@@ -2,8 +2,23 @@ import { useEffect, useRef, useState } from "react";
 import { Application } from "pixi.js";
 import type { DocStore } from "../../core/doc-store.js";
 import type { CharacterDoc } from "../../core/schema/character.js";
-import { computeBoneWorld, buildRenderList } from "../../runtime/pose.js";
-import { buildCharacterContainer } from "../../render/character-pixi.js";
+import {
+  computeBoneWorld,
+  buildRenderList,
+  headDecalMatrix,
+} from "../../runtime/pose.js";
+import {
+  buildCharacterContainer,
+  CharacterView,
+} from "../../render/character-pixi.js";
+import { HairSimulator } from "../../runtime/hair-physics.js";
+import {
+  blinkAt,
+  EXPRESSION_PRESETS,
+  resolveFace,
+} from "../../runtime/expression.js";
+import { mulberry32 } from "../../runtime/rand.js";
+import { evalCycle, type CycleKind } from "../../runtime/test-cycles.js";
 import { POSES } from "./poses.js";
 
 const PREVIEW_W = 260;
@@ -19,13 +34,28 @@ interface Props {
   charStore: DocStore<CharacterDoc>;
 }
 
+type Mode = { kind: "pose"; index: number } | { kind: "cycle"; cycle: CycleKind };
+
+interface PreviewState {
+  mode: Mode;
+  expression: string;
+  blinkOn: boolean;
+}
+
 export function PosePreview({ charStore }: Props) {
   const singleRef = useRef<HTMLDivElement>(null);
   const multiRef = useRef<HTMLDivElement>(null);
-  const [poseIndex, setPoseIndex] = useState(0);
+  const [mode, setMode] = useState<Mode>({ kind: "pose", index: 0 });
+  const [expression, setExpression] = useState("neutral");
+  const [blinkOn, setBlinkOn] = useState(true);
   const [multiMode, setMultiMode] = useState(false);
+  const [zoomUp, setZoomUp] = useState(false); // 上半身ズーム(表情・髪の確認用)
 
-  // single pose preview
+  // ticker内から最新状態を読むためのref(effect再実行を避ける)
+  const stRef = useRef<PreviewState & { zoomUp: boolean }>({ mode, expression, blinkOn, zoomUp });
+  stRef.current = { mode, expression, blinkOn, zoomUp };
+
+  // 単体プレビュー(静止/アニメ共通の常駐ループ)
   useEffect(() => {
     const host = singleRef.current;
     if (!host || multiMode) return;
@@ -44,36 +74,81 @@ export function PosePreview({ charStore }: Props) {
       if (disposed) { app.destroy(true); return; }
       host.appendChild(app.canvas);
 
-      const rebuild = () => {
-        app.stage.removeChildren();
-        const char = charStore.doc;
-        const def = POSES[poseIndex] ?? POSES[0]!;
-        const bones = computeBoneWorld(char, def.pose);
-        const items = buildRenderList(char, bones, { handShape: def.handShape });
-        const c = buildCharacterContainer(char, items);
-        c.position.set(PREVIEW_W / 2, GROUND_Y - 310 * SCALE);
-        c.scale.set(SCALE);
-        app.stage.addChild(c);
+      const view = new CharacterView();
+      app.stage.addChild(view.container);
+      const applyCamera = () => {
+        if (stRef.current.zoomUp) {
+          // 上半身: 頭頂(-348)〜腰(+50)あたりをフレーミング
+          view.container.position.set(PREVIEW_W / 2, 306);
+          view.container.scale.set(0.85);
+        } else {
+          view.container.position.set(PREVIEW_W / 2, GROUND_Y - 310 * SCALE);
+          view.container.scale.set(SCALE);
+        }
       };
+      applyCamera();
 
-      rebuild();
-      const unsub = charStore.subscribe(rebuild);
+      let t = 0;
+      let sim: HairSimulator | null = null;
+      let simDocRev = -1;
+      let lastCycle: CycleKind | null = null;
+      const blinkSchedule: number[] = [];
+      const rng = mulberry32(7);
 
-      return () => {
-        unsub();
-      };
-    })().then((_cleanup) => {
-      // cleanup stored in closure
-    });
+      const unsub = charStore.subscribe(() => {
+        simDocRev = -1; // doc変更で物理を作り直す
+      });
+
+      app.ticker.add(() => {
+        applyCamera();
+        const st = stRef.current;
+        const doc = charStore.doc;
+        const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
+        t += dt;
+
+        const blink = st.blinkOn ? blinkAt(t, rng, blinkSchedule) : 0;
+        const face = resolveFace(doc, { preset: st.expression, blink });
+
+        if (st.mode.kind === "cycle") {
+          if (!sim || simDocRev !== charStore.revision || lastCycle !== st.mode.cycle) {
+            sim = new HairSimulator(doc);
+            simDocRev = charStore.revision;
+            lastCycle = st.mode.cycle;
+          }
+          const frame = evalCycle(st.mode.cycle, t);
+          const bones = computeBoneWorld(doc, frame.pose);
+          const hm = headDecalMatrix(bones);
+          if (hm) sim.step(hm, dt, [frame.virtualVelocity, 0]);
+          const items = buildRenderList(doc, bones, {
+            face,
+            hairDeform: sim.getDeforms(),
+            handShape: st.mode.cycle === "run" ? "fist" : undefined,
+          });
+          view.update(doc, items);
+        } else {
+          sim = null;
+          lastCycle = null;
+          const def = POSES[st.mode.index] ?? POSES[0]!;
+          const bones = computeBoneWorld(doc, def.pose);
+          const items = buildRenderList(doc, bones, {
+            face,
+            handShape: def.handShape,
+          });
+          view.update(doc, items);
+        }
+      });
+
+      return unsub;
+    })();
 
     return () => {
       disposed = true;
       if (app.renderer) app.destroy(true, { children: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poseIndex, multiMode]);
+  }, [multiMode, charStore]);
 
-  // multi pose preview
+  // 4ポーズ一覧(静止)
   useEffect(() => {
     const host = multiRef.current;
     if (!host || !multiMode) return;
@@ -95,9 +170,10 @@ export function PosePreview({ charStore }: Props) {
       const rebuild = () => {
         app.stage.removeChildren();
         const char = charStore.doc;
+        const face = resolveFace(char, { preset: stRef.current.expression });
         POSES.forEach((def, i) => {
           const bones = computeBoneWorld(char, def.pose);
-          const items = buildRenderList(char, bones, { handShape: def.handShape });
+          const items = buildRenderList(char, bones, { face, handShape: def.handShape });
           const c = buildCharacterContainer(char, items);
           c.position.set(130 + i * 185, MULTI_GROUND_Y - 310 * MULTI_SCALE);
           c.scale.set(MULTI_SCALE);
@@ -107,10 +183,7 @@ export function PosePreview({ charStore }: Props) {
 
       rebuild();
       const unsub = charStore.subscribe(rebuild);
-
-      return () => {
-        unsub();
-      };
+      return unsub;
     })();
 
     return () => {
@@ -118,15 +191,17 @@ export function PosePreview({ charStore }: Props) {
       if (app.renderer) app.destroy(true, { children: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [multiMode]);
+  }, [multiMode, charStore, expression]);
 
-  // rebuild on store change for multi
-  useEffect(() => {
-    if (!multiMode) return;
-    return charStore.subscribe(() => {
-      // pixi rebuild is handled inside the pixi effect — this triggers remount via key
-    });
-  }, [charStore, multiMode]);
+  const chip = (active: boolean) => ({
+    padding: "2px 8px",
+    fontSize: "11px",
+    background: active ? "#5B7DB1" : "#eee",
+    color: active ? "#fff" : "#333",
+    border: "1px solid #ccc",
+    borderRadius: "3px",
+    cursor: "pointer",
+  });
 
   return (
     <div style={{ padding: "4px 0" }}>
@@ -134,33 +209,63 @@ export function PosePreview({ charStore }: Props) {
         {POSES.map((p, i) => (
           <button
             key={p.label}
-            onClick={() => { setMultiMode(false); setPoseIndex(i); }}
-            style={{
-              padding: "2px 8px",
-              fontSize: "11px",
-              background: !multiMode && poseIndex === i ? "#5B7DB1" : "#eee",
-              color: !multiMode && poseIndex === i ? "#fff" : "#333",
-              border: "1px solid #ccc",
-              borderRadius: "3px",
-              cursor: "pointer",
-            }}
+            onClick={() => { setMultiMode(false); setMode({ kind: "pose", index: i }); }}
+            style={chip(!multiMode && mode.kind === "pose" && mode.index === i)}
           >
             {p.label}
           </button>
         ))}
-        <button
-          onClick={() => setMultiMode((m) => !m)}
-          style={{
-            padding: "2px 8px",
-            fontSize: "11px",
-            background: multiMode ? "#5B7DB1" : "#eee",
-            color: multiMode ? "#fff" : "#333",
-            border: "1px solid #ccc",
-            borderRadius: "3px",
-            cursor: "pointer",
-          }}
-        >
+        <button onClick={() => setMultiMode((m) => !m)} style={chip(multiMode)}>
           4ポーズ
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "4px", flexWrap: "wrap" }}>
+        <button
+          onClick={() => { setMultiMode(false); setMode({ kind: "cycle", cycle: "idle" }); }}
+          style={chip(!multiMode && mode.kind === "cycle" && mode.cycle === "idle")}
+        >
+          ▶待機
+        </button>
+        <button
+          onClick={() => { setMultiMode(false); setMode({ kind: "cycle", cycle: "walk" }); }}
+          style={chip(!multiMode && mode.kind === "cycle" && mode.cycle === "walk")}
+        >
+          ▶歩き
+        </button>
+        <button
+          onClick={() => { setMultiMode(false); setMode({ kind: "cycle", cycle: "run" }); }}
+          style={chip(!multiMode && mode.kind === "cycle" && mode.cycle === "run")}
+        >
+          ▶走り
+        </button>
+        <button
+          onClick={() => setMode({ kind: "pose", index: 0 })}
+          style={chip(false)}
+        >
+          ⏹停止
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "4px", alignItems: "center" }}>
+        <span style={{ fontSize: "11px", color: "#888" }}>表情:</span>
+        <select
+          value={expression}
+          onChange={(e) => setExpression(e.target.value)}
+          style={{ fontSize: "11px" }}
+        >
+          {Object.entries(EXPRESSION_PRESETS).map(([key, def]) => (
+            <option key={key} value={key}>{def.label}</option>
+          ))}
+        </select>
+        <label style={{ fontSize: "11px", color: "#555", display: "flex", alignItems: "center", gap: "2px" }}>
+          <input
+            type="checkbox"
+            checked={blinkOn}
+            onChange={(e) => setBlinkOn(e.target.checked)}
+          />
+          まばたき
+        </label>
+        <button onClick={() => setZoomUp((z) => !z)} style={chip(zoomUp)}>
+          上半身
         </button>
       </div>
       {!multiMode && <div ref={singleRef} />}

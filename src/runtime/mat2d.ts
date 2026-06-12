@@ -26,6 +26,10 @@ export function rotationDeg(deg: number): Mat2D {
 
 export const MIRROR_X: Mat2D = { a: -1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 
+export function scaling(sx: number, sy: number): Mat2D {
+  return { a: sx, b: 0, c: 0, d: sy, tx: 0, ty: 0 };
+}
+
 // mul(A, B) = A ∘ B(Bを先に適用)
 export function mul(A: Mat2D, B: Mat2D): Mat2D {
   return {

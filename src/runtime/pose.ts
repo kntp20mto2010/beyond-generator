@@ -1,10 +1,12 @@
 import type { CharacterDoc } from "../core/schema/character.js";
 import type { Shape, Vec2 } from "../core/schema/geometry.js";
+import type { FaceResolution } from "./expression.js";
 import {
   type Mat2D,
   MIRROR_X,
   mul,
   rotationDeg,
+  scaling,
   translation,
 } from "./mat2d.js";
 import {
@@ -79,9 +81,16 @@ function itemMatrix(state: BoneState, mirror = false): Mat2D {
   return mirror ? mul(m, MIRROR_X) : m;
 }
 
+// 髪物理などの外部入力用: headのデカール行列(キャラ空間→ワールド)
+export function headDecalMatrix(bones: BoneWorld): Mat2D | null {
+  const head = bones.get("head");
+  return head ? itemMatrix(head) : null;
+}
+
 export interface RenderListOptions {
   handShape?: string;
-  expression?: string; // Phase 1 は "neutral" 固定。Phase 2 で表情合成に置換
+  face?: ReadonlyMap<string, FaceResolution>; // resolveFace の結果(省略時 neutral)
+  hairDeform?: ReadonlyMap<string, Mat2D>; // HairSimulator.getDeforms の結果(キャラ空間)
 }
 
 export function buildRenderList(
@@ -120,28 +129,40 @@ export function buildRenderList(
 
   const head = bones.get("head");
   if (head) {
-    const expression = opts.expression ?? "neutral";
     for (const [slot, face] of Object.entries(char.face)) {
+      const res = opts.face?.get(slot);
+      const shapeName = res?.shapeName ?? "neutral";
       const shapes =
-        face.shapes[expression] ?? Object.values(face.shapes)[0];
+        face.shapes[shapeName] ?? face.shapes["neutral"] ?? Object.values(face.shapes)[0];
       if (!shapes) continue;
-      items.push({
-        key: `face:${slot}`,
-        z: face.z,
-        shapes,
-        matrix: itemMatrix(head),
-      });
+
+      let m = itemMatrix(head);
+      if (res) {
+        if (res.offset[0] !== 0 || res.offset[1] !== 0) {
+          m = mul(m, translation(res.offset[0], res.offset[1]));
+        }
+        if (res.squashY !== undefined) {
+          const [ax, ay] = face.anchor;
+          m = mul(
+            m,
+            mul(translation(ax, ay), mul(scaling(1, res.squashY), translation(-ax, -ay))),
+          );
+        }
+      }
+      items.push({ key: `face:${slot}`, z: face.z, shapes, matrix: m });
     }
 
     for (const layer of ["back", "mid", "front"] as const) {
       const strands = char.hair[layer];
       strands.forEach((strand, i) => {
-        // Phase 2 でここに振り子物理の回転(pin中心)が挟まる
+        const key = `hair:${layer}:${i}`;
+        const deform = opts.hairDeform?.get(key);
+        const m = deform ? mul(itemMatrix(head), deform) : itemMatrix(head);
         items.push({
-          key: `hair:${layer}:${i}`,
+          key,
           z: HAIR_Z[layer] + i * 0.01,
           shapes: strand.shapes,
-          matrix: itemMatrix(head),
+          matrix: m,
         });
       });
     }

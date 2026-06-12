@@ -80,3 +80,40 @@ export function buildCharacterContainer(
   }
   return container;
 }
+
+// アニメ用: キー単位でGraphicsを再利用するビュー。
+// 形状参照・パレット・キー列が同じ間は行列更新のみ(毎フレームの再テッセレーション回避)
+export class CharacterView {
+  readonly container = new Container();
+  #keys: string[] = [];
+  #shapes: (readonly Shape[])[] = [];
+  #graphics: Graphics[] = [];
+  #palette: Record<string, string> | null = null;
+
+  update(char: CharacterDoc, items: readonly RenderItem[]): void {
+    const structural =
+      this.#palette !== char.palette ||
+      items.length !== this.#keys.length ||
+      items.some((it, i) => it.key !== this.#keys[i] || it.shapes !== this.#shapes[i]);
+
+    if (structural) {
+      for (const c of this.container.removeChildren()) c.destroy();
+      this.#graphics = items.map((it) => {
+        const g = new Graphics();
+        for (const shape of it.shapes) drawShape(g, shape, char.palette);
+        this.container.addChild(g);
+        return g;
+      });
+      this.#keys = items.map((it) => it.key);
+      this.#shapes = items.map((it) => it.shapes);
+      this.#palette = char.palette;
+    }
+
+    items.forEach((it, i) => {
+      const g = this.#graphics[i];
+      if (!g) return;
+      const m = it.matrix;
+      g.setFromMatrix(new Matrix(m.a, m.b, m.c, m.d, m.tx, m.ty));
+    });
+  }
+}
