@@ -4,14 +4,17 @@ import type { CharacterDoc } from "../../core/schema/character.js";
 import { validateCharacter } from "../../core/schema/character.js";
 import type { Shape } from "../../core/schema/geometry.js";
 import {
+  addFaceVariant,
   addShape,
   mirrorLR,
   movePin,
+  removeFaceVariant,
   removeShape,
   setName,
   setPaletteColor,
   setPartZ,
   updateShape,
+  updateStrandPhysics,
 } from "../../core/commands-character.js";
 import { mirrorPartSlot, mirrorFaceSlot } from "../../core/mirror.js";
 import { TEMPLATE_A } from "../../presets/characters/template-a.js";
@@ -27,6 +30,9 @@ import {
   refLabel,
 } from "./slot-ref.js";
 import type { SlotRef } from "./slot-ref.js";
+import { referencedShapeNames } from "../../runtime/expression.js";
+import type { StrandPhysics } from "../../core/schema/character.js";
+import { HAIR_PHYSICS_PRESETS } from "../../presets/hair-presets.js";
 import { EditCanvas } from "./EditCanvas.js";
 import { PosePreview } from "./PosePreview.js";
 import {
@@ -60,6 +66,7 @@ export function CharacterEditorPage({ fs }: Props) {
   const [canRedo, setCanRedo] = useState(false);
   const [selectedRef, setSelectedRef] = useState<SlotRef | null>(null);
   const [selectedShapeIndex, setSelectedShapeIndex] = useState<number | null>(null);
+  const [faceVariant, setFaceVariant] = useState<string>("neutral");
   const [tool, setTool] = useState<Tool>("select");
   const [savedRevision, setSavedRevision] = useState(charStore.revision);
   const [charFiles, setCharFiles] = useState<string[]>([]);
@@ -73,13 +80,16 @@ export function CharacterEditorPage({ fs }: Props) {
       setCanRedo(charStore.canRedo());
       // ガード: selectedShapeIndex が範囲外になったら解除
       if (selectedRef !== null && selectedShapeIndex !== null) {
-        const shapes = getShapes(charStore.doc, selectedRef) ?? [];
+        const checkRef: SlotRef = selectedRef.kind === "face"
+          ? { ...selectedRef, variant: faceVariant }
+          : selectedRef;
+        const shapes = getShapes(charStore.doc, checkRef) ?? [];
         if (selectedShapeIndex >= shapes.length) {
           setSelectedShapeIndex(null);
         }
       }
     });
-  }, [selectedRef, selectedShapeIndex]);
+  }, [selectedRef, selectedShapeIndex, faceVariant]);
 
   const isDirty = charStore.revision !== savedRevision;
 
@@ -152,14 +162,19 @@ export function CharacterEditorPage({ fs }: Props) {
     }
   };
 
-  const selectedShapes = selectedRef ? (getShapes(doc, selectedRef) ?? []) : [];
-  const selectedShape = selectedShapeIndex !== null ? selectedShapes[selectedShapeIndex] ?? null : null;
-  const pins = selectedRef ? getPins(doc, selectedRef) : {};
+  // face スロット選択中は variant を反映した ref を使う
+  const effectiveRef: SlotRef | null = selectedRef?.kind === "face"
+    ? { ...selectedRef, variant: faceVariant }
+    : selectedRef;
 
-  const canMirror = selectedRef !== null && (() => {
-    if (selectedRef.kind === "part") return mirrorPartSlot(selectedRef.slot) !== null;
-    if (selectedRef.kind === "face") return mirrorFaceSlot(selectedRef.slot) !== null;
-    if (selectedRef.kind === "hair") return selectedRef.layer === "mid" && (selectedRef.index === 0 || selectedRef.index === 1);
+  const selectedShapes = effectiveRef ? (getShapes(doc, effectiveRef) ?? []) : [];
+  const selectedShape = selectedShapeIndex !== null ? selectedShapes[selectedShapeIndex] ?? null : null;
+  const pins = effectiveRef ? getPins(doc, effectiveRef) : {};
+
+  const canMirror = effectiveRef !== null && (() => {
+    if (effectiveRef.kind === "part") return mirrorPartSlot(effectiveRef.slot) !== null;
+    if (effectiveRef.kind === "face") return mirrorFaceSlot(effectiveRef.slot) !== null;
+    if (effectiveRef.kind === "hair") return effectiveRef.layer === "mid" && (effectiveRef.index === 0 || effectiveRef.index === 1);
     return false;
   })();
 
@@ -273,6 +288,15 @@ export function CharacterEditorPage({ fs }: Props) {
         >
           ↪やり直す
         </button>
+        <button
+          onClick={() => {
+            localStorage.setItem("byond.contactsheet.char", JSON.stringify(doc));
+            window.open("/#contact-sheet");
+          }}
+          style={{ padding: "3px 10px", fontSize: "12px", border: "1px solid #bbb", borderRadius: "3px", cursor: "pointer", background: "#fff", marginLeft: "8px" }}
+        >
+          コンタクトシート
+        </button>
         {isDirty && <span style={{ fontSize: "11px", color: "#e07030" }}>●未保存</span>}
       </div>
 
@@ -294,6 +318,7 @@ export function CharacterEditorPage({ fs }: Props) {
                 onClick={() => {
                   setSelectedRef(ref);
                   setSelectedShapeIndex(null);
+                  if (ref.kind === "face") setFaceVariant("neutral");
                 }}
                 style={{
                   display: "block", width: "100%", textAlign: "left",
@@ -320,9 +345,9 @@ export function CharacterEditorPage({ fs }: Props) {
             {toolBtn("select", "選択")}
             {toolBtn("rect", "矩形")}
             {toolBtn("ellipse", "楕円")}
-            {canMirror && selectedRef && (
+            {canMirror && effectiveRef && (
               <button
-                onClick={() => mirrorLR(charStore, selectedRef)}
+                onClick={() => mirrorLR(charStore, effectiveRef)}
                 style={{ padding: "3px 8px", fontSize: "12px", border: "1px solid #bbb", borderRadius: "3px", cursor: "pointer", background: "#fff", marginLeft: "8px" }}
               >
                 L→Rミラーコピー
@@ -332,7 +357,7 @@ export function CharacterEditorPage({ fs }: Props) {
           <div style={{ flex: 1, overflow: "hidden" }}>
             <EditCanvas
               charStore={charStore}
-              selectedRef={selectedRef}
+              selectedRef={effectiveRef}
               selectedShapeIndex={selectedShapeIndex}
               tool={tool}
               onSelectShape={(idx) => {
@@ -365,11 +390,67 @@ export function CharacterEditorPage({ fs }: Props) {
           ))}
 
           {/* selected slot shapes */}
-          {selectedRef && (
+          {effectiveRef && (
             <>
               <div style={{ fontSize: "11px", color: "#888", marginTop: "8px", marginBottom: "4px" }}>
-                {refLabel(selectedRef)} シェイプ
+                {refLabel(effectiveRef)} シェイプ
               </div>
+
+              {/* バリアントチップ(faceスロットのみ) */}
+              {selectedRef?.kind === "face" && (() => {
+                const slot = selectedRef.slot;
+                const existingVariants = Object.keys(doc.face[slot]?.shapes ?? {});
+                const referencedVariants = referencedShapeNames(slot);
+                const allVariants = Array.from(new Set(["neutral", ...existingVariants, ...referencedVariants]));
+                return (
+                  <div style={{ marginBottom: "6px" }}>
+                    <div style={{ fontSize: "10px", color: "#aaa", marginBottom: "3px" }}>バリアント</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
+                      {allVariants.map((v) => {
+                        const exists = existingVariants.includes(v);
+                        const isActive = faceVariant === v;
+                        return (
+                          <button
+                            key={v}
+                            onClick={() => {
+                              if (!exists) {
+                                addFaceVariant(charStore, slot, v, true);
+                              }
+                              setFaceVariant(v);
+                              setSelectedShapeIndex(null);
+                            }}
+                            style={{
+                              fontSize: "10px", padding: "1px 6px",
+                              border: exists ? "1px solid #aaa" : "1px dashed #bbb",
+                              borderRadius: "3px", cursor: "pointer",
+                              background: isActive ? "#5B7DB1" : exists ? "#eee" : "#f8f8f8",
+                              color: isActive ? "#fff" : exists ? "#333" : "#888",
+                            }}
+                          >
+                            {v}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {faceVariant !== "neutral" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px" }}>
+                        <button
+                          onClick={() => {
+                            removeFaceVariant(charStore, slot, faceVariant);
+                            setFaceVariant("neutral");
+                            setSelectedShapeIndex(null);
+                          }}
+                          style={{ fontSize: "10px", padding: "1px 6px", border: "1px solid #e88", borderRadius: "3px", cursor: "pointer", background: "#fff", color: "#a33" }}
+                        >
+                          ×削除
+                        </button>
+                        <span style={{ fontSize: "10px", color: "#aaa" }}>未作成→neutral表示</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {selectedShapes.map((shape, i) => (
                 <ShapeRow
                   key={i}
@@ -379,14 +460,14 @@ export function CharacterEditorPage({ fs }: Props) {
                   palette={doc.palette}
                   onSelect={() => setSelectedShapeIndex(i)}
                   onRemove={() => {
-                    removeShape(charStore, selectedRef, i);
+                    removeShape(charStore, effectiveRef, i);
                     if (selectedShapeIndex === i) setSelectedShapeIndex(null);
                   }}
                 />
               ))}
               <button
                 onClick={() => {
-                  addShape(charStore, selectedRef, { kind: "rect", x: -20, y: -20, w: 40, h: 40, r: 0, fill: "@primary" });
+                  addShape(charStore, effectiveRef, { kind: "rect", x: -20, y: -20, w: 40, h: 40, r: 0, fill: "@primary" });
                   setSelectedShapeIndex(selectedShapes.length);
                 }}
                 style={{ fontSize: "11px", padding: "2px 8px", marginTop: "4px", border: "1px solid #bbb", borderRadius: "3px", cursor: "pointer", background: "#fff" }}
@@ -400,15 +481,15 @@ export function CharacterEditorPage({ fs }: Props) {
                   shape={selectedShape}
                   onChange={(patch) => {
                     if (selectedShapeIndex !== null) {
-                      updateShape(charStore, selectedRef, selectedShapeIndex, patch, `shape:${refKey(selectedRef)}:${selectedShapeIndex}`);
+                      updateShape(charStore, effectiveRef, selectedShapeIndex, patch, `shape:${refKey(effectiveRef)}:${selectedShapeIndex}`);
                     }
                   }}
                 />
               )}
 
               {/* z order for part */}
-              {selectedRef.kind === "part" && (() => {
-                const z = getZ(doc, selectedRef) ?? 0;
+              {effectiveRef.kind === "part" && (() => {
+                const z = getZ(doc, effectiveRef) ?? 0;
                 return (
                   <div style={{ marginTop: "8px" }}>
                     <span style={{ fontSize: "11px", color: "#888" }}>Z順: </span>
@@ -417,7 +498,7 @@ export function CharacterEditorPage({ fs }: Props) {
                       value={z}
                       onChange={(e) => {
                         const v = Number(e.target.value);
-                        if (!isNaN(v)) setPartZ(charStore, selectedRef.slot, v);
+                        if (!isNaN(v)) setPartZ(charStore, effectiveRef.slot, v);
                       }}
                       style={{ width: "60px", fontSize: "12px", padding: "1px 4px" }}
                     />
@@ -428,20 +509,91 @@ export function CharacterEditorPage({ fs }: Props) {
               {/* pins */}
               <div style={{ fontSize: "11px", color: "#888", marginTop: "8px", marginBottom: "2px" }}>ピン</div>
               {Object.entries(pins).map(([name, pos]) => {
-                const capturedRef = selectedRef;
+                const capturedRef = effectiveRef;
                 return (
                   <PinRow
                     key={name}
                     name={name}
                     pos={pos}
                     onChange={(newPos) => {
-                      if (capturedRef) {
-                        movePin(charStore, capturedRef, name, newPos);
-                      }
+                      movePin(charStore, capturedRef, name, newPos);
                     }}
                   />
                 );
               })}
+
+              {/* 髪物理パラメータ(hairスロットのみ) */}
+              {effectiveRef.kind === "hair" && (() => {
+                const strand = doc.hair[effectiveRef.layer][effectiveRef.index];
+                if (!strand) return null;
+                const ph = strand.physics;
+                const sliderParam = (
+                  label: string,
+                  param: keyof StrandPhysics,
+                  min: number,
+                  max: number,
+                  step: number,
+                ) => (
+                  <div key={param} style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "3px" }}>
+                    <span style={{ fontSize: "10px", color: "#666", width: "52px", flexShrink: 0 }}>{label}</span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={ph[param] as number}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        updateStrandPhysics(charStore, effectiveRef, { [param]: v } as Partial<StrandPhysics>, `physics:${refKey(effectiveRef)}:${param}`);
+                      }}
+                      style={{ flex: 1, maxWidth: "90px" }}
+                    />
+                    <span style={{ fontSize: "10px", width: "28px" }}>{(ph[param] as number).toFixed(2)}</span>
+                  </div>
+                );
+                return (
+                  <div style={{ marginTop: "10px", borderTop: "1px solid #eee", paddingTop: "6px" }}>
+                    <div style={{ fontSize: "11px", color: "#888", marginBottom: "4px" }}>揺れ(物理)</div>
+                    {sliderParam("硬さ", "stiffness", 0, 1, 0.05)}
+                    {sliderParam("減衰", "damping", 0, 1, 0.05)}
+                    {sliderParam("慣性", "inertia", 0, 1, 0.05)}
+                    {sliderParam("重力", "gravity", 0, 1, 0.05)}
+                    {sliderParam("最大角", "maxAngle", 0, 60, 1)}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "10px", color: "#666" }}>分割</span>
+                      {([1, 2] as const).map((seg) => (
+                        <button
+                          key={seg}
+                          onClick={() => updateStrandPhysics(charStore, effectiveRef, { segments: seg })}
+                          style={{
+                            fontSize: "10px", padding: "1px 8px",
+                            border: "1px solid #bbb", borderRadius: "3px", cursor: "pointer",
+                            background: ph.segments === seg ? "#5B7DB1" : "#eee",
+                            color: ph.segments === seg ? "#fff" : "#333",
+                          }}
+                        >
+                          {seg}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "4px" }}>
+                      {Object.entries(HAIR_PHYSICS_PRESETS).map(([key, preset]) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            const { label: _l, ...phys } = preset;
+                            updateStrandPhysics(charStore, effectiveRef, phys);
+                          }}
+                          style={{ fontSize: "10px", padding: "1px 6px", border: "1px solid #ccc", borderRadius: "3px", cursor: "pointer", background: "#fff" }}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: "10px", color: "#999" }}>▶走り再生中に動かすと揺れがリアルタイムで変わります</div>
+                  </div>
+                );
+              })()}
             </>
           )}
 

@@ -531,6 +531,14 @@ export function EditCanvas({
   const selectedShape = selectedShapeIndex !== null ? selectedShapes[selectedShapeIndex] ?? null : null;
   const pins = selectedRef ? getPins(doc, selectedRef) : {};
 
+  // variant≠neutral 編集中: neutralシェイプをゴーストとして取得
+  const neutralGhostShapes = (
+    selectedRef?.kind === "face" &&
+    (selectedRef.variant ?? "neutral") !== "neutral"
+  )
+    ? (getShapes(doc, { ...selectedRef, variant: "neutral" }) ?? [])
+    : [];
+
   // grid lines
   const gridLines: React.ReactNode[] = [];
   const gx0 = Math.floor(vb.x / GRID) * GRID;
@@ -612,6 +620,22 @@ export function EditCanvas({
           </g>
         );
       })}
+
+      {/* neutral ゴースト(variant編集中: opacity 0.2・操作不可) */}
+      {neutralGhostShapes.length > 0 && (
+        <g opacity={0.2} pointerEvents="none">
+          {neutralGhostShapes.map((shape, i) => (
+            <ShapeEl
+              key={`ghost:${i}`}
+              shape={shape}
+              palette={palette}
+              selected={false}
+              dimmed={false}
+              onClick={() => undefined}
+            />
+          ))}
+        </g>
+      )}
 
       {/* pins for selected ref */}
       {selectedRef && Object.entries(pins).map(([name, pos]) => (

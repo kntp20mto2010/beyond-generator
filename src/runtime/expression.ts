@@ -122,6 +122,16 @@ export function resolveFace(
   return out;
 }
 
+// スロットが EXPRESSION_PRESETS の中で参照されているシェイプ名の一覧
+export function referencedShapeNames(slot: string): string[] {
+  const names = new Set<string>();
+  for (const def of Object.values(EXPRESSION_PRESETS)) {
+    const name = def.slots[slot];
+    if (name) names.add(name);
+  }
+  return Array.from(names);
+}
+
 // まばたきスケジューラ(決定論: seedベース)
 export function blinkAt(t: number, rng: () => number, schedule: number[]): number {
   // schedule は開始時刻の昇順配列。足りなければ伸ばす(呼び出し側が配列を保持)

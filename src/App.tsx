@@ -3,15 +3,23 @@ import { DocStore } from "./core/doc-store.js";
 import { createEmptyProject } from "./core/schema/project.js";
 import { AppShell } from "./editor/shell/AppShell.js";
 import { CharacterEditorPage } from "./editor/character/CharacterEditorPage.js";
+import { ContactSheetPage } from "./editor/character/ContactSheetPage.js";
 import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
 
 type Tab = "scene" | "character";
 
+// #contact-sheet ハッシュルートは初回判定のみ(リアクティブルーティング不要)
+const IS_CONTACT_SHEET = location.hash === "#contact-sheet";
+
 function App() {
   const [tab, setTab] = useState<Tab>("character");
   const fs = useUiStore((s) => s.fs);
+
+  if (IS_CONTACT_SHEET) {
+    return <ContactSheetPage />;
+  }
 
   const tabStyle = (active: boolean) => ({
     padding: "6px 16px",

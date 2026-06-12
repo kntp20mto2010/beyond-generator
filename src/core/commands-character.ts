@@ -28,7 +28,8 @@ function resolveShapesDraft(
     case "face": {
       const face = draft.face[ref.slot];
       if (!face) return null;
-      const shapes = face.shapes["neutral"];
+      const variantName = ref.variant ?? "neutral";
+      const shapes = face.shapes[variantName];
       return shapes ? (shapes as Draft<Shape>[]) : null;
     }
     case "hair": {
@@ -194,13 +195,21 @@ export function mirrorLR(
         if (!toSlot) return;
         const fromFace = d.face[fromRef.slot];
         if (!fromFace) return;
-        const mirroredShapes = (fromFace.shapes["neutral"] as Shape[] | undefined)?.map(mirrorShape) ?? [];
+        const variantName = fromRef.variant ?? "neutral";
+        const srcShapes = fromFace.shapes[variantName] as Shape[] | undefined;
+        const mirroredShapes = srcShapes?.map(mirrorShape) ?? [];
         const mirroredAnchor = mirrorPins({ anchor: fromFace.anchor as Vec2 });
-        d.face[toSlot] = {
-          anchor: mirroredAnchor["anchor"] as Vec2,
-          z: fromFace.z,
-          shapes: { neutral: mirroredShapes },
-        };
+        const toFace = d.face[toSlot];
+        if (toFace) {
+          toFace.shapes[variantName] = mirroredShapes;
+          toFace.anchor = mirroredAnchor["anchor"] as Vec2;
+        } else {
+          d.face[toSlot] = {
+            anchor: mirroredAnchor["anchor"] as Vec2,
+            z: fromFace.z,
+            shapes: { [variantName]: mirroredShapes },
+          };
+        }
         break;
       }
       case "hair": {
@@ -223,4 +232,52 @@ export function mirrorLR(
         break;
     }
   });
+}
+
+export function addFaceVariant(
+  store: DocStore<CharacterDoc>,
+  slot: string,
+  name: string,
+  copyFromNeutral = true,
+): void {
+  store.dispatch("バリアント追加", (d) => {
+    const face = d.face[slot];
+    if (!face) return;
+    if (face.shapes[name]) return; // 既存は上書きしない
+    const src = copyFromNeutral ? (face.shapes["neutral"] as Shape[] | undefined) : undefined;
+    // JSON往復でImmerドラフトから切り離したコピーを作る
+    face.shapes[name] = src ? (JSON.parse(JSON.stringify(src)) as Draft<Shape>[]) : [];
+  });
+}
+
+export function removeFaceVariant(
+  store: DocStore<CharacterDoc>,
+  slot: string,
+  name: string,
+): void {
+  if (name === "neutral") return; // neutral は削除禁止
+  store.dispatch("バリアント削除", (d) => {
+    const face = d.face[slot];
+    if (!face) return;
+    delete face.shapes[name];
+  });
+}
+
+export function updateStrandPhysics(
+  store: DocStore<CharacterDoc>,
+  ref: SlotRef,
+  patch: Partial<import("./schema/character.js").StrandPhysics>,
+  mergeKey?: string,
+): void {
+  if (ref.kind !== "hair") return;
+  const key = mergeKey ?? `physics:${refKey(ref)}`;
+  store.dispatch(
+    "物理パラメータ変更",
+    (d) => {
+      const strand = d.hair[ref.layer][ref.index];
+      if (!strand) return;
+      Object.assign(strand.physics, patch);
+    },
+    { mergeKey: key },
+  );
 }

@@ -4,14 +4,14 @@ import { HAIR_Z, HAND_Z } from "../../runtime/skeleton.js";
 
 export type SlotRef =
   | { kind: "part"; slot: string }
-  | { kind: "face"; slot: string }
+  | { kind: "face"; slot: string; variant?: string }
   | { kind: "hair"; layer: "front" | "mid" | "back"; index: number }
   | { kind: "hand"; name: string };
 
 export function refKey(ref: SlotRef): string {
   switch (ref.kind) {
     case "part": return `part:${ref.slot}`;
-    case "face": return `face:${ref.slot}`;
+    case "face": return `face:${ref.slot}:${ref.variant ?? "neutral"}`;
     case "hair": return `hair:${ref.layer}:${ref.index}`;
     case "hand": return `hand:${ref.name}`;
   }
@@ -113,7 +113,9 @@ export function getShapes(
     }
     case "face": {
       const face = char.face[ref.slot];
-      return face?.shapes["neutral"] ?? Object.values(face?.shapes ?? {})[0];
+      if (!face) return undefined;
+      const variantName = ref.variant ?? "neutral";
+      return face.shapes[variantName] ?? face.shapes["neutral"] ?? Object.values(face.shapes)[0];
     }
     case "hair": {
       const strand = char.hair[ref.layer][ref.index];
