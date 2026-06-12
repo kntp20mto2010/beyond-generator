@@ -15,3 +15,11 @@
 [ 4440823ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8766/:0
 [ 4440823ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:4000/:0
 [ 4440823ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/:0
+[ 5139990ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/:0
+[ 5139992ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:9000/report.html:0
+[ 5139992ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5173/:0
+[ 5139992ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5050/:0
+[ 5139993ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8899/:0
+[ 5140033ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8766/:0
+[ 5140033ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5174/:0
+[ 5140033ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:4000/:0

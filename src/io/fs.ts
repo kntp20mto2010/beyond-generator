@@ -23,8 +23,11 @@ export class FsAccessAdapter implements FileSystemAdapter {
     try {
       this.#handle = await showDirectoryPicker({ mode: "readwrite" });
       return true;
-    } catch {
-      return false;
+    } catch (err) {
+      // 利用者によるキャンセルは正常系(静かに false)
+      if (err instanceof DOMException && err.name === "AbortError") return false;
+      // それ以外(クロスオリジン枠でのブロック等)は呼び出し側で通知させる
+      throw err;
     }
   }
 

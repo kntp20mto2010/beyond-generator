@@ -160,6 +160,32 @@ export function ScenePage({ store }: Props) {
     setT(next);
   }, []);
 
+  // 開発時: 起動直後に空ならリポジトリ同梱の project.byp.json を自動読込
+  // (フォルダ未選択でもデモがそのまま開く。フォルダを開けば従来どおり上書き)
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (fs || store.doc.scenes.length > 0) return; // フォルダ選択済み/編集中は触らない
+    let live = true;
+    (async () => {
+      try {
+        const res = await fetch("/project.byp.json");
+        if (!live || !res.ok) return;
+        store.reset(parseProject(await res.text()));
+        setSavedRevision(store.revision);
+        setSelectedSceneId(store.doc.scenes[0]?.id ?? null);
+        setTime(0);
+        bumpSeek();
+      } catch {
+        /* 同梱プロジェクトが無ければ空のまま */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // 初回マウント時のみ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // シーン切替: 時刻リセット + 物理再構築
   const selectScene = useCallback(
     (id: string) => {
@@ -586,7 +612,16 @@ export function ScenePage({ store }: Props) {
   async function handleOpenFolder() {
     if (!ensureFsSupport()) return;
     const adapter: FileSystemAdapter = new FsAccessAdapter();
-    const ok = await adapter.pickProjectFolder();
+    let ok = false;
+    try {
+      ok = await adapter.pickProjectFolder();
+    } catch (err) {
+      alert(
+        `フォルダを開けませんでした: ${String(err)}\n\n` +
+          "埋め込みプレビュー枠では使えません。Chrome / Edge の通常タブで http://localhost:5273 を開いてください。",
+      );
+      return;
+    }
     if (!ok) return;
     setFs(adapter);
     resolver.invalidate();
@@ -613,8 +648,16 @@ export function ScenePage({ store }: Props) {
     let adapter = fs;
     if (!adapter) {
       const created = new FsAccessAdapter();
-      const ok = await created.pickProjectFolder();
-      if (!ok) return;
+      try {
+        const ok = await created.pickProjectFolder();
+        if (!ok) return;
+      } catch (err) {
+        alert(
+          `フォルダを開けませんでした: ${String(err)}\n\n` +
+            "埋め込みプレビュー枠では使えません。Chrome / Edge の通常タブで開いてください。",
+        );
+        return;
+      }
       setFs(created);
       adapter = created;
     }
