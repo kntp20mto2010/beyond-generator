@@ -1,0 +1,169 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "キャラクター" [ref=e5] [cursor=pointer]
+    - button "シーン編集" [ref=e6] [cursor=pointer]
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - button "新規(テンプレ複製)" [ref=e9] [cursor=pointer]
+      - button "読込▼" [ref=e11] [cursor=pointer]
+      - button "保存" [ref=e12] [cursor=pointer]
+      - generic [ref=e13]: "名前:"
+      - textbox [ref=e14]: ハル
+      - button "↩戻す" [disabled] [ref=e15]
+      - button "↪やり直す" [disabled] [ref=e16]
+      - button "コンタクトシート" [ref=e17] [cursor=pointer]
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]: スロット一覧
+        - button "胴(2)" [ref=e21] [cursor=pointer]:
+          - text: 胴
+          - generic [ref=e22]: (2)
+        - button "頭(3)" [ref=e23] [cursor=pointer]:
+          - text: 頭
+          - generic [ref=e24]: (3)
+        - button "上腕L(1)" [ref=e25] [cursor=pointer]:
+          - text: 上腕L
+          - generic [ref=e26]: (1)
+        - button "前腕L(1)" [ref=e27] [cursor=pointer]:
+          - text: 前腕L
+          - generic [ref=e28]: (1)
+        - button "上腕R(1)" [ref=e29] [cursor=pointer]:
+          - text: 上腕R
+          - generic [ref=e30]: (1)
+        - button "前腕R(1)" [ref=e31] [cursor=pointer]:
+          - text: 前腕R
+          - generic [ref=e32]: (1)
+        - button "太腿L(1)" [ref=e33] [cursor=pointer]:
+          - text: 太腿L
+          - generic [ref=e34]: (1)
+        - button "脛L(1)" [ref=e35] [cursor=pointer]:
+          - text: 脛L
+          - generic [ref=e36]: (1)
+        - button "足L(1)" [ref=e37] [cursor=pointer]:
+          - text: 足L
+          - generic [ref=e38]: (1)
+        - button "太腿R(1)" [ref=e39] [cursor=pointer]:
+          - text: 太腿R
+          - generic [ref=e40]: (1)
+        - button "脛R(1)" [ref=e41] [cursor=pointer]:
+          - text: 脛R
+          - generic [ref=e42]: (1)
+        - button "足R(1)" [ref=e43] [cursor=pointer]:
+          - text: 足R
+          - generic [ref=e44]: (1)
+        - button "眉L(1)" [ref=e45] [cursor=pointer]:
+          - text: 眉L
+          - generic [ref=e46]: (1)
+        - button "眉R(1)" [ref=e47] [cursor=pointer]:
+          - text: 眉R
+          - generic [ref=e48]: (1)
+        - button "目L(1)" [ref=e49] [cursor=pointer]:
+          - text: 目L
+          - generic [ref=e50]: (1)
+        - button "目R(1)" [ref=e51] [cursor=pointer]:
+          - text: 目R
+          - generic [ref=e52]: (1)
+        - button "口(1)" [ref=e53] [cursor=pointer]:
+          - text: 口
+          - generic [ref=e54]: (1)
+        - button "髪(後)[0](1)" [ref=e55] [cursor=pointer]:
+          - text: 髪(後)[0]
+          - generic [ref=e56]: (1)
+        - button "髪(中)[0](1)" [ref=e57] [cursor=pointer]:
+          - text: 髪(中)[0]
+          - generic [ref=e58]: (1)
+        - button "髪(中)[1](1)" [ref=e59] [cursor=pointer]:
+          - text: 髪(中)[1]
+          - generic [ref=e60]: (1)
+        - button "髪(前)[0](1)" [ref=e61] [cursor=pointer]:
+          - text: 髪(前)[0]
+          - generic [ref=e62]: (1)
+        - button "手(open)(1)" [ref=e63] [cursor=pointer]:
+          - text: 手(open)
+          - generic [ref=e64]: (1)
+        - button "手(relax)(1)" [ref=e65] [cursor=pointer]:
+          - text: 手(relax)
+          - generic [ref=e66]: (1)
+        - button "手(fist)(1)" [ref=e67] [cursor=pointer]:
+          - text: 手(fist)
+          - generic [ref=e68]: (1)
+        - button "手(point)(2)" [ref=e69] [cursor=pointer]:
+          - text: 手(point)
+          - generic [ref=e70]: (2)
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - button "選択" [ref=e73] [cursor=pointer]
+          - button "矩形" [ref=e74] [cursor=pointer]
+          - button "楕円" [ref=e75] [cursor=pointer]
+        - img [ref=e77]:
+          - generic [ref=e78]: 接地 y=310
+      - generic [ref=e162]:
+        - generic [ref=e163]: パレット
+        - generic [ref=e164]:
+          - generic [ref=e165]: 肌
+          - textbox [ref=e166] [cursor=pointer]: "#f0c19c"
+          - generic [ref=e167]: "#F0C19C"
+        - generic [ref=e168]:
+          - generic [ref=e169]: 髪
+          - textbox [ref=e170] [cursor=pointer]: "#463029"
+          - generic [ref=e171]: "#463029"
+        - generic [ref=e172]:
+          - generic [ref=e173]: メイン色
+          - textbox [ref=e174] [cursor=pointer]: "#5b7db1"
+          - generic [ref=e175]: "#5B7DB1"
+        - generic [ref=e176]:
+          - generic [ref=e177]: サブ色
+          - textbox [ref=e178] [cursor=pointer]: "#3f4a5a"
+          - generic [ref=e179]: "#3F4A5A"
+        - generic [ref=e180]:
+          - generic [ref=e181]: アクセント
+          - textbox [ref=e182] [cursor=pointer]: "#d9704c"
+          - generic [ref=e183]: "#D9704C"
+        - generic [ref=e184]:
+          - generic [ref=e185]: ライン
+          - textbox [ref=e186] [cursor=pointer]: "#2e2a33"
+          - generic [ref=e187]: "#2E2A33"
+        - generic [ref=e188]:
+          - generic [ref=e189]: ポーズプレビュー
+          - generic [ref=e190]:
+            - generic [ref=e191]:
+              - button "休め" [ref=e192] [cursor=pointer]
+              - button "手を振る" [ref=e193] [cursor=pointer]
+              - button "歩き" [ref=e194] [cursor=pointer]
+              - button "ジャンプ" [ref=e195] [cursor=pointer]
+              - button "4ポーズ" [ref=e196] [cursor=pointer]
+            - generic [ref=e197]:
+              - generic [ref=e198]: "アニメ:"
+              - combobox [ref=e199]:
+                - option "待機"
+                - option "歩き" [selected]
+                - option "走り"
+                - option "会話A"
+                - option "会話B"
+                - option "指差し"
+                - option "手を振る"
+                - option "うなずき"
+                - option "首振り"
+                - option "ジャンプ"
+              - button "▶再生" [ref=e200] [cursor=pointer]
+              - button "⏹停止" [ref=e201] [cursor=pointer]
+              - generic [ref=e202]:
+                - checkbox "反転" [ref=e203]
+                - text: 反転
+            - generic [ref=e204]:
+              - generic [ref=e205]: "表情:"
+              - combobox [ref=e206]:
+                - option "通常" [selected]
+                - option "笑顔"
+                - option "大笑い"
+                - option "悲しい"
+                - option "泣く"
+                - option "怒り"
+                - option "驚き"
+                - option "心配"
+                - option "ドヤ"
+                - option "疲れ"
+              - generic [ref=e207]:
+                - checkbox "まばたき" [checked] [ref=e208]
+                - text: まばたき
+              - button "上半身" [ref=e209] [cursor=pointer]

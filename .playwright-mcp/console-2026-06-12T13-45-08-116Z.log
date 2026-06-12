@@ -1,0 +1,4 @@
+[     503ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337
+[  429678ms] [ERROR] [vite] SyntaxError: The requested module '/src/editor/ui/icons.tsx' does not provide an export named 'IconExport' @ http://localhost:5273/@vite/client:928
+[  429680ms] [ERROR] [vite] Failed to reload /src/editor/scene/ScenePage.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5273/@vite/client:928
+[  430580ms] The requested module '/src/editor/ui/icons.tsx' does not provide an export named 'IconExport'

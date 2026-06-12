@@ -1,0 +1,6 @@
+[     366ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=c870b7ae:14337
+[  102256ms] [WARNING] WebGL: INVALID_VALUE: texImage2D: bad image data @ http://localhost:5273/node_modules/.vite/deps/pixi__js.js?v=c870b7ae:24501
+[  185166ms] [WARNING] WebGL: INVALID_VALUE: texImage2D: bad image data @ http://localhost:5273/node_modules/.vite/deps/pixi__js.js?v=c870b7ae:24501
+[  265072ms] [WARNING] WebGL: INVALID_VALUE: texImage2D: bad image data @ http://localhost:5273/node_modules/.vite/deps/pixi__js.js?v=c870b7ae:24501
+[  972567ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5273/@vite/client:992
+[  987975ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=c870b7ae:14337

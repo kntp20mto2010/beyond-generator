@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Application, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
+import { Application, Graphics } from "pixi.js";
 import type { DocStore } from "../../core/doc-store.js";
 import {
   PAPER_COLOR,
@@ -7,19 +7,15 @@ import {
   type ProjectDoc,
   type SceneDoc,
 } from "../../core/schema/project.js";
-import { CharacterView } from "../../render/character-pixi.js";
-import { drawBalloon } from "../../render/balloon.js";
 import {
   evaluateCamera,
-  evaluateScene,
   STAGE_H,
   STAGE_W,
   type CameraState,
-  type CharResolver,
   type SceneFrameItem,
 } from "../../runtime/scene-eval.js";
-import type { Mat2D } from "../../runtime/mat2d.js";
 import { ScenePhysicsPool } from "../../runtime/scene-physics.js";
+import { SceneRenderStack } from "../../render/scene-render-stack.js";
 import type { AssetResolver } from "../../io/asset-resolver.js";
 import { setBalloonTail, updateElementTransform } from "../../core/commands-project.js";
 import {
@@ -81,23 +77,6 @@ interface Props {
   apiRef: React.MutableRefObject<StageApi | null>;
 }
 
-interface ElView {
-  container: Container;
-  charView?: CharacterView;
-  text?: Text;
-  balloon?: { g: Graphics; text: Text };
-  placeholder?: { g: Graphics; label: Text };
-}
-
-// シーン境界トランジションの一時状態(snapshot方式)
-interface TransitionState {
-  sprite: Sprite;
-  tex: Texture;
-  mask: Graphics | null;
-  type: "fade" | "wipe" | "slide";
-  dur: number;
-}
-
 export function StageCanvas(props: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -110,6 +89,7 @@ export function StageCanvas(props: Props) {
     if (!host) return;
     let disposed = false;
     const app = new Application();
+    let stackRef: SceneRenderStack | null = null;
 
     (async () => {
       await withPixiInitLock(() =>
@@ -128,47 +108,16 @@ export function StageCanvas(props: Props) {
       }
       host.appendChild(app.canvas);
 
-      const root = new Container();
-      root.scale.set(STAGE_SCALE);
-      app.stage.addChild(root);
+      // 描画コアは SceneRenderStack に集約(bg / 背景画像 / 要素 / カメラ / トランジション)。
+      // 編集オーバーレイ(グリッド・選択枠・ホバー・カメラ枠)だけをここで app.stage / root に重ねる。
+      const stack = new SceneRenderStack(app, pRef.current.resolver, STAGE_SCALE);
+      stackRef = stack;
+      const root = stack.root;
 
-      const bg = new Graphics();
-      root.addChild(bg);
-
-      // 背景画像(色レイヤの上・要素の下)。高さフィット+中央クロップ
-      const bgImageLayer = new Container();
-      root.addChild(bgImageLayer);
-      // 表示中のキー = "パス|URL"。パスとURL有無の両方で再評価する
-      let bgImgKey: string | null = null;
-      const updateBgImage = (scene: SceneDoc | undefined) => {
-        const path = scene?.background?.image ?? null;
-        const url = path ? pRef.current.resolver.getImageUrl(path) : undefined;
-        const key = path ? `${path}|${url ?? ""}` : null;
-        if (key === bgImgKey) return;
-        bgImgKey = key;
-        for (const c of bgImageLayer.removeChildren()) c.destroy();
-        // 未解決(URL未取得)の間はスキップ。解決後 resolverRev が変わり再試行される
-        if (!path || !url) return;
-        const want = key;
-        const imgEl = new Image();
-        imgEl.onload = () => {
-          if (disposed || bgImgKey !== want) return;
-          const tex = Texture.from(imgEl);
-          const s = Math.max(1920 / tex.width, 1080 / tex.height);
-          const sp = new Sprite(tex);
-          sp.scale.set(s);
-          sp.position.set((1920 - tex.width * s) / 2, (1080 - tex.height * s) / 2);
-          bgImageLayer.addChild(sp);
-        };
-        imgEl.src = url;
-      };
-
-      // グリッド+セーフエリア(bgの上・要素の下、ステージ座標で描画)
+      // グリッド+セーフエリア(背景の上・要素の下、ステージ座標で描画)。
+      // root 内の elLayer の直前に挟む(評価器の絵には含めない編集用レイヤ)。
       const gridLayer = new Graphics();
-      root.addChild(gridLayer);
-
-      const elLayer = new Container();
-      root.addChild(elLayer);
+      root.addChildAt(gridLayer, root.getChildIndex(stack.elLayer));
 
       // 選択枠は app.stage 直下(zoomしても太さ一定、snapshotにも写らない)
       const selection = new Graphics();
@@ -191,42 +140,19 @@ export function StageCanvas(props: Props) {
       // ドラッグ中(要素 or スケール or カメラ)はホバーを抑止
       let dragging = false;
 
-      const views = new Map<string, ElView>();
       const pool = new ScenePhysicsPool();
       let prevT = pRef.current.tRef.current;
       let lastSeekNonce = -1;
       let throttleAcc = 0;
-      let lastFrame: SceneFrameItem[] = [];
       let lastCam: CameraState = { x: 960, y: 540, zoom: 1 };
       // カメラ枠が示すカメラ(camera-edit中はidentity表示でも枠はこの値で描く)
       let camFrameValue: CameraState = { x: 960, y: 540, zoom: 1 };
-      let transition: TransitionState | null = null;
 
       const p = () => pRef.current;
       const currentScene = (): SceneDoc | undefined =>
         p().store.doc.scenes.find((s) => s.id === p().sceneId);
 
-      const resolver: CharResolver = {
-        getCharacter: (ref) => pRef.current.resolver.getCharacter(ref),
-      };
-
-      const disposeTransition = () => {
-        if (!transition) return;
-        transition.sprite.destroy();
-        if (transition.mask) transition.mask.destroy();
-        transition.tex.destroy(true);
-        transition = null;
-      };
-
-      // root(world)へカメラ変換を適用。slidePush は新シーン押し込み量(px)
-      const applyCamera = (cam: CameraState, slidePush = 0) => {
-        const z = STAGE_SCALE * cam.zoom;
-        root.scale.set(z);
-        root.position.set(
-          VIEW_W / 2 - cam.x * z + slidePush,
-          VIEW_H / 2 - cam.y * z,
-        );
-      };
+      const resolver = { getCharacter: (ref: string) => pRef.current.resolver.getCharacter(ref) };
 
       // === ヒットテスト / 座標補助 ===
       const canvas = app.canvas;
@@ -237,9 +163,11 @@ export function StageCanvas(props: Props) {
         return [((clientX - r.left) / r.width) * VIEW_W, ((clientY - r.top) / r.height) * VIEW_H];
       };
 
-      // viewのbounds(app.stage=screen座標のAABB)をステージ座標のEdgesへ変換
-      const viewStageEdges = (view: ElView): Edges => {
-        const b = view.container.getBounds();
+      // 要素のbounds(app.stage=screen座標のAABB)をステージ座標のEdgesへ変換。未描画なら null
+      const elStageEdges = (elementId: string): Edges | null => {
+        const container = stack.getView(elementId);
+        if (!container) return null;
+        const b = container.getBounds();
         const [l, t] = screenToStage(b.x, b.y, lastCam);
         const [r, bot] = screenToStage(b.x + b.width, b.y + b.height, lastCam);
         return { l, r, t, b: bot, cx: (l + r) / 2, cy: (t + bot) / 2 };
@@ -247,15 +175,15 @@ export function StageCanvas(props: Props) {
 
       // z降順で最初に当たった要素(locked除外)。bounds は screen座標
       const hitTest = (sx: number, sy: number): string | null => {
-        const frame = lastFrame;
+        const frame = stack.lastFrame;
         const scene = currentScene();
         for (let i = frame.length - 1; i >= 0; i--) {
           const item = frame[i]!;
           const el = scene?.elements.find((e) => e.id === item.elementId);
           if (el?.locked) continue; // locked はヒット対象外
-          const view = views.get(item.elementId);
-          if (!view) continue;
-          const b = view.container.getBounds();
+          const container = stack.getView(item.elementId);
+          if (!container) continue;
+          const b = container.getBounds();
           if (sx >= b.x && sx <= b.x + b.width && sy >= b.y && sy <= b.y + b.height) {
             return item.elementId;
           }
@@ -286,9 +214,9 @@ export function StageCanvas(props: Props) {
         const scene = currentScene();
         const el = scene?.elements.find((e) => e.id === id);
         if (!el || el.locked) return null;
-        const view = views.get(id);
-        if (!view) return null;
-        const b = view.container.getBounds();
+        const container = stack.getView(id);
+        if (!container) return null;
+        const b = container.getBounds();
         const corners: [number, number][] = [
           [b.x - 6, b.y - 6],
           [b.x + b.width + 6, b.y - 6],
@@ -385,15 +313,14 @@ export function StageCanvas(props: Props) {
         const startY = el.transform.y;
         const [startStageX, startStageY] = screenToStage(sx, sy, lastCam);
         // スナップ用: 開始bounds(ステージ座標)と他要素エッジ(自分・locked除外)
-        const startView = views.get(hitId);
-        const startEdges = startView ? viewStageEdges(startView) : null;
+        const startEdges = elStageEdges(hitId);
         const otherEdges: Edges[] = [];
-        for (const item of lastFrame) {
+        for (const item of stack.lastFrame) {
           if (item.elementId === hitId) continue;
           const oe = scene.elements.find((e) => e.id === item.elementId);
           if (oe?.locked) continue;
-          const ov = views.get(item.elementId);
-          if (ov) otherEdges.push(viewStageEdges(ov));
+          const oe2 = elStageEdges(item.elementId);
+          if (oe2) otherEdges.push(oe2);
         }
         canvas.setPointerCapture(ev.pointerId);
         dragging = true;
@@ -569,20 +496,7 @@ export function StageCanvas(props: Props) {
 
       // 整列用: 要素のステージ座標boundsを公開
       pRef.current.apiRef.current = {
-        getStageEdges: (elementId) => {
-          const v = views.get(elementId);
-          return v ? viewStageEdges(v) : null;
-        },
-      };
-
-      const collectDeforms = (scene: SceneDoc): Map<string, Map<string, Mat2D>> => {
-        const map = new Map<string, Map<string, Mat2D>>();
-        for (const el of scene.elements) {
-          if (el.kind !== "character") continue;
-          const d = pool.deforms(el.id);
-          if (d) map.set(el.id, d);
-        }
-        return map;
+        getStageEdges: (elementId) => elStageEdges(elementId),
       };
 
       const drawSelection = (frame: SceneFrameItem[]) => {
@@ -592,10 +506,10 @@ export function StageCanvas(props: Props) {
         const id = p().selectedId;
         if (!id) return;
         const item = frame.find((f) => f.elementId === id);
-        const view = item ? views.get(id) : undefined;
-        if (!view) return;
+        const container = item ? stack.getView(id) : undefined;
+        if (!container) return;
         // bounds は app.stage(screen)座標なのでそのまま使う
-        const b = view.container.getBounds();
+        const b = container.getBounds();
         selection
           .rect(b.x - 6, b.y - 6, b.width + 12, b.height + 12)
           .stroke({ color: 0x5b7db1, width: 3 });
@@ -623,9 +537,9 @@ export function StageCanvas(props: Props) {
       const drawHover = (elementId: string | null) => {
         hover.clear();
         if (elementId === null) return;
-        const view = views.get(elementId);
-        if (!view) return;
-        const b = view.container.getBounds();
+        const container = stack.getView(elementId);
+        if (!container) return;
+        const b = container.getBounds();
         hover
           .rect(b.x - 4, b.y - 4, b.width + 8, b.height + 8)
           .stroke({ color: 0x5b7db1, width: 1, alpha: 0.5 });
@@ -674,87 +588,47 @@ export function StageCanvas(props: Props) {
         gridLayer.stroke({ color: 0x5b7db1, width: 2, alpha: 0.35 });
       };
 
-      const renderFrame = (scene: SceneDoc | undefined, t: number) => {
-        bg.clear();
-        const color = scene?.background?.color ?? PAPER_COLOR;
-        bg.rect(0, 0, 1920, 1080).fill({ color });
-        updateBgImage(scene);
-        drawGrid();
+      // 現在進行中のトランジション(slidePush と進行率の算出に使う。snapshot 本体は stack 側)
+      let transMeta: { type: "fade" | "wipe" | "slide"; dur: number } | null = null;
 
+      const renderFrame = (scene: SceneDoc | undefined, t: number) => {
         // カメラ評価。枠が示すカメラ = ドラッグ中ローカル値 ?? 評価値
         const evalCam = scene ? evaluateCamera(scene.camera, t) : { x: 960, y: 540, zoom: 1 };
         camFrameValue = camLive ?? evalCam;
         // トランジション slide の押し込み量
         let slidePush = 0;
-        if (transition && transition.type === "slide") {
-          const prog = transition.dur > 0 ? Math.min(t / transition.dur, 1) : 1;
+        if (transMeta && transMeta.type === "slide") {
+          const prog = transMeta.dur > 0 ? Math.min(t / transMeta.dur, 1) : 1;
           slidePush = (1 - prog) * VIEW_W;
         }
         // カメラモード中はステージをidentity表示(枠でクロップを示す)。
         // lastCam(ヒットテスト/座標基準)もidentityに合わせる。
-        if (p().cameraEdit) {
-          lastCam = { x: 960, y: 540, zoom: 1 };
-          applyCamera(lastCam, 0);
-        } else {
-          lastCam = camFrameValue;
-          applyCamera(lastCam, slidePush);
-        }
+        const cameraOverride = p().cameraEdit
+          ? { x: 960, y: 540, zoom: 1 }
+          : camFrameValue;
+
+        lastCam = stack.renderFrame(p().store.doc, scene, t, pool, { cameraOverride, slidePush });
+        drawGrid();
         drawCameraOverlay();
 
         if (!scene) {
-          for (const [, v] of views) v.container.destroy({ children: true });
-          views.clear();
           selection.clear();
-          lastFrame = [];
           return;
         }
-
-        const frame = evaluateScene(p().store.doc, scene, t, resolver, {
-          hairDeforms: collectDeforms(scene),
-          // 口パク: 再生中もスクラブ中も同じエンベロープ参照(音は鳴らずとも口は動く)
-          audio: { lookup: (path) => pRef.current.resolver.getAudio(path) },
-        });
-        lastFrame = frame;
-
-        const seen = new Set<string>();
-        elLayer.removeChildren(); // z順を毎フレーム反映(要素数は少ない)
-
-        for (const item of frame) {
-          seen.add(item.elementId);
-          let view = views.get(item.elementId);
-          if (!view) {
-            view = { container: new Container() };
-            views.set(item.elementId, view);
-          }
-          applyItem(view, item);
-          elLayer.addChild(view.container);
-        }
-        for (const [id, v] of [...views]) {
-          if (!seen.has(id)) {
-            v.container.destroy({ children: true });
-            views.delete(id);
-          }
-        }
-
-        drawSelection(frame);
+        drawSelection(stack.lastFrame);
       };
 
       // トランジション進行(新シーン再生中)。snapshot を p に応じて変形/消去
       const advanceTransition = (t: number) => {
-        if (!transition) return;
-        const prog = transition.dur > 0 ? Math.min(t / transition.dur, 1) : 1;
-        const snap = transition.sprite;
-        if (transition.type === "fade") {
-          snap.alpha = 1 - prog;
-        } else if (transition.type === "wipe" && transition.mask) {
-          transition.mask.clear();
-          transition.mask
-            .rect(prog * VIEW_W, 0, VIEW_W - prog * VIEW_W, VIEW_H)
-            .fill({ color: 0xffffff });
-        } else if (transition.type === "slide") {
-          snap.x = -prog * VIEW_W;
-        }
-        if (prog >= 1) disposeTransition();
+        if (!transMeta) return;
+        const prog = transMeta.dur > 0 ? Math.min(t / transMeta.dur, 1) : 1;
+        stack.applyTransition(prog);
+        if (prog >= 1) transMeta = null;
+      };
+
+      const disposeTransition = () => {
+        stack.disposeTransition();
+        transMeta = null;
       };
 
       // 次シーンへ切り替わる直前: 現stageをsnapshot化(transitionがcut以外なら)
@@ -766,20 +640,8 @@ export function StageCanvas(props: Props) {
         if (!next) return;
         const trans = next.transition;
         if (!trans || trans.type === "cut") return;
-        disposeTransition();
-        const tex = app.renderer.extract.texture(app.stage);
-        const sprite = new Sprite(tex);
-        sprite.position.set(0, 0);
-        let mask: Graphics | null = null;
-        if (trans.type === "wipe") {
-          mask = new Graphics();
-          mask.rect(0, 0, VIEW_W, VIEW_H).fill({ color: 0xffffff });
-          app.stage.addChild(mask);
-          sprite.mask = mask;
-        }
-        // 選択枠より前面(最前面)へ
-        app.stage.addChild(sprite);
-        transition = { sprite, tex, mask, type: trans.type, dur: trans.dur };
+        stack.beginTransition(trans.type, trans.dur);
+        transMeta = { type: trans.type, dur: trans.dur };
       };
 
       app.ticker.add(() => {
@@ -809,7 +671,7 @@ export function StageCanvas(props: Props) {
             pool.advance(cur.store.doc, scene, prevT, t, resolver);
             prevT = t;
             renderFrame(scene, t);
-            if (transition && cur.playMode === "all") advanceTransition(t);
+            if (transMeta && cur.playMode === "all") advanceTransition(t);
             throttleAcc += dt;
             if (throttleAcc >= 0.05) {
               throttleAcc = 0;
@@ -818,7 +680,7 @@ export function StageCanvas(props: Props) {
           }
         } else {
           // 非再生: 共有時刻で描画(scrub中も)。トランジションは描かない
-          if (transition) disposeTransition();
+          if (stack.hasTransition()) disposeTransition();
           prevT = cur.tRef.current;
           renderFrame(scene, cur.tRef.current);
         }
@@ -827,6 +689,8 @@ export function StageCanvas(props: Props) {
 
     return () => {
       disposed = true;
+      // stack を先に破棄(背景画像の遅延ロードガード #disposed を立て、root/views を解放)
+      stackRef?.destroy();
       if (app.renderer) app.destroy(true, { children: true });
     };
     // 初期化は一度だけ。状態は pRef 経由で読む
@@ -844,101 +708,4 @@ export function StageCanvas(props: Props) {
       }}
     />
   );
-}
-
-// ---------------------------------------------------------------------------
-// 要素の表示更新
-// ---------------------------------------------------------------------------
-
-function applyItem(view: ElView, item: SceneFrameItem): void {
-  const c = view.container;
-  const visual = item.visual;
-  c.alpha = visual.alpha;
-
-  if (item.payload.kind === "character") {
-    if (!view.charView) {
-      view.charView = new CharacterView();
-      c.addChild(view.charView.container);
-    }
-    if (view.text) {
-      view.text.destroy();
-      view.text = undefined;
-    }
-    view.charView.update(item.payload.char, item.payload.items);
-    const tf = item.payload.transform;
-    const s = tf.scale * visual.scaleMul;
-    c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
-    c.scale.set(item.payload.flipX ? -s : s, s);
-  } else if (item.payload.kind === "text") {
-    const el = item.payload.el;
-    const stroke =
-      el.strokeColor !== null
-        ? { color: el.strokeColor, width: el.strokeWidth, join: "round" as const }
-        : undefined;
-    if (!view.text) {
-      view.text = new Text({ text: el.text });
-      view.text.anchor.set(0.5);
-      c.addChild(view.text);
-    }
-    view.text.text = el.text;
-    view.text.style = {
-      fontFamily: "system-ui, sans-serif",
-      fontSize: el.size,
-      fill: el.color,
-      ...(stroke ? { stroke } : {}),
-      align: "center",
-    };
-    const tf = item.payload.transform;
-    c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
-    c.scale.set(tf.scale * visual.scaleMul);
-  } else if (item.payload.kind === "balloon") {
-    const el = item.payload.el;
-    if (!view.balloon) {
-      const g = new Graphics();
-      const text = new Text({ text: el.text });
-      text.anchor.set(0.5);
-      c.addChild(g);
-      c.addChild(text);
-      view.balloon = { g, text };
-    }
-    const { g, text } = view.balloon;
-    g.clear();
-    drawBalloon(g, el);
-    text.text = el.text;
-    text.style = {
-      fontFamily: "system-ui, sans-serif",
-      fontSize: el.size,
-      fill: el.textColor,
-      wordWrap: true,
-      wordWrapWidth: el.w - 48,
-      breakWords: true,
-      align: "center",
-    };
-    const tf = item.payload.transform;
-    c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
-    // balloon は flipX を適用しない(テキスト同様)
-    c.scale.set(tf.scale * visual.scaleMul);
-  } else {
-    // placeholder
-    const tf = item.payload.transform;
-    if (!view.placeholder) {
-      const g = new Graphics();
-      const label = new Text({
-        text: "未解決",
-        style: { fontFamily: "system-ui", fontSize: 40, fill: "#888" },
-      });
-      label.anchor.set(0.5);
-      c.addChild(g);
-      c.addChild(label);
-      view.placeholder = { g, label };
-    }
-    view.placeholder.g.clear();
-    view.placeholder.g
-      .rect(-120, -300, 240, 300)
-      .fill({ color: 0xdddddd })
-      .stroke({ color: 0x999999, width: 2 });
-    view.placeholder.label.position.set(0, -150);
-    c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
-    c.scale.set(tf.scale * visual.scaleMul);
-  }
 }

@@ -50,8 +50,11 @@ import { copyElement, hasClipboard, readClipboard } from "./clipboard.js";
 import { QuickActionPopover } from "./QuickActionPopover.js";
 import { ScriptPanel } from "./ScriptPanel.js";
 import { OVERVIEW_CAMERA, focusOnBounds } from "./camera-preset.js";
+import { VIEW_W, VIEW_H } from "./stage-coords.js";
 import type { CameraState } from "../../runtime/scene-eval.js";
-import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid, IconCamera } from "../ui/icons.js";
+import { ExportDialog } from "./ExportDialog.js";
+import { exportMp4, isExportCancelled, type ExportProgress, type ExportSettings } from "../../export/mp4-exporter.js";
+import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid, IconCamera, IconExport } from "../ui/icons.js";
 
 interface Props {
   store: DocStore<ProjectDoc>;
@@ -96,6 +99,12 @@ export function ScenePage({ store }: Props) {
   const [showGrid, setShowGrid] = useState(false);
   const [cameraEdit, setCameraEdit] = useState(false);
   const [rightTab, setRightTab] = useState<"property" | "script">("property");
+  // 書き出し: ダイアログ開閉 / 進捗(null=設定中) / エラー。実行中はStageCanvasをアンマウント
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportAbortRef = useRef<AbortController | null>(null);
+  const exporting = exportProgress !== null;
   // クイックアクションPopover(キャラのダブルクリック)
   const [quickAction, setQuickAction] = useState<
     { clientX: number; clientY: number; elementId: string } | null
@@ -232,6 +241,97 @@ export function ScenePage({ store }: Props) {
   const stop = () => {
     audioPlayback.stopAll();
     setPlayMode(null);
+  };
+
+  // === 書き出し ===
+  const openExport = () => {
+    // 再生中なら先に止める
+    audioPlayback.stopAll();
+    setPlayMode(null);
+    setExportProgress(null);
+    setExportError(null);
+    setExportOpen(true);
+  };
+
+  const startExport = async (settings: ExportSettings) => {
+    // 念のため再生停止
+    audioPlayback.stopAll();
+    setPlayMode(null);
+    setExportError(null);
+    // StageCanvas をアンマウントしてレンダラー排他を確保(exporting=true)
+    setExportProgress({ frame: 0, totalFrames: 0, phase: "audio" });
+
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+
+    // 全アセット(キャラ/画像/音声)を解決してから開始(書き出しは解決済み前提)
+    try {
+      const refs = doc.scenes
+        .flatMap((s) => s.elements)
+        .filter((e): e is CharacterElement => e.kind === "character")
+        .map((e) => e.ref);
+      const images = doc.scenes.map((s) => s.background?.image).filter((i): i is string => !!i);
+      const audioPaths = collectAudioPaths(doc);
+      await Promise.all([
+        resolver.ensureLoaded(refs, fs),
+        resolver.ensureImagesLoaded(images, fs),
+        resolver.ensureAudioLoaded(audioPaths, fs),
+      ]);
+
+      const blob = await exportMp4(
+        doc,
+        resolver,
+        settings,
+        (p) => setExportProgress(p),
+        controller.signal,
+      );
+
+      // DEV検証用: 書き出した Blob を取り出せるようにする
+      if (import.meta.env.DEV) {
+        (globalThis as unknown as { __lastExportBlob?: Blob }).__lastExportBlob = blob;
+      }
+
+      // ダウンロード
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${doc.title || "byond"}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      // 完了 → ダイアログを閉じて StageCanvas を再マウント(物理再構築)
+      finishExport();
+    } catch (err) {
+      exportAbortRef.current = null;
+      if (isExportCancelled(err)) {
+        // キャンセル: 破棄してダイアログを閉じる
+        finishExport();
+      } else {
+        setExportProgress(null);
+        setExportError(String(err instanceof Error ? err.message : err));
+      }
+    }
+  };
+
+  const cancelExport = () => {
+    exportAbortRef.current?.abort();
+  };
+
+  // 終了処理(成功/キャンセル): StageCanvas を戻し物理を再構築
+  const finishExport = () => {
+    exportAbortRef.current = null;
+    setExportProgress(null);
+    setExportOpen(false);
+    setExportError(null);
+    bumpSeek();
+  };
+
+  const closeExport = () => {
+    if (exporting) return; // 実行中は閉じない(キャンセルを使う)
+    setExportOpen(false);
+    setExportError(null);
   };
 
   const onReachEnd = useCallback(
@@ -772,6 +872,15 @@ export function ScenePage({ store }: Props) {
             </button>
           </>
         )}
+        <div className="ui-sep" />
+        <button
+          className="ui-btn"
+          onClick={openExport}
+          disabled={doc.scenes.length === 0}
+          title="動画を書き出し(MP4)"
+        >
+          <IconExport /> 書き出し
+        </button>
         {isDirty && <span style={{ color: "var(--warn)", fontSize: "11px", marginLeft: "2px" }}>● 未保存</span>}
       </div>
 
@@ -792,7 +901,25 @@ export function ScenePage({ store }: Props) {
           />
         </div>
         <div className="stage-frame">
-          {scene ? (
+          {exporting ? (
+            // 書き出し中は Pixi レンダラー排他のため StageCanvas をアンマウント
+            <div
+              style={{
+                width: VIEW_W,
+                height: VIEW_H,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text-dim)",
+                fontSize: "13px",
+                background: "var(--bg-panel)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+              }}
+            >
+              書き出し中…
+            </div>
+          ) : scene ? (
             <StageCanvas
               store={store}
               resolver={resolver}
@@ -977,6 +1104,18 @@ export function ScenePage({ store }: Props) {
           onPickClip={onQuickPickClip}
           onPickExpression={onQuickPickExpression}
           onClose={() => setQuickAction(null)}
+        />
+      )}
+
+      {/* 書き出しダイアログ */}
+      {exportOpen && (
+        <ExportDialog
+          project={doc}
+          progress={exportProgress}
+          error={exportError}
+          onStart={startExport}
+          onCancel={cancelExport}
+          onClose={closeExport}
         />
       )}
     </div>

@@ -214,3 +214,13 @@ export function IconKeyDiamond() {
     </svg>
   );
 }
+
+export function IconExport() {
+  return (
+    <svg {...PROPS}>
+      <path d="M8 2 L8 10" />
+      <polyline points="5,7 8,10 11,7" />
+      <path d="M2 11 L2 14 L14 14 L14 11" />
+    </svg>
+  );
+}
