@@ -7,6 +7,7 @@ export interface FileSystemAdapter {
   pickProjectFolder(): Promise<boolean>;
   readTextFile(relPath: string): Promise<string | null>;
   writeTextFile(relPath: string, content: string): Promise<void>;
+  listFiles(relDir: string): Promise<string[]>;
   readonly folderName: string | null;
 }
 
@@ -62,6 +63,24 @@ export class FsAccessAdapter implements FileSystemAdapter {
     await writable.write(content);
     await writable.close();
   }
+
+  async listFiles(relDir: string): Promise<string[]> {
+    if (!this.#handle) return [];
+    try {
+      const parts = relDir.split("/").filter(Boolean);
+      let dir: FileSystemDirectoryHandle = this.#handle;
+      for (const part of parts) {
+        dir = await dir.getDirectoryHandle(part);
+      }
+      const names: string[] = [];
+      for await (const [name, handle] of dir) {
+        if (handle.kind === "file") names.push(name);
+      }
+      return names;
+    } catch {
+      return [];
+    }
+  }
 }
 
 export class MemoryAdapter implements FileSystemAdapter {
@@ -83,6 +102,20 @@ export class MemoryAdapter implements FileSystemAdapter {
 
   async writeTextFile(relPath: string, content: string): Promise<void> {
     this.#files.set(relPath, content);
+  }
+
+  async listFiles(relDir: string): Promise<string[]> {
+    const prefix = relDir.endsWith("/") ? relDir : `${relDir}/`;
+    const names: string[] = [];
+    for (const key of this.#files.keys()) {
+      if (key.startsWith(prefix)) {
+        const rest = key.slice(prefix.length);
+        if (rest && !rest.includes("/")) {
+          names.push(rest);
+        }
+      }
+    }
+    return names;
   }
 }
 

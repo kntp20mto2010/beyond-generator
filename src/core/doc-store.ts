@@ -105,6 +105,14 @@ export class DocStore<D extends object> {
     return this.#redoStack.length > 0;
   }
 
+  reset(doc: D): void {
+    this.#doc = doc;
+    this.#undoStack = [];
+    this.#redoStack = [];
+    this.#revision++;
+    this.#notify();
+  }
+
   subscribe(cb: () => void): () => void {
     this.#listeners.add(cb);
     return () => {

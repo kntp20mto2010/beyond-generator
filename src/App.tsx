@@ -2,7 +2,8 @@ import { useState } from "react";
 import { DocStore } from "./core/doc-store.js";
 import { createEmptyProject } from "./core/schema/project.js";
 import { AppShell } from "./editor/shell/AppShell.js";
-import { CharacterPage } from "./editor/character/CharacterPage.js";
+import { CharacterEditorPage } from "./editor/character/CharacterEditorPage.js";
+import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
 
@@ -10,6 +11,7 @@ type Tab = "scene" | "character";
 
 function App() {
   const [tab, setTab] = useState<Tab>("character");
+  const fs = useUiStore((s) => s.fs);
 
   const tabStyle = (active: boolean) => ({
     padding: "6px 16px",
@@ -21,8 +23,8 @@ function App() {
   });
 
   return (
-    <div>
-      <nav style={{ display: "flex", gap: "4px", borderBottom: "1px solid #ddd", padding: "0 8px" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <nav style={{ display: "flex", gap: "4px", borderBottom: "1px solid #ddd", padding: "0 8px", flexShrink: 0 }}>
         <button style={tabStyle(tab === "character")} onClick={() => setTab("character")}>
           キャラクター
         </button>
@@ -30,7 +32,11 @@ function App() {
           シーン編集
         </button>
       </nav>
-      {tab === "character" ? <CharacterPage /> : <AppShell store={store} />}
+      {tab === "character" ? (
+        <CharacterEditorPage fs={fs} />
+      ) : (
+        <AppShell store={store} />
+      )}
     </div>
   );
 }
