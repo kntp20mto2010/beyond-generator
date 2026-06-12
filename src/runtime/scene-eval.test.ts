@@ -11,14 +11,21 @@ import { CLIPS } from "../presets/clips/index.js";
 import { sampleClip } from "./clip-player.js";
 import {
   evaluateActionTrack,
+  evaluateCamera,
+  evaluateCharMotion,
   evaluateEffect,
   evaluateScene,
+  expandActions,
   type CharResolver,
 } from "./scene-eval.js";
+import type { Action, CameraKey } from "../core/schema/project.js";
 
 const resolver: CharResolver = {
   getCharacter: (ref) => (ref === "builtin:template-a" ? TEMPLATE_A : undefined),
 };
+
+// moveTo無しの純ポーズ評価では origin は from/to に影響しない(任意値でよい)
+const ORIGIN: [number, number] = [0, 0];
 
 function makeCharEl(over: Partial<CharacterElement> = {}): CharacterElement {
   return {
@@ -27,6 +34,7 @@ function makeCharEl(over: Partial<CharacterElement> = {}): CharacterElement {
     ref: "builtin:template-a",
     transform: { x: 960, y: 700, scale: 0.9, flipX: false },
     z: 0,
+    locked: false,
     enter: { type: "cut", delay: 0, dur: 0.4 },
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [],
@@ -50,21 +58,21 @@ function sceneWith(elements: SceneDoc["elements"], seed = 5): { project: Project
 
 describe("evaluateActionTrack", () => {
   it("アクションが無ければ暗黙の idle を再生する", () => {
-    const frame = evaluateActionTrack([], 0.3);
+    const frame = evaluateActionTrack(ORIGIN, [], 0.3);
     const idle = sampleClip(CLIPS["idle"]!, 0.3);
     expect(frame.pose.rotations?.torso ?? 0).toBeCloseTo(idle.pose.rotations?.torso ?? 0, 5);
   });
 
   it("純関数: 同入力で同出力", () => {
     const actions = [{ t: 0.5, clip: "wave", speed: 1 }];
-    const a = evaluateActionTrack(actions, 1.0);
-    const b = evaluateActionTrack(actions, 1.0);
+    const a = evaluateActionTrack(ORIGIN, actions, 1.0);
+    const b = evaluateActionTrack(ORIGIN, actions, 1.0);
     expect(a).toEqual(b);
   });
 
   it("active アクションのローカル時刻に speed が掛かる", () => {
     const actions = [{ t: 1.0, clip: "wave", speed: 2 }];
-    const frame = evaluateActionTrack(actions, 1.5); // local = (1.5-1.0)*2 = 1.0
+    const frame = evaluateActionTrack(ORIGIN, actions, 1.5); // local = (1.5-1.0)*2 = 1.0
     const expected = sampleClip(CLIPS["wave"]!, 1.0);
     expect(frame.pose.rotations?.upperArmL ?? 0).toBeCloseTo(
       expected.pose.rotations?.upperArmL ?? 0,
@@ -74,7 +82,7 @@ describe("evaluateActionTrack", () => {
 
   it("クロスフェード窓を越えた後は active クリップに一致(暗黙idle→wave)", () => {
     const actions = [{ t: 1.0, clip: "wave", speed: 1 }];
-    const after = evaluateActionTrack(actions, 1.3); // 0.3 > 0.22
+    const after = evaluateActionTrack(ORIGIN, actions, 1.3); // 0.3 > 0.22
     const pure = sampleClip(CLIPS["wave"]!, 0.3);
     expect(after.pose.rotations?.upperArmL ?? 0).toBeCloseTo(
       pure.pose.rotations?.upperArmL ?? 0,
@@ -89,7 +97,7 @@ describe("evaluateActionTrack", () => {
     ];
     let prev: number | null = null;
     for (let t = 0.9; t <= 1.25; t += 0.008) {
-      const v = evaluateActionTrack(actions, t).pose.rotations?.thighL ?? 0;
+      const v = evaluateActionTrack(ORIGIN, actions, t).pose.rotations?.thighL ?? 0;
       if (prev !== null) expect(Math.abs(v - prev)).toBeLessThan(8);
       prev = v;
     }
@@ -97,7 +105,7 @@ describe("evaluateActionTrack", () => {
 
   it("非ループクリップは最終姿勢を保持する", () => {
     const actions = [{ t: 0, clip: "point", speed: 1 }];
-    const frame = evaluateActionTrack(actions, 10);
+    const frame = evaluateActionTrack(ORIGIN, actions, 10);
     expect(frame.pose.rotations?.upperArmL ?? 0).toBeCloseTo(-95, 0);
   });
 
@@ -107,7 +115,7 @@ describe("evaluateActionTrack", () => {
       { t: 1.0, clip: "wave", speed: 1 },
       { t: 1.0, clip: "point", speed: 1 },
     ];
-    const frame = evaluateActionTrack(actions, 1.5);
+    const frame = evaluateActionTrack(ORIGIN, actions, 1.5);
     const point = sampleClip(CLIPS["point"]!, 0.5);
     expect(frame.pose.rotations?.upperArmL ?? 0).toBeCloseTo(
       point.pose.rotations?.upperArmL ?? 0,
@@ -117,7 +125,7 @@ describe("evaluateActionTrack", () => {
 
   it("明示的な t=0 アクションは暗黙idleより優先", () => {
     const actions = [{ t: 0, clip: "run", speed: 1 }];
-    const frame = evaluateActionTrack(actions, 0.5);
+    const frame = evaluateActionTrack(ORIGIN, actions, 0.5);
     const run = sampleClip(CLIPS["run"]!, 0.5);
     expect(frame.pose.rotations?.thighL ?? 0).toBeCloseTo(run.pose.rotations?.thighL ?? 0, 5);
   });
@@ -197,6 +205,7 @@ describe("evaluateScene", () => {
       strokeWidth: 6,
       transform: { x: 0, y: 0, scale: 1, flipX: false },
       z: 5,
+      locked: false,
       enter: { type: "cut", delay: 0, dur: 0.4 },
       exit: { type: "cut", at: null, dur: 0.4 },
     };
@@ -250,5 +259,192 @@ describe("evaluateScene", () => {
     const char = makeCharEl({ enter: { type: "fade", delay: 2, dur: 0.4 } });
     const { project, scene } = sceneWith([char]);
     expect(evaluateScene(project, scene, 0.5, resolver)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// expandActions / evaluateCharMotion(moveTo歩行移動)
+// ---------------------------------------------------------------------------
+
+describe("expandActions / evaluateCharMotion", () => {
+  it("等速移動の中間位置(walk v=240, dist=240 → 1秒で到着)", () => {
+    const el = makeCharEl({
+      transform: { x: 0, y: 0, scale: 1, flipX: false },
+      actions: [{ t: 0, clip: "walk", speed: 1, moveTo: { x: 240, y: 0 } }],
+    });
+    const at0 = evaluateCharMotion(el, 0);
+    const at05 = evaluateCharMotion(el, 0.5);
+    const at1 = evaluateCharMotion(el, 1);
+    expect(at0.pos[0]).toBeCloseTo(0, 5);
+    expect(at05.pos[0]).toBeCloseTo(120, 5);
+    expect(at1.pos[0]).toBeCloseTo(240, 5);
+    // 移動中は vel 非ゼロ、到着後ゼロ
+    expect(at05.vel[0]).toBeCloseTo(240, 5);
+    expect(evaluateCharMotion(el, 1.5).vel[0]).toBe(0);
+  });
+
+  it("到着後は to に静止し、暗黙idleがポーズに効く", () => {
+    const el = makeCharEl({
+      transform: { x: 0, y: 0, scale: 1, flipX: false },
+      actions: [{ t: 0, clip: "walk", speed: 1, moveTo: { x: 240, y: 0 } }],
+    });
+    // 到着後の位置は固定
+    expect(evaluateCharMotion(el, 3).pos[0]).toBeCloseTo(240, 5);
+    // evaluateActionTrack: 到着(t=1)以降は暗黙idleのポーズ。十分後でidle相当
+    const frame = evaluateActionTrack([0, 0], el.actions, 2.0);
+    const idle = sampleClip(CLIPS["idle"]!, 0); // idle先頭(ループ周期内)
+    // idleはループ。t=2 はidle開始から1秒 → idle(1秒)と一致を確認
+    const idleAt = sampleClip(CLIPS["idle"]!, 2.0 - 1.0);
+    expect(frame.pose.rotations?.torso ?? 0).toBeCloseTo(idleAt.pose.rotations?.torso ?? 0, 5);
+    void idle;
+  });
+
+  it("打ち切り: 移動中に次アクション開始 → 位置が連続", () => {
+    const el = makeCharEl({
+      transform: { x: 0, y: 0, scale: 1, flipX: false },
+      // 1秒で240まで歩く予定だが 0.5s で別アクション → 120で打ち切り
+      actions: [
+        { t: 0, clip: "walk", speed: 1, moveTo: { x: 240, y: 0 } },
+        { t: 0.5, clip: "wave", speed: 1 },
+      ],
+    });
+    const justBefore = evaluateCharMotion(el, 0.499);
+    const justAfter = evaluateCharMotion(el, 0.501);
+    // 境界で位置が連続(打ち切り点=120付近、両側でジャンプしない)
+    expect(Math.abs(justAfter.pos[0] - justBefore.pos[0])).toBeLessThan(1);
+    expect(justBefore.pos[0]).toBeCloseTo(119.76, 1);
+    // 到達点(t=0.5)はちょうど120、打ち切り後は静止
+    expect(evaluateCharMotion(el, 0.5).pos[0]).toBeCloseTo(120, 5);
+    expect(evaluateCharMotion(el, 1.0).pos[0]).toBeCloseTo(120, 5);
+  });
+
+  it("facing: 左移動で-1、到着後も維持", () => {
+    const el = makeCharEl({
+      transform: { x: 500, y: 0, scale: 1, flipX: false },
+      actions: [{ t: 0, clip: "walk", speed: 1, moveTo: { x: 260, y: 0 } }], // 左へ
+    });
+    expect(evaluateCharMotion(el, 0.5).facing).toBe(-1);
+    // 到着後(dist=240→1秒)も向きは維持
+    expect(evaluateCharMotion(el, 3).facing).toBe(-1);
+  });
+
+  it("移動が無ければ facing は transform.flipX 準拠", () => {
+    const plain = makeCharEl({ transform: { x: 0, y: 0, scale: 1, flipX: false } });
+    const flipped = makeCharEl({ transform: { x: 0, y: 0, scale: 1, flipX: true } });
+    expect(evaluateCharMotion(plain, 1).facing).toBe(1);
+    expect(evaluateCharMotion(flipped, 1).facing).toBe(-1);
+  });
+
+  it("virtualVelocity=0クリップ(idle)にmoveTo → 240でフォールバック", () => {
+    const el = makeCharEl({
+      transform: { x: 0, y: 0, scale: 1, flipX: false },
+      actions: [{ t: 0, clip: "idle", speed: 1, moveTo: { x: 240, y: 0 } }],
+    });
+    // 240/240 = 1秒で到着。t=0.5 で半分
+    expect(evaluateCharMotion(el, 0.5).pos[0]).toBeCloseTo(120, 5);
+    expect(evaluateCharMotion(el, 1.0).pos[0]).toBeCloseTo(240, 5);
+  });
+
+  it("speed=2 で所要時間が半分", () => {
+    const el = makeCharEl({
+      transform: { x: 0, y: 0, scale: 1, flipX: false },
+      actions: [{ t: 0, clip: "walk", speed: 2, moveTo: { x: 240, y: 0 } }],
+    });
+    // v=480 → 0.5秒で到着。t=0.25 で半分
+    expect(evaluateCharMotion(el, 0.25).pos[0]).toBeCloseTo(120, 5);
+    expect(evaluateCharMotion(el, 0.5).pos[0]).toBeCloseTo(240, 5);
+    expect(evaluateCharMotion(el, 0.6).vel[0]).toBe(0);
+  });
+
+  it("y省略 = 開始時のyを維持(横移動)", () => {
+    const el = makeCharEl({
+      transform: { x: 0, y: 333, scale: 1, flipX: false },
+      actions: [{ t: 0, clip: "walk", speed: 1, moveTo: { x: 240 } }],
+    });
+    const m = evaluateCharMotion(el, 0.5);
+    expect(m.pos[1]).toBeCloseTo(333, 5);
+  });
+
+  it("moveTo無し要素は従来評価と完全一致(origin不変・位置=transform)", () => {
+    const actions: Action[] = [
+      { t: 0, clip: "idle", speed: 1 },
+      { t: 1, clip: "wave", speed: 1 },
+    ];
+    const el = makeCharEl({
+      transform: { x: 700, y: 400, scale: 1, flipX: false },
+      actions,
+    });
+    // 位置は常に transform のまま
+    expect(evaluateCharMotion(el, 2).pos).toEqual([700, 400]);
+    // expandActions は to=from(移動なし)・travelEnd=t
+    const exp = expandActions([700, 400], actions);
+    for (const a of exp) {
+      expect(a.to).toEqual(a.from);
+      expect(a.travelEnd).toBe(a.t);
+    }
+  });
+
+  it("到着idleが挿入される(移動後・次アクション無し)", () => {
+    const exp = expandActions([0, 0], [
+      { t: 0, clip: "walk", speed: 1, moveTo: { x: 240, y: 0 } },
+    ]);
+    // walk(移動) + 到着idle の2本
+    expect(exp.length).toBe(2);
+    expect(exp[1]!.clip).toBe("idle");
+    expect(exp[1]!.t).toBeCloseTo(1.0, 5);
+    expect(exp[1]!.from).toEqual([240, 0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluateCamera
+// ---------------------------------------------------------------------------
+
+describe("evaluateCamera", () => {
+  it("キー無しはデフォルト(中心960,540 zoom1)", () => {
+    expect(evaluateCamera([], 0)).toEqual({ x: 960, y: 540, zoom: 1 });
+  });
+
+  it("1キーは常にその値", () => {
+    const keys: CameraKey[] = [{ t: 1, x: 100, y: 200, zoom: 2 }];
+    expect(evaluateCamera(keys, 0)).toEqual({ x: 100, y: 200, zoom: 2 });
+    expect(evaluateCamera(keys, 5)).toEqual({ x: 100, y: 200, zoom: 2 });
+  });
+
+  it("2キーの中間値(linearで中点)", () => {
+    const keys: CameraKey[] = [
+      { t: 0, x: 0, y: 0, zoom: 1, ease: "linear" },
+      { t: 2, x: 200, y: 100, zoom: 3, ease: "linear" },
+    ];
+    const mid = evaluateCamera(keys, 1);
+    expect(mid.x).toBeCloseTo(100, 5);
+    expect(mid.y).toBeCloseTo(50, 5);
+    expect(mid.zoom).toBeCloseTo(2, 5);
+  });
+
+  it("ease指定(quadIn)で中点は線形未満", () => {
+    const keys: CameraKey[] = [
+      { t: 0, x: 0, y: 0, zoom: 1, ease: "quadIn" },
+      { t: 2, x: 200, y: 0, zoom: 1 },
+    ];
+    // quadIn(0.5)=0.25 → x=50
+    expect(evaluateCamera(keys, 1).x).toBeCloseTo(50, 5);
+  });
+
+  it("範囲外はクランプ(最初/最後の値)", () => {
+    const keys: CameraKey[] = [
+      { t: 1, x: 10, y: 0, zoom: 1 },
+      { t: 3, x: 90, y: 0, zoom: 1 },
+    ];
+    expect(evaluateCamera(keys, 0).x).toBe(10);
+    expect(evaluateCamera(keys, 10).x).toBe(90);
+  });
+
+  it("未ソート入力でも正しく評価", () => {
+    const keys: CameraKey[] = [
+      { t: 2, x: 200, y: 0, zoom: 1, ease: "linear" },
+      { t: 0, x: 0, y: 0, zoom: 1, ease: "linear" },
+    ];
+    expect(evaluateCamera(keys, 1).x).toBeCloseTo(100, 5);
   });
 });

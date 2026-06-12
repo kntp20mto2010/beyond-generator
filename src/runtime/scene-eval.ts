@@ -2,6 +2,8 @@ import type { CharacterDoc } from "../core/schema/character.js";
 import type { ClipDoc } from "../core/schema/clip.js";
 import type {
   Action,
+  BalloonElement,
+  CameraKey,
   CharacterElement,
   Enter,
   Exit,
@@ -19,7 +21,7 @@ import {
   sampleClip,
   smoothstep,
 } from "./clip-player.js";
-import { quadOut, backOut } from "./easing.js";
+import { ease, type EasingName, quadOut, backOut } from "./easing.js";
 import { blinkAt, resolveFace } from "./expression.js";
 import type { Mat2D } from "./mat2d.js";
 import { computeBoneWorld } from "./pose.js";
@@ -32,6 +34,8 @@ const STAGE_H = 1080;
 // 画面外オフセット(stage幅高にマージンを加味)
 const SLIDE_X = 1260;
 const SLIDE_Y = 840;
+// virtualVelocity=0 のクリップに moveTo が付いた場合の歩行速度フォールバック
+const DEFAULT_WALK_V = 240;
 
 // ---------------------------------------------------------------------------
 // アクション列の純関数評価
@@ -51,18 +55,105 @@ function normalizedActions(actions: readonly Action[]): Action[] {
   return sorted;
 }
 
+// 展開済みアクション: 各アクションに開始位置 from・到達点 to・到着時刻を畳み込む
+export interface ExpandedAction {
+  t: number;
+  clip: string;
+  speed: number;
+  from: [number, number]; // このアクション開始時の位置
+  to: [number, number]; // 到達点(moveTo無しなら from と同じ)
+  travelEnd: number; // 到着時刻(moveTo無しなら t)
+}
+
+function dist(a: [number, number], b: [number, number]): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
+
+function lerp2(
+  a: [number, number],
+  b: [number, number],
+  k: number,
+): [number, number] {
+  return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+}
+
+// 先頭から位置を畳み込み、到着idleを挿入した展開列を返す
+export function expandActions(
+  origin: [number, number],
+  actions: readonly Action[],
+): ExpandedAction[] {
+  const list = normalizedActions(actions);
+  const out: ExpandedAction[] = [];
+  let pos: [number, number] = [origin[0], origin[1]];
+
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i]!;
+    const next = list[i + 1];
+    const from: [number, number] = [pos[0], pos[1]];
+
+    let to: [number, number] = from;
+    let travelEnd = a.t;
+    if (a.moveTo) {
+      const target: [number, number] = [
+        a.moveTo.x,
+        a.moveTo.y ?? from[1], // y省略 = 開始時のyを維持
+      ];
+      const d = dist(from, target);
+      if (d > 1e-6) {
+        const baseV = lookupClip(a.clip).virtualVelocity || DEFAULT_WALK_V;
+        const v = baseV * a.speed;
+        const travelDur = d / v;
+        const fullEnd = a.t + travelDur;
+        // 打ち切り: 次アクションが到着前に始まる → 途中で停止
+        if (next && next.t < fullEnd) {
+          const k = (next.t - a.t) / travelDur;
+          to = lerp2(from, target, k);
+          travelEnd = next.t;
+        } else {
+          to = target;
+          travelEnd = fullEnd;
+        }
+      }
+    }
+
+    out.push({ t: a.t, clip: a.clip, speed: a.speed, from, to, travelEnd });
+    pos = to;
+
+    // 到着idle: 到着が次アクション開始前(または最後)かつ移動があった場合
+    const moved = to[0] !== from[0] || to[1] !== from[1];
+    if (moved && (!next || travelEnd < next.t)) {
+      out.push({
+        t: travelEnd,
+        clip: "idle",
+        speed: 1,
+        from: to,
+        to,
+        travelEnd,
+      });
+    }
+  }
+
+  return out;
+}
+
+// active = a.t <= t を満たす最後の展開アクション(同時刻は後勝ち)
+function activeExpandedIdx(list: readonly ExpandedAction[], t: number): number {
+  let idx = 0;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i]!.t <= t) idx = i;
+    else break;
+  }
+  return idx;
+}
+
 export function evaluateActionTrack(
+  origin: [number, number],
   actions: readonly Action[],
   t: number,
 ): ClipFrame {
-  const list = normalizedActions(actions);
+  const list = expandActions(origin, actions);
 
-  // active = a.t <= t を満たす最後のアクション(同時刻は後勝ち)
-  let activeIdx = 0;
-  for (let i = 0; i < list.length; i++) {
-    if (list[i]!.t <= t) activeIdx = i;
-    else break;
-  }
+  const activeIdx = activeExpandedIdx(list, t);
   const active = list[activeIdx]!;
   const activeFrame = sampleClip(lookupClip(active.clip), (t - active.t) * active.speed);
 
@@ -74,6 +165,49 @@ export function evaluateActionTrack(
     return blendFrames(prevFrame, activeFrame, smoothstep(since / CROSSFADE));
   }
   return activeFrame;
+}
+
+// ---------------------------------------------------------------------------
+// キャラの位置・向き・速度(moveTo駆動)
+// ---------------------------------------------------------------------------
+
+export interface CharMotion {
+  pos: [number, number];
+  facing: 1 | -1; // 1=右向き(素), -1=反転
+  vel: [number, number]; // px/s。移動中のみ非ゼロ(ワールド座標)
+}
+
+export function evaluateCharMotion(el: CharacterElement, t: number): CharMotion {
+  const origin: [number, number] = [el.transform.x, el.transform.y];
+  const list = expandActions(origin, el.actions);
+  const activeIdx = activeExpandedIdx(list, t);
+  const active = list[activeIdx]!;
+
+  const travelDur = active.travelEnd - active.t;
+  const moving = travelDur > 1e-6 && t < active.travelEnd;
+
+  let pos: [number, number];
+  let vel: [number, number] = [0, 0];
+  if (moving) {
+    const k = (t - active.t) / travelDur;
+    pos = lerp2(active.from, active.to, k);
+    vel = [
+      (active.to[0] - active.from[0]) / travelDur,
+      (active.to[1] - active.from[1]) / travelDur,
+    ];
+  } else {
+    pos = active.to;
+  }
+
+  // facing: tまでに発生した最後の水平移動の方向。無ければ transform.flipX 準拠
+  let facing: 1 | -1 = el.transform.flipX ? -1 : 1;
+  for (let i = 0; i <= activeIdx; i++) {
+    const a = list[i]!;
+    const dx = a.to[0] - a.from[0];
+    if (dx !== 0) facing = dx < 0 ? -1 : 1;
+  }
+
+  return { pos, facing, vel };
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +333,7 @@ export type SceneFramePayload =
       transform: Transform;
     }
   | { kind: "text"; el: TextElement; transform: Transform }
+  | { kind: "balloon"; el: BalloonElement; transform: Transform }
   | { kind: "placeholder"; ref: string; transform: Transform };
 
 export interface SceneFrameItem {
@@ -230,7 +365,8 @@ function evaluateCharacter(
   seed: number,
   hairDeform: Map<string, Mat2D> | undefined,
 ): SceneFramePayload {
-  const frame = evaluateActionTrack(el.actions, t);
+  const origin: [number, number] = [el.transform.x, el.transform.y];
+  const frame = evaluateActionTrack(origin, el.actions, t);
   const bones = computeBoneWorld(char, frame.pose);
 
   const preset = activeExpression(el.expressions, t);
@@ -246,12 +382,22 @@ function evaluateCharacter(
     hairDeform,
   });
 
+  // 位置・向きを実効値へ(StageCanvasは無変更で動く)
+  const motion = evaluateCharMotion(el, t);
+  const flipX = motion.facing === -1;
+  const transform: Transform = {
+    ...el.transform,
+    x: motion.pos[0],
+    y: motion.pos[1],
+    flipX,
+  };
+
   return {
     kind: "character",
     char,
     items,
-    flipX: el.transform.flipX,
-    transform: el.transform,
+    flipX,
+    transform,
   };
 }
 
@@ -267,16 +413,23 @@ function evaluateElement(
   if (!visual.visible) return null;
 
   let payload: SceneFramePayload;
-  if (el.kind === "character") {
-    const char = resolver.getCharacter(el.ref);
-    if (!char) {
-      payload = { kind: "placeholder", ref: el.ref, transform: el.transform };
-    } else {
-      const seed = scene.seed * 31 + index;
-      payload = evaluateCharacter(el, char, t, seed, opts?.hairDeforms?.get(el.id));
+  switch (el.kind) {
+    case "character": {
+      const char = resolver.getCharacter(el.ref);
+      if (!char) {
+        payload = { kind: "placeholder", ref: el.ref, transform: el.transform };
+      } else {
+        const seed = scene.seed * 31 + index;
+        payload = evaluateCharacter(el, char, t, seed, opts?.hairDeforms?.get(el.id));
+      }
+      break;
     }
-  } else {
-    payload = { kind: "text", el, transform: el.transform };
+    case "text":
+      payload = { kind: "text", el, transform: el.transform };
+      break;
+    case "balloon":
+      payload = { kind: "balloon", el, transform: el.transform };
+      break;
   }
 
   return { elementId: el.id, z: el.z, visual, payload };
@@ -296,6 +449,43 @@ export function evaluateScene(
   });
   out.sort((a, b) => a.z - b.z);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// カメラ評価(evaluateScene には混ぜない。呼び出し側が別途呼ぶ)
+// ---------------------------------------------------------------------------
+
+export interface CameraState {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+const CAMERA_DEFAULT: CameraState = { x: STAGE_W / 2, y: STAGE_H / 2, zoom: 1 };
+
+export function evaluateCamera(keys: readonly CameraKey[], t: number): CameraState {
+  if (keys.length === 0) return { ...CAMERA_DEFAULT };
+  const sorted = [...keys].sort((a, b) => a.t - b.t);
+  const first = sorted[0]!;
+  if (t <= first.t) return { x: first.x, y: first.y, zoom: first.zoom };
+  const last = sorted[sorted.length - 1]!;
+  if (t >= last.t) return { x: last.x, y: last.y, zoom: last.zoom };
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i]!;
+    const b = sorted[i + 1]!;
+    if (t >= a.t && t <= b.t) {
+      const span = b.t - a.t;
+      const raw = span <= 0 ? 1 : (t - a.t) / span;
+      const k = ease((a.ease as EasingName | undefined) ?? "quadInOut", raw);
+      return {
+        x: a.x + (b.x - a.x) * k,
+        y: a.y + (b.y - a.y) * k,
+        zoom: a.zoom + (b.zoom - a.zoom) * k,
+      };
+    }
+  }
+  return { x: last.x, y: last.y, zoom: last.zoom };
 }
 
 export { STAGE_W, STAGE_H };

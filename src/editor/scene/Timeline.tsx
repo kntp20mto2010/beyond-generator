@@ -17,6 +17,17 @@ interface Props {
 const LANE_H = 26;
 const NAME_W = 110;
 
+function laneLabel(el: SceneDoc["elements"][number]): string {
+  switch (el.kind) {
+    case "character":
+      return `🙂 ${el.ref.replace(/^.*\//, "").replace(/\.byc\.json$/, "").replace("builtin:", "")}`;
+    case "text":
+      return `🅣 ${el.text}`;
+    case "balloon":
+      return `💬 ${el.text}`;
+  }
+}
+
 export function Timeline({ store, scene, t, selectedId, onSelect, onScrub, onScrubCommit }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dur = scene.duration;
@@ -113,6 +124,41 @@ export function Timeline({ store, scene, t, selectedId, onSelect, onScrub, onScr
         </div>
       </div>
 
+      {/* カメラレーン(キーがある場合のみ・表示専用) */}
+      {scene.camera.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", height: LANE_H, marginTop: "4px" }}>
+          <div style={{ width: NAME_W, flexShrink: 0, fontSize: "11px", color: "#444" }}>
+            📷 カメラ
+          </div>
+          <div
+            style={{
+              position: "relative",
+              flex: 1,
+              height: "18px",
+              background: "#f3eefc",
+              borderRadius: "3px",
+            }}
+          >
+            {scene.camera.map((k, i) => (
+              <div
+                key={i}
+                title={`t=${k.t}s zoom=${k.zoom}`}
+                style={{
+                  position: "absolute",
+                  left: pct(k.t),
+                  top: "2px",
+                  width: "8px",
+                  height: "8px",
+                  marginLeft: "-4px",
+                  borderRadius: "50%",
+                  background: "#8a5fd0",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 要素レーン */}
       <div style={{ marginTop: "4px" }}>
         {scene.elements.length === 0 && (
@@ -141,8 +187,8 @@ export function Timeline({ store, scene, t, selectedId, onSelect, onScrub, onScr
                   textOverflow: "ellipsis",
                 }}
               >
-                {el.kind === "character" ? "🙂 " : "🅣 "}
-                {el.kind === "text" ? el.text : el.ref.replace(/^.*\//, "").replace(/\.byc\.json$/, "").replace("builtin:", "")}
+                {el.locked && "🔒 "}
+                {laneLabel(el)}
               </div>
               <div
                 style={{

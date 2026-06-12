@@ -2,28 +2,44 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { DocStore } from "../../core/doc-store.js";
 import {
   createEmptyProject,
+  type BalloonElement,
   type CharacterElement,
   type ProjectDoc,
+  type SceneElement,
   type TextElement,
 } from "../../core/schema/project.js";
 import { newId } from "../../core/id.js";
 import { setTitle } from "../../core/commands.js";
 import {
   addElement,
+  duplicateElement,
   removeElement,
+  replaceElementRef,
+  reorderElement,
+  setElementLocked,
   setSceneBackground,
   setSceneBackgroundImage,
+  unlockAllElements,
+  updateElementTransform,
+  type ReorderOp,
 } from "../../core/commands-project.js";
 import { toJson, parseProject } from "../../io/serialize.js";
 import { FsAccessAdapter, PROJECT_FILE, isFsAccessSupported } from "../../io/fs.js";
 import type { FileSystemAdapter } from "../../io/fs.js";
 import { AssetResolver } from "../../io/asset-resolver.js";
 import { useUiStore } from "../ui-store.js";
-import { StageCanvas, type PlayMode } from "./StageCanvas.js";
+import { StageCanvas, type PlayMode, type StageApi } from "./StageCanvas.js";
 import { AddPanel } from "./AddPanel.js";
 import { PropertyPanel } from "./PropertyPanel.js";
 import { SceneStrip } from "./SceneStrip.js";
 import { Timeline } from "./Timeline.js";
+import {
+  ContextMenu,
+  type AlignOp,
+  type ContextMenuInfo,
+  type ReplaceCandidate,
+} from "./ContextMenu.js";
+import { copyElement, hasClipboard, readClipboard } from "./clipboard.js";
 
 interface Props {
   store: DocStore<ProjectDoc>;
@@ -33,6 +49,11 @@ function ensureFsSupport(): boolean {
   if (isFsAccessSupported) return true;
   alert("このブラウザはフォルダ保存に非対応です。Chrome または Edge で開いてください。");
   return false;
+}
+
+// 新規追加時の初期z = 既存zの最大 + 1(最前面)
+function nextZ(elements: readonly SceneElement[]): number {
+  return elements.reduce((m, e) => Math.max(m, e.z), -1) + 1;
 }
 
 export function ScenePage({ store }: Props) {
@@ -50,10 +71,18 @@ export function ScenePage({ store }: Props) {
 
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 保存済キャラ一覧(AddPanel と 右クリック差し替えで共有)
+  const [savedCharacters, setSavedCharacters] = useState<string[]>([]);
   const [t, setT] = useState(0);
   const tRef = useRef(0);
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
   const [seekNonce, setSeekNonce] = useState(0);
+  const [showGrid, setShowGrid] = useState(false);
+  // 右クリックメニュー(対象elementId と メニュー位置のstage座標を保持)
+  const [ctxMenu, setCtxMenu] = useState<
+    { clientX: number; clientY: number; elementId: string | null; stageX: number; stageY: number } | null
+  >(null);
+  const stageApiRef = useRef<StageApi | null>(null);
 
   // 選択シーンの自動補正
   const sceneId =
@@ -63,14 +92,35 @@ export function ScenePage({ store }: Props) {
   const scene = doc.scenes.find((s) => s.id === sceneId) ?? null;
   const selectedEl = scene?.elements.find((e) => e.id === selectedId) ?? null;
 
-  // 参照キャラのロード
+  // 参照キャラ・背景画像のロード
   useEffect(() => {
     const refs = doc.scenes
       .flatMap((s) => s.elements)
       .filter((e): e is CharacterElement => e.kind === "character")
       .map((e) => e.ref);
     if (refs.length > 0) void resolver.ensureLoaded(refs, fs);
+
+    const images = doc.scenes
+      .map((s) => s.background?.image)
+      .filter((img): img is string => !!img);
+    if (images.length > 0) void resolver.ensureImagesLoaded(images, fs);
   }, [doc, fs, resolver]);
+
+  // 保存済キャラ(characters/*.byc.json)を一覧化
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (!fs) {
+        setSavedCharacters([]);
+        return;
+      }
+      const files = await fs.listFiles("characters");
+      if (live) setSavedCharacters(files.filter((f) => f.endsWith(".byc.json")));
+    })();
+    return () => {
+      live = false;
+    };
+  }, [fs]);
 
   const bumpSeek = useCallback(() => setSeekNonce((n) => n + 1), []);
 
@@ -148,7 +198,8 @@ export function ScenePage({ store }: Props) {
       kind: "character",
       ref,
       transform: { x: 960, y: 700, scale: 0.9, flipX: false },
-      z: scene.elements.length,
+      z: nextZ(scene.elements),
+      locked: false,
       enter: { type: "cut", delay: 0, dur: 0.4 },
       exit: { type: "cut", at: null, dur: 0.4 },
       actions: [],
@@ -170,7 +221,32 @@ export function ScenePage({ store }: Props) {
       strokeColor: "#ffffff",
       strokeWidth: 8,
       transform: { x: 960, y: 200, scale: 1, flipX: false },
-      z: 100 + scene.elements.length,
+      z: nextZ(scene.elements),
+      locked: false,
+      enter: { type: "cut", delay: 0, dur: 0.4 },
+      exit: { type: "cut", at: null, dur: 0.4 },
+    };
+    addElement(store, scene.id, el);
+    setSelectedId(el.id);
+  };
+  const addBalloon = (shape: BalloonElement["shape"]) => {
+    if (!scene) return;
+    const el: BalloonElement = {
+      id: newId(),
+      kind: "balloon",
+      shape,
+      text: "セリフ",
+      size: 40,
+      w: 420,
+      h: 240,
+      fill: "#ffffff",
+      textColor: "#2E2A33",
+      lineColor: "#2E2A33",
+      lineWidth: 4,
+      tail: { x: -60, y: 220 },
+      transform: { x: 620, y: 300, scale: 1, flipX: false },
+      z: nextZ(scene.elements),
+      locked: false,
       enter: { type: "cut", delay: 0, dur: 0.4 },
       exit: { type: "cut", at: null, dur: 0.4 },
     };
@@ -192,6 +268,145 @@ export function ScenePage({ store }: Props) {
     setSelectedId(null);
   }, [scene, selectedId, store]);
 
+  // === コピー / ペースト / 複製 ===
+  const copySelected = useCallback(() => {
+    const el = scene?.elements.find((e) => e.id === selectedId);
+    if (el) copyElement(el);
+  }, [scene, selectedId]);
+
+  // at 指定時はその stage 座標へ、無指定は +24 オフセット
+  const pasteClipboard = useCallback(
+    (at?: { x: number; y: number }) => {
+      if (!scene) return;
+      const src = readClipboard();
+      if (!src) return;
+      src.id = newId();
+      if (at) {
+        src.transform.x = at.x;
+        src.transform.y = at.y;
+      } else {
+        src.transform.x += 24;
+        src.transform.y += 24;
+      }
+      src.z = nextZ(scene.elements);
+      addElement(store, scene.id, src);
+      setSelectedId(src.id);
+      if (src.kind === "character" && fs) void resolver.ensureLoaded([src.ref], fs);
+      bumpSeek();
+    },
+    [scene, store, fs, resolver, bumpSeek],
+  );
+
+  const duplicateSelected = useCallback(() => {
+    if (!scene || !selectedId) return;
+    duplicateElement(store, scene.id, selectedId);
+    bumpSeek();
+  }, [scene, selectedId, store, bumpSeek]);
+
+  const reorderSelected = useCallback(
+    (op: ReorderOp) => {
+      if (!scene || !selectedId) return;
+      reorderElement(store, scene.id, selectedId, op);
+    },
+    [scene, selectedId, store],
+  );
+
+  const toggleLockSelected = useCallback(() => {
+    const el = scene?.elements.find((e) => e.id === selectedId);
+    if (!scene || !el) return;
+    setElementLocked(store, scene.id, el.id, !el.locked);
+  }, [scene, selectedId, store]);
+
+  // 整列: Pixi bounds(ステージ座標)から必要シフトを計算し transform を更新
+  const alignElement = useCallback(
+    (elementId: string, op: AlignOp) => {
+      if (!scene) return;
+      const el = scene.elements.find((e) => e.id === elementId);
+      if (!el || el.locked) return;
+      const edges = stageApiRef.current?.getStageEdges(elementId);
+      if (!edges) return;
+      let dx = 0;
+      let dy = 0;
+      switch (op) {
+        case "left":
+          dx = 0 - edges.l;
+          break;
+        case "hcenter":
+          dx = 960 - edges.cx;
+          break;
+        case "right":
+          dx = 1920 - edges.r;
+          break;
+        case "top":
+          dy = 0 - edges.t;
+          break;
+        case "vcenter":
+          dy = 540 - edges.cy;
+          break;
+        case "bottom":
+          dy = 1080 - edges.b;
+          break;
+      }
+      updateElementTransform(store, scene.id, elementId, {
+        x: el.transform.x + dx,
+        y: el.transform.y + dy,
+      });
+    },
+    [scene, store],
+  );
+
+  // 選択要素を矢印でナッジ(locked時は無効)
+  const nudgeSelected = useCallback(
+    (dx: number, dy: number) => {
+      if (!scene) return;
+      // 連続keydownでも失われないよう、最新のstore.docから読む(再レンダリング前のスナップショット参照を避ける)
+      const liveScene = store.doc.scenes.find((s) => s.id === scene.id);
+      const el = liveScene?.elements.find((e) => e.id === selectedId);
+      if (!liveScene || !el || el.locked) return;
+      updateElementTransform(store, liveScene.id, el.id, {
+        x: el.transform.x + dx,
+        y: el.transform.y + dy,
+      });
+    },
+    [scene, selectedId, store],
+  );
+
+  // 右クリックメニュー要求(StageCanvas から clientX/Y + stage座標 + elementId)
+  const onContextMenu = useCallback(
+    (info: {
+      clientX: number;
+      clientY: number;
+      stageX: number;
+      stageY: number;
+      elementId: string | null;
+    }) => {
+      setCtxMenu(info);
+    },
+    [],
+  );
+
+  // 差し替え候補: ハル(内蔵) + 保存済キャラ
+  const replaceCandidates: ReplaceCandidate[] = useMemo(
+    () => [
+      { ref: "builtin:template-a", label: "ハル(内蔵)" },
+      ...savedCharacters.map((f) => ({
+        ref: `characters/${f}`,
+        label: f.replace(/\.byc\.json$/, ""),
+      })),
+    ],
+    [savedCharacters],
+  );
+
+  const doReplace = useCallback(
+    (elementId: string, ref: string) => {
+      if (!scene) return;
+      replaceElementRef(store, scene.id, elementId, ref);
+      if (fs) void resolver.ensureLoaded([ref], fs);
+      bumpSeek();
+    },
+    [scene, store, fs, resolver, bumpSeek],
+  );
+
   // キーボード: Delete / undo・redo / Space
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -205,6 +420,31 @@ export function ScenePage({ store }: Props) {
         return;
       }
       if (typing) return;
+
+      // Ctrl/Cmd 系ショートカット
+      if (e.ctrlKey || e.metaKey) {
+        const k = e.key.toLowerCase();
+        if (k === "c") {
+          copySelected();
+          return;
+        }
+        if (k === "v") {
+          pasteClipboard();
+          return;
+        }
+        if (k === "d") {
+          e.preventDefault(); // ブックマーク防止
+          duplicateSelected();
+          return;
+        }
+        if (k === "l") {
+          e.preventDefault(); // アドレスバー防止
+          toggleLockSelected();
+          return;
+        }
+        return;
+      }
+
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         deleteSelected();
@@ -216,11 +456,35 @@ export function ScenePage({ store }: Props) {
           bumpSeek();
           return "scene";
         });
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        nudgeSelected(dx, dy);
+      } else if (e.key === "[") {
+        e.preventDefault();
+        reorderSelected("backward");
+      } else if (e.key === "]") {
+        e.preventDefault();
+        reorderSelected("forward");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, deleteSelected, bumpSeek, scene, setTime]);
+  }, [
+    store,
+    deleteSelected,
+    bumpSeek,
+    scene,
+    setTime,
+    copySelected,
+    pasteClipboard,
+    duplicateSelected,
+    toggleLockSelected,
+    nudgeSelected,
+    reorderSelected,
+  ]);
 
   // === ファイル ===
   async function handleOpenFolder() {
@@ -286,6 +550,13 @@ export function ScenePage({ store }: Props) {
         <button onClick={playScene} disabled={!scene}>▶ シーン再生</button>
         <button onClick={playAll} disabled={doc.scenes.length === 0}>▶ 通し再生</button>
         <button onClick={stop} disabled={!playMode}>⏹</button>
+        <span style={{ width: "1px", height: "20px", background: "#ddd" }} />
+        <button
+          onClick={() => setShowGrid((g) => !g)}
+          style={{ background: showGrid ? "#5B7DB1" : undefined, color: showGrid ? "#fff" : undefined }}
+        >
+          グリッド
+        </button>
         {isDirty && <span style={{ color: "#e55" }}>● 未保存</span>}
       </div>
 
@@ -295,8 +566,10 @@ export function ScenePage({ store }: Props) {
           <AddPanel
             fs={fs}
             disabled={!scene}
+            savedCharacters={savedCharacters}
             onAddCharacter={addCharacter}
             onAddText={addText}
+            onAddBalloon={addBalloon}
             onAddBackground={addBackground}
             onSetBackgroundImage={setBackgroundImage}
           />
@@ -317,6 +590,9 @@ export function ScenePage({ store }: Props) {
               seekNonce={seekNonce}
               revision={revision}
               resolverRev={resolverRev}
+              showGrid={showGrid}
+              onContextMenu={onContextMenu}
+              apiRef={stageApiRef}
             />
           ) : (
             <div style={{ color: "#888", marginTop: "40px" }}>
@@ -325,7 +601,15 @@ export function ScenePage({ store }: Props) {
           )}
         </div>
         <div style={{ width: "260px", flexShrink: 0, borderLeft: "1px solid #ddd", overflowY: "auto" }}>
-          {scene && <PropertyPanel store={store} sceneId={scene.id} element={selectedEl} />}
+          {scene && (
+            <PropertyPanel
+              store={store}
+              sceneId={scene.id}
+              scene={scene}
+              element={selectedEl}
+              t={t}
+            />
+          )}
         </div>
       </div>
 
@@ -350,6 +634,69 @@ export function ScenePage({ store }: Props) {
           onScrubCommit={onScrubCommit}
         />
       )}
+
+      {/* 右クリックメニュー */}
+      {ctxMenu &&
+        scene &&
+        (() => {
+          const targetEl = ctxMenu.elementId
+            ? scene.elements.find((e) => e.id === ctxMenu.elementId) ?? null
+            : null;
+          const menuInfo: ContextMenuInfo = {
+            clientX: ctxMenu.clientX,
+            clientY: ctxMenu.clientY,
+            element: targetEl,
+          };
+          const tid = targetEl?.id ?? null;
+          return (
+            <ContextMenu
+              info={menuInfo}
+              canPaste={hasClipboard()}
+              replaceCandidates={replaceCandidates}
+              onClose={() => setCtxMenu(null)}
+              onCopy={() => {
+                if (tid) copyElement(scene.elements.find((e) => e.id === tid)!);
+              }}
+              onPaste={() => pasteClipboard({ x: ctxMenu.stageX, y: ctxMenu.stageY })}
+              onDuplicate={() => {
+                if (tid) {
+                  duplicateElement(store, scene.id, tid);
+                  bumpSeek();
+                }
+              }}
+              onFlip={() => {
+                if (tid) {
+                  const el = scene.elements.find((e) => e.id === tid);
+                  if (el && el.kind === "character" && !el.locked) {
+                    updateElementTransform(store, scene.id, tid, { flipX: !el.transform.flipX });
+                  }
+                }
+              }}
+              onReorder={(op) => {
+                if (tid) reorderElement(store, scene.id, tid, op);
+              }}
+              onAlign={(op) => {
+                if (tid) alignElement(tid, op);
+              }}
+              onToggleLock={() => {
+                if (tid) {
+                  const el = scene.elements.find((e) => e.id === tid);
+                  if (el) setElementLocked(store, scene.id, tid, !el.locked);
+                }
+              }}
+              onReplace={(ref) => {
+                if (tid) doReplace(tid, ref);
+              }}
+              onDelete={() => {
+                if (tid) {
+                  removeElement(store, scene.id, tid);
+                  setSelectedId(null);
+                }
+              }}
+              onUnlockAll={() => unlockAllElements(store, scene.id)}
+            />
+          );
+        })()}
     </div>
   );
 }

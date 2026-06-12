@@ -19,6 +19,7 @@ function build(): { project: ProjectDoc; scene: SceneDoc } {
     ref: "builtin:template-a",
     transform: { x: 960, y: 700, scale: 0.9, flipX: false },
     z: 0,
+    locked: false,
     enter: { type: "cut", delay: 0, dur: 0.4 },
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [{ t: 0, clip: "jump", speed: 1 }],

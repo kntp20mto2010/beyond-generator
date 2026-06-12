@@ -3,6 +3,8 @@ import type { DocStore } from "./doc-store.js";
 import { newId } from "./id.js";
 import type {
   Action,
+  BalloonElement,
+  CameraKey,
   Enter,
   Exit,
   ExpressionKey,
@@ -11,6 +13,7 @@ import type {
   SceneElement,
   TextElement,
   Transform,
+  Transition,
 } from "./schema/project.js";
 import { createEmptyScene } from "./schema/project.js";
 
@@ -138,6 +141,70 @@ export function setSceneBackgroundImage(
 }
 
 // ---------------------------------------------------------------------------
+// カメラキー / シーントランジション
+// ---------------------------------------------------------------------------
+
+export function addCameraKey(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  key: CameraKey,
+): void {
+  store.dispatch("カメラキー追加", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    scene.camera.push(key as Draft<CameraKey>);
+    sortByT(scene.camera);
+  });
+}
+
+export function updateCameraKey(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  index: number,
+  patch: Partial<CameraKey>,
+): void {
+  store.dispatch(
+    "カメラキー編集",
+    (d) => {
+      const scene = findScene(d, sceneId);
+      if (!scene) return;
+      const key = scene.camera[index];
+      if (!key) return;
+      Object.assign(key, patch);
+      sortByT(scene.camera);
+    },
+    { mergeKey: `cam:${sceneId}:${index}` },
+  );
+}
+
+export function removeCameraKey(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  index: number,
+): void {
+  store.dispatch("カメラキー削除", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    if (index >= 0 && index < scene.camera.length) scene.camera.splice(index, 1);
+  });
+}
+
+export function setSceneTransition(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  patch: Partial<Transition>,
+): void {
+  store.dispatch(
+    "トランジション変更",
+    (d) => {
+      const scene = findScene(d, sceneId);
+      if (scene) Object.assign(scene.transition, patch);
+    },
+    { mergeKey: `trans:${sceneId}` },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 要素操作
 // ---------------------------------------------------------------------------
 
@@ -190,6 +257,101 @@ export function setElementZ(
   store.dispatch("重なり順変更", (d) => {
     const el = findElement(d, sceneId, elementId);
     if (el) el.z = z;
+  });
+}
+
+// 深複製 + 新id、x,y+24、z=既存max+1。複製要素のidを返す代わりに付与済み要素を push
+export function duplicateElement(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+): void {
+  store.dispatch("要素複製", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    const src = scene.elements.find((e) => e.id === elementId);
+    if (!src) return;
+    // draft(Proxy)は structuredClone 不可。duplicateScene と同じく JSON で深複製
+    const copy = JSON.parse(JSON.stringify(src)) as SceneElement;
+    copy.id = newId();
+    copy.transform.x += 24;
+    copy.transform.y += 24;
+    const maxZ = scene.elements.reduce((m, e) => Math.max(m, e.z), -1);
+    copy.z = maxZ + 1;
+    scene.elements.push(copy as Draft<SceneElement>);
+  });
+}
+
+export type ReorderOp = "front" | "forward" | "backward" | "back";
+
+// z昇順(同zはstable)の並びで対象を移動 → 全要素のzをindexで再正規化。1 dispatch = 1 undo
+export function reorderElement(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  op: ReorderOp,
+): void {
+  store.dispatch("重なり順変更", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    const els = scene.elements;
+    // z昇順 stable（同zは元の配列順を保つ）
+    const order = els
+      .map((el, i) => ({ el, i }))
+      .sort((a, b) => (a.el.z - b.el.z) || (a.i - b.i))
+      .map((x) => x.el);
+    const cur = order.findIndex((el) => el.id === elementId);
+    if (cur === -1) return;
+    let target = cur;
+    if (op === "front") target = order.length - 1;
+    else if (op === "back") target = 0;
+    else if (op === "forward") target = Math.min(order.length - 1, cur + 1);
+    else if (op === "backward") target = Math.max(0, cur - 1);
+    if (target === cur) {
+      // 位置不変でもzを正規化(同z混在の解消)
+      order.forEach((el, idx) => {
+        el.z = idx;
+      });
+      return;
+    }
+    const [moved] = order.splice(cur, 1);
+    if (moved) order.splice(target, 0, moved);
+    order.forEach((el, idx) => {
+      el.z = idx;
+    });
+  });
+}
+
+export function setElementLocked(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  locked: boolean,
+): void {
+  store.dispatch(locked ? "ロック" : "ロック解除", (d) => {
+    const el = findElement(d, sceneId, elementId);
+    if (el) el.locked = locked;
+  });
+}
+
+export function unlockAllElements(store: DocStore<ProjectDoc>, sceneId: string): void {
+  store.dispatch("全ロック解除", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    for (const el of scene.elements) el.locked = false;
+  });
+}
+
+// キャラ差し替え: kind==="character" のみ。ref 以外には一切触らない(タイミング・表情を維持)
+export function replaceElementRef(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  ref: string,
+): void {
+  store.dispatch("キャラ差し替え", (d) => {
+    const el = findElement(d, sceneId, elementId);
+    if (el && el.kind === "character") el.ref = ref;
   });
 }
 
@@ -265,6 +427,8 @@ export function updateAction(
     const action = el.actions[index];
     if (!action) return;
     Object.assign(action, patch);
+    // moveTo の解除: Object.assign では key が残るため明示削除
+    if ("moveTo" in patch && patch.moveTo === undefined) delete action.moveTo;
     sortByT(el.actions);
   });
 }
@@ -348,5 +512,44 @@ export function setTextProps(
       if (el && el.kind === "text") Object.assign(el, patch);
     },
     { mergeKey: mergeKey ?? `el:${elementId}:text` },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 吹き出し要素
+// ---------------------------------------------------------------------------
+
+export function setBalloonProps(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  patch: Partial<
+    Omit<BalloonElement, "id" | "kind" | "transform" | "z" | "locked" | "enter" | "exit" | "tail">
+  >,
+  mergeKey?: string,
+): void {
+  store.dispatch(
+    "吹き出し編集",
+    (d) => {
+      const el = findElement(d, sceneId, elementId);
+      if (el && el.kind === "balloon") Object.assign(el, patch);
+    },
+    { mergeKey: mergeKey ?? `el:${elementId}:balloon` },
+  );
+}
+
+export function setBalloonTail(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  tail: { x: number; y: number },
+): void {
+  store.dispatch(
+    "しっぽ移動",
+    (d) => {
+      const el = findElement(d, sceneId, elementId);
+      if (el && el.kind === "balloon") el.tail = tail;
+    },
+    { mergeKey: `el:${elementId}:tail` },
   );
 }

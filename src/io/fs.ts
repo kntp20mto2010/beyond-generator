@@ -7,6 +7,7 @@ export interface FileSystemAdapter {
   pickProjectFolder(): Promise<boolean>;
   readTextFile(relPath: string): Promise<string | null>;
   writeTextFile(relPath: string, content: string): Promise<void>;
+  readBinaryFile(relPath: string): Promise<ArrayBuffer | null>;
   listFiles(relDir: string): Promise<string[]>;
   readonly folderName: string | null;
 }
@@ -42,6 +43,26 @@ export class FsAccessAdapter implements FileSystemAdapter {
       const fileHandle = await dir.getFileHandle(fileName);
       const file = await fileHandle.getFile();
       return file.text();
+    } catch {
+      return null;
+    }
+  }
+
+  async readBinaryFile(relPath: string): Promise<ArrayBuffer | null> {
+    if (!this.#handle) return null;
+    try {
+      const parts = relPath.split("/");
+      let dir: FileSystemDirectoryHandle = this.#handle;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (!part) continue;
+        dir = await dir.getDirectoryHandle(part);
+      }
+      const fileName = parts[parts.length - 1];
+      if (!fileName) return null;
+      const fileHandle = await dir.getFileHandle(fileName);
+      const file = await fileHandle.getFile();
+      return file.arrayBuffer();
     } catch {
       return null;
     }
@@ -85,6 +106,7 @@ export class FsAccessAdapter implements FileSystemAdapter {
 
 export class MemoryAdapter implements FileSystemAdapter {
   #files = new Map<string, string>();
+  #binaries = new Map<string, ArrayBuffer>();
   #folderName: string | null = null;
 
   get folderName(): string | null {
@@ -104,18 +126,27 @@ export class MemoryAdapter implements FileSystemAdapter {
     this.#files.set(relPath, content);
   }
 
+  async readBinaryFile(relPath: string): Promise<ArrayBuffer | null> {
+    return this.#binaries.get(relPath) ?? null;
+  }
+
+  // テスト用: バイナリファイルを登録(listFiles にも反映)
+  writeBinaryFile(relPath: string, data: ArrayBuffer): void {
+    this.#binaries.set(relPath, data);
+  }
+
   async listFiles(relDir: string): Promise<string[]> {
     const prefix = relDir.endsWith("/") ? relDir : `${relDir}/`;
-    const names: string[] = [];
-    for (const key of this.#files.keys()) {
+    const names = new Set<string>();
+    for (const key of [...this.#files.keys(), ...this.#binaries.keys()]) {
       if (key.startsWith(prefix)) {
         const rest = key.slice(prefix.length);
         if (rest && !rest.includes("/")) {
-          names.push(rest);
+          names.add(rest);
         }
       }
     }
-    return names;
+    return [...names];
   }
 }
 

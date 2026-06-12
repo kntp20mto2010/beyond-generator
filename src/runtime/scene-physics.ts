@@ -1,7 +1,7 @@
 import type { CharacterDoc } from "../core/schema/character.js";
 import type { ProjectDoc, SceneDoc } from "../core/schema/project.js";
 import type { CharResolver } from "./scene-eval.js";
-import { evaluateActionTrack } from "./scene-eval.js";
+import { evaluateActionTrack, evaluateCharMotion } from "./scene-eval.js";
 import { HairSimulator } from "./hair-physics.js";
 import type { Mat2D } from "./mat2d.js";
 import { computeBoneWorld, headDecalMatrix } from "./pose.js";
@@ -41,11 +41,16 @@ export class ScenePhysicsPool {
       if (el.kind !== "character") continue;
       const entry = this.#entries.get(el.id);
       if (!entry) continue;
-      const frame = evaluateActionTrack(el.actions, t);
+      const origin: [number, number] = [el.transform.x, el.transform.y];
+      const frame = evaluateActionTrack(origin, el.actions, t);
       const bones = computeBoneWorld(entry.char, frame.pose);
       const hm = headDecalMatrix(bones);
-      // Phase 4a: 仮想速度は常に [0,0](moveTo未実装)
-      if (hm) entry.sim.step(hm, dt, [0, 0]);
+      if (!hm) continue;
+      // moveTo の実速度を髪へ。シミュレータはコンテナのflipX反転前(キャラ局所)空間で
+      // 動くため、左向き(facing=-1)時はx成分を反転して渡す(PosePreviewのvv反転と同規約)
+      const motion = evaluateCharMotion(el, t);
+      const vx = motion.facing === -1 ? -motion.vel[0] : motion.vel[0];
+      entry.sim.step(hm, dt, [vx, motion.vel[1]]);
     }
   }
 

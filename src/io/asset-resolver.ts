@@ -14,6 +14,11 @@ export class AssetResolver {
   #pending = new Map<string, Promise<void>>();
   #listeners = new Set<() => void>();
 
+  // 画像: パス → objectURL のキャッシュ
+  #imageUrls = new Map<string, string>();
+  #imageFailed = new Set<string>();
+  #imagePending = new Map<string, Promise<void>>();
+
   getCharacter(ref: string): CharacterDoc | undefined {
     const builtin = BUILTINS[ref];
     if (builtin) return builtin;
@@ -57,9 +62,65 @@ export class AssetResolver {
     }
   }
 
+  // --- 画像背景の解決 ---
+
+  getImageUrl(path: string): string | undefined {
+    return this.#imageUrls.get(path);
+  }
+
+  async ensureImagesLoaded(
+    paths: readonly string[],
+    fs: FileSystemAdapter | null,
+  ): Promise<void> {
+    const jobs: Promise<void>[] = [];
+    for (const path of paths) {
+      if (!path) continue;
+      if (this.#imageUrls.has(path) || this.#imageFailed.has(path)) continue;
+      const existing = this.#imagePending.get(path);
+      if (existing) {
+        jobs.push(existing);
+        continue;
+      }
+      const job = this.#loadImage(path, fs);
+      this.#imagePending.set(path, job);
+      jobs.push(job);
+    }
+    await Promise.all(jobs);
+  }
+
+  async #loadImage(path: string, fs: FileSystemAdapter | null): Promise<void> {
+    try {
+      // 1) プロジェクトフォルダ(FS Access)から
+      const buf = fs ? await fs.readBinaryFile(path) : null;
+      if (buf) {
+        const url = URL.createObjectURL(new Blob([buf]));
+        this.#imageUrls.set(path, url);
+        this.#notify();
+        return;
+      }
+      // 2) リポジトリ内蔵パス(devサーバー配信)へフォールバック
+      const res = await fetch(encodeURI(`/${path}`));
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        this.#imageUrls.set(path, url);
+        this.#notify();
+        return;
+      }
+      this.#imageFailed.add(path);
+    } catch {
+      this.#imageFailed.add(path);
+    } finally {
+      this.#imagePending.delete(path);
+    }
+  }
+
   // ロード再試行のため失敗記録を消す(フォルダ再選択時など)
   invalidate(): void {
     this.#failed.clear();
+    this.#imageFailed.clear();
+    for (const url of this.#imageUrls.values()) URL.revokeObjectURL(url);
+    this.#imageUrls.clear();
   }
 
   subscribe(cb: () => void): () => void {
