@@ -32,11 +32,12 @@ Vyondの視覚的編集の快適さに、**キャラクターを0から自作で
 - モデル割り当ては [09-model-strategy](docs/spec/09-model-strategy.md) に従う: **fable5=設計・難所(Phase 1-3コア)・視覚検証 / opus=タイムライン・書き出し / sonnet=量産**
 - 視覚検証はコンタクトシート1枚方式+ピクセル回帰ゲートで、fable5の画像認識を要所だけに使う
 
-## 次の一歩
+## 現在地
+
+**Phase 0〜4a 完了**(キャラ作成・表情・髪物理・クリップ10本・シーンエディタ・Codex製背景の採用まで)。
+詳細な進捗・動かし方・検証の落とし穴は **[docs/progress.md](docs/progress.md)** を参照。次は Phase 4b(Replace・スナップ・カメラ・moveTo)→ Phase 5(音声+MP4書き出し = M2)。
 
 ```
-Phase 0(基盤)から開始:
-  読む仕様書: 02-architecture.md(+01のスコープ確認)
-  担当: sonnet
-  受入条件: 空プロジェクトを保存→再読込→undo/redoが動く
+npm run dev   # http://localhost:5273(Chrome/Edge)
+npm test      # 188件
 ```
