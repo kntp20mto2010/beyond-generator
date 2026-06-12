@@ -10,6 +10,7 @@ import {
 import { buildCharacterContainer } from "../../render/character-pixi.js";
 import { resolveFace } from "../../runtime/expression.js";
 import { POSES } from "./poses.js";
+import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 // 列: 表情6種
 const EXPRESSIONS = [
@@ -93,14 +94,14 @@ export function ContactSheetPage() {
         }
       };
 
-      await app.init({
+      await withPixiInitLock(() => app.init({
         width: CANVAS_W,
         height: CANVAS_H,
         background: "#f4f1ec",
         antialias: true,
         resolution: 1,
         autoDensity: false,
-      });
+      }));
       if (disposed) { app.destroy(true); return; }
       host.appendChild(app.canvas);
 

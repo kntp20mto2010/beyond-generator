@@ -28,6 +28,7 @@ import { FsAccessAdapter, PROJECT_FILE, isFsAccessSupported } from "../../io/fs.
 import type { FileSystemAdapter } from "../../io/fs.js";
 import { AssetResolver } from "../../io/asset-resolver.js";
 import { useUiStore } from "../ui-store.js";
+import { ThumbnailService } from "../thumbs/thumbnail-service.js";
 import { StageCanvas, type PlayMode, type StageApi } from "./StageCanvas.js";
 import { AddPanel } from "./AddPanel.js";
 import { PropertyPanel } from "./PropertyPanel.js";
@@ -40,6 +41,7 @@ import {
   type ReplaceCandidate,
 } from "./ContextMenu.js";
 import { copyElement, hasClipboard, readClipboard } from "./clipboard.js";
+import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid } from "../ui/icons.js";
 
 interface Props {
   store: DocStore<ProjectDoc>;
@@ -66,6 +68,7 @@ export function ScenePage({ store }: Props) {
   const isDirty = revision !== savedRevision;
 
   const resolver = useMemo(() => new AssetResolver(), []);
+  const thumbs = useMemo(() => new ThumbnailService(), []);
   const [resolverRev, setResolverRev] = useState(0);
   useEffect(() => resolver.subscribe(() => setResolverRev((r) => r + 1)), [resolver]);
 
@@ -94,17 +97,22 @@ export function ScenePage({ store }: Props) {
 
   // 参照キャラ・背景画像のロード
   useEffect(() => {
-    const refs = doc.scenes
-      .flatMap((s) => s.elements)
-      .filter((e): e is CharacterElement => e.kind === "character")
-      .map((e) => e.ref);
-    if (refs.length > 0) void resolver.ensureLoaded(refs, fs);
+    // シーン内キャラ + 保存済キャラ + 内蔵キャラを全てロード(AddPanelのサムネ用)
+    const refs = [
+      "builtin:template-a",
+      ...doc.scenes
+        .flatMap((s) => s.elements)
+        .filter((e): e is CharacterElement => e.kind === "character")
+        .map((e) => e.ref),
+      ...savedCharacters.map((f) => `characters/${f}`),
+    ];
+    void resolver.ensureLoaded(refs, fs);
 
     const images = doc.scenes
       .map((s) => s.background?.image)
       .filter((img): img is string => !!img);
     if (images.length > 0) void resolver.ensureImagesLoaded(images, fs);
-  }, [doc, fs, resolver]);
+  }, [doc, fs, resolver, savedCharacters]);
 
   // 保存済キャラ(characters/*.byc.json)を一覧化
   useEffect(() => {
@@ -533,40 +541,58 @@ export function ScenePage({ store }: Props) {
   const playingSceneId = playMode ? sceneId : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-app)", color: "var(--text)" }}>
       {/* ツールバー */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 8px", borderBottom: "1px solid #ddd", flexWrap: "wrap" }}>
-        <button onClick={handleOpenFolder}>フォルダを開く</button>
-        <button onClick={handleSave}>保存</button>
+      <div style={{ display: "flex", alignItems: "center", gap: "4px", padding: "5px 8px", borderBottom: "1px solid var(--border)", flexWrap: "wrap", background: "var(--bg-panel)" }}>
+        <button className="ui-btn" onClick={handleOpenFolder}>
+          <IconFolder /> フォルダを開く
+        </button>
+        <button className="ui-btn" onClick={handleSave}>
+          <IconSave /> 保存
+        </button>
         <input
+          className="ui-input"
           value={doc.title}
           onChange={(e) => setTitle(store, e.target.value)}
           style={{ width: "160px" }}
         />
-        <span style={{ width: "1px", height: "20px", background: "#ddd" }} />
-        <button onClick={() => { store.undo(); bumpSeek(); }} disabled={!canUndo}>↩</button>
-        <button onClick={() => { store.redo(); bumpSeek(); }} disabled={!canRedo}>↪</button>
-        <span style={{ width: "1px", height: "20px", background: "#ddd" }} />
-        <button onClick={playScene} disabled={!scene}>▶ シーン再生</button>
-        <button onClick={playAll} disabled={doc.scenes.length === 0}>▶ 通し再生</button>
-        <button onClick={stop} disabled={!playMode}>⏹</button>
-        <span style={{ width: "1px", height: "20px", background: "#ddd" }} />
-        <button
-          onClick={() => setShowGrid((g) => !g)}
-          style={{ background: showGrid ? "#5B7DB1" : undefined, color: showGrid ? "#fff" : undefined }}
-        >
-          グリッド
+        <div className="ui-sep" />
+        <button className="ui-icon-btn" onClick={() => { store.undo(); bumpSeek(); }} disabled={!canUndo} title="元に戻す">
+          <IconUndo />
         </button>
-        {isDirty && <span style={{ color: "#e55" }}>● 未保存</span>}
+        <button className="ui-icon-btn" onClick={() => { store.redo(); bumpSeek(); }} disabled={!canRedo} title="やり直す">
+          <IconRedo />
+        </button>
+        <div className="ui-sep" />
+        <button className="ui-btn" onClick={playScene} disabled={!scene} title="シーン再生">
+          <IconPlay />
+        </button>
+        <button className="ui-btn" onClick={playAll} disabled={doc.scenes.length === 0} title="通し再生">
+          <IconPlayAll />
+        </button>
+        <button className="ui-btn" onClick={stop} disabled={!playMode} title="停止">
+          <IconStop />
+        </button>
+        <div className="ui-sep" />
+        <button
+          className={`ui-icon-btn${showGrid ? " ui-icon-btn--active" : ""}`}
+          onClick={() => setShowGrid((g) => !g)}
+          title="グリッド"
+        >
+          <IconGrid />
+        </button>
+        {isDirty && <span style={{ color: "var(--warn)", fontSize: "11px", marginLeft: "2px" }}>● 未保存</span>}
       </div>
 
       {/* 3カラム */}
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <div style={{ width: "180px", flexShrink: 0, borderRight: "1px solid #ddd", overflowY: "auto" }}>
+        <div className="ui-panel" style={{ width: "188px", flexShrink: 0, overflowY: "auto" }}>
           <AddPanel
             fs={fs}
             disabled={!scene}
             savedCharacters={savedCharacters}
+            resolver={resolver}
+            thumbs={thumbs}
             onAddCharacter={addCharacter}
             onAddText={addText}
             onAddBalloon={addBalloon}
@@ -574,7 +600,7 @@ export function ScenePage({ store }: Props) {
             onSetBackgroundImage={setBackgroundImage}
           />
         </div>
-        <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "12px", overflow: "auto", background: "#e9e7e2" }}>
+        <div className="stage-frame">
           {scene ? (
             <StageCanvas
               store={store}
@@ -595,12 +621,12 @@ export function ScenePage({ store }: Props) {
               apiRef={stageApiRef}
             />
           ) : (
-            <div style={{ color: "#888", marginTop: "40px" }}>
+            <div style={{ color: "var(--text-dim)", marginTop: "40px", fontSize: "13px" }}>
               シーンを追加してください(下の + ボタン)
             </div>
           )}
         </div>
-        <div style={{ width: "260px", flexShrink: 0, borderLeft: "1px solid #ddd", overflowY: "auto" }}>
+        <div className="ui-panel--right" style={{ width: "268px", flexShrink: 0, overflowY: "auto" }}>
           {scene && (
             <PropertyPanel
               store={store}
@@ -608,6 +634,8 @@ export function ScenePage({ store }: Props) {
               scene={scene}
               element={selectedEl}
               t={t}
+              resolver={resolver}
+              thumbs={thumbs}
             />
           )}
         </div>

@@ -21,6 +21,7 @@ import { mulberry32 } from "../../runtime/rand.js";
 import { ClipPlayer } from "../../runtime/clip-player.js";
 import { CLIPS, CLIP_ORDER } from "../../presets/clips/index.js";
 import { POSES } from "./poses.js";
+import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const PREVIEW_W = 260;
 const PREVIEW_H = 340;
@@ -66,14 +67,14 @@ export function PosePreview({ charStore }: Props) {
     const app = new Application();
 
     (async () => {
-      await app.init({
+      await withPixiInitLock(() => app.init({
         width: PREVIEW_W,
         height: PREVIEW_H,
         background: "#f4f1ec",
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
-      });
+      }));
       if (disposed) { app.destroy(true); return; }
       host.appendChild(app.canvas);
 
@@ -165,14 +166,14 @@ export function PosePreview({ charStore }: Props) {
     const app = new Application();
 
     (async () => {
-      await app.init({
+      await withPixiInitLock(() => app.init({
         width: MULTI_W,
         height: MULTI_H,
         background: "#f4f1ec",
         antialias: true,
         resolution: window.devicePixelRatio || 1,
         autoDensity: true,
-      });
+      }));
       if (disposed) { app.destroy(true); return; }
       host.appendChild(app.canvas);
 

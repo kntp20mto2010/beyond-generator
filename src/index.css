@@ -1,0 +1,339 @@
+/* Byond グローバルテーマ — CSS変数ベース。グローバルリセットは最小限に抑える */
+:root {
+  --bg-app: #1c1c20;
+  --bg-panel: #26262b;
+  --bg-elev: #2f2f36;
+  --border: #3c3c44;
+  --text: #e8e6e3;
+  --text-dim: #98959e;
+  --accent: #5b7db1;
+  --accent-soft: #3d4f6e;
+  --warn: #d9704c;
+  --danger: #e05656;
+  --radius: 6px;
+  --sp: 8px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+}
+
+/* --- 共通クラス --- */
+
+/* パネル背景 */
+.ui-panel {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+.ui-panel--right {
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+}
+
+/* 汎用ボタン */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+.ui-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.ui-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ui-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ui-btn--danger:hover:not(:disabled) {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* アイコンのみボタン */
+.ui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.1s;
+  flex-shrink: 0;
+}
+.ui-icon-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.ui-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ui-icon-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* テキスト入力 */
+.ui-input {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.ui-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* サムネイルカード */
+.ui-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.1s;
+  background: var(--bg-elev);
+}
+.ui-thumb:hover {
+  border-color: var(--accent-soft);
+}
+.ui-thumb--selected {
+  border-color: var(--accent);
+}
+.ui-thumb__label {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 2px 2px 3px;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* セグメントボタン群 */
+.ui-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ui-seg__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.1s;
+  gap: 3px;
+}
+.ui-seg__btn:last-child {
+  border-right: none;
+}
+.ui-seg__btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.ui-seg__btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+.ui-seg__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* セクション折りたたみ */
+.ui-section {
+  border-top: 1px solid var(--border);
+}
+.ui-section__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ui-section__header:hover {
+  color: var(--text);
+}
+.ui-section__chevron {
+  margin-left: auto;
+  transition: transform 0.15s;
+  color: var(--text-dim);
+}
+.ui-section__chevron--open {
+  transform: rotate(0deg);
+}
+.ui-section__chevron--closed {
+  transform: rotate(-90deg);
+}
+.ui-section__body {
+  padding: 4px 8px 8px;
+}
+
+/* ポップオーバー */
+.ui-popover {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  padding: 6px;
+}
+
+/* ツールバー区切り */
+.ui-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* スウォッチ */
+.ui-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.1s;
+}
+.ui-swatch:hover {
+  border-color: var(--text);
+}
+.ui-swatch--selected {
+  border-color: var(--accent);
+}
+
+/* ステージ周辺(額縁)— StageCanvasの親 */
+.stage-frame {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12px;
+  overflow: auto;
+  background: #e9e7e2;
+  flex: 1;
+}
+
+/* スクロールバー */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-panel); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* フォームインライン数値 */
+.ui-num {
+  width: 56px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 2px 4px;
+  font-size: 12px;
+  text-align: right;
+}
+.ui-num:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ラベル+コントロールの行 */
+.ui-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+.ui-row label {
+  color: var(--text-dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* タブバー */
+.app-tab {
+  padding: 6px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+.app-tab:hover {
+  color: var(--text);
+}
+.app-tab--active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* 吹き出しSVGミニ用 */
+.balloon-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: border-color 0.1s;
+}
+.balloon-mini:hover {
+  border-color: var(--accent-soft);
+}

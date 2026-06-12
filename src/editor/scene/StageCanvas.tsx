@@ -28,6 +28,7 @@ import {
   stageToScreen,
 } from "./stage-coords.js";
 import { computeSnap, type Edges } from "./snap.js";
+import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const SNAP_THRESHOLD = 12;
 
@@ -103,14 +104,16 @@ export function StageCanvas(props: Props) {
     const app = new Application();
 
     (async () => {
-      await app.init({
-        width: VIEW_W,
-        height: VIEW_H,
-        background: PAPER_COLOR,
-        antialias: true,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-      });
+      await withPixiInitLock(() =>
+        app.init({
+          width: VIEW_W,
+          height: VIEW_H,
+          background: PAPER_COLOR,
+          antialias: true,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
+        }),
+      );
       if (disposed) {
         app.destroy(true);
         return;

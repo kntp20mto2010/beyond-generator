@@ -8,6 +8,7 @@ import { sampleClip } from "../../runtime/clip-player.js";
 import { computeBoneWorld, buildRenderList } from "../../runtime/pose.js";
 import { buildCharacterContainer } from "../../render/character-pixi.js";
 import { resolveFace } from "../../runtime/expression.js";
+import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const CELL_W = 190;
 const CELL_H = 300;
@@ -70,14 +71,14 @@ export function ClipSheetPage() {
     (async () => {
       const char = loadCharacter();
 
-      await app.init({
+      await withPixiInitLock(() => app.init({
         width: CANVAS_W,
         height: CANVAS_H,
         background: "#f4f1ec",
         antialias: true,
         resolution: 1,
         autoDensity: false,
-      });
+      }));
       if (disposed) { app.destroy(true); return; }
       host.appendChild(app.canvas);
 

@@ -27,22 +27,19 @@ function App() {
     return <ClipSheetPage />;
   }
 
-  const tabStyle = (active: boolean) => ({
-    padding: "6px 16px",
-    border: "none",
-    borderBottom: active ? "2px solid #5B7DB1" : "2px solid transparent",
-    background: "none",
-    fontWeight: active ? 700 : 400,
-    cursor: "pointer",
-  });
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      <nav style={{ display: "flex", gap: "4px", borderBottom: "1px solid #ddd", padding: "0 8px", flexShrink: 0 }}>
-        <button style={tabStyle(tab === "character")} onClick={() => setTab("character")}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "var(--bg-app)", color: "var(--text)" }}>
+      <nav style={{ display: "flex", gap: "0", borderBottom: "1px solid var(--border)", padding: "0 8px", flexShrink: 0, background: "var(--bg-panel)" }}>
+        <button
+          className={`app-tab${tab === "character" ? " app-tab--active" : ""}`}
+          onClick={() => setTab("character")}
+        >
           キャラクター
         </button>
-        <button style={tabStyle(tab === "scene")} onClick={() => setTab("scene")}>
+        <button
+          className={`app-tab${tab === "scene" ? " app-tab--active" : ""}`}
+          onClick={() => setTab("scene")}
+        >
           シーン編集
         </button>
       </nav>
