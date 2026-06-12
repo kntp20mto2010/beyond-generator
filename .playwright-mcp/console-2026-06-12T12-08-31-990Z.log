@@ -1,0 +1,17 @@
+[   29695ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_stop:0
+[   33808ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_clear:0
+[   35231ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_stop:0
+[   35459ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_stop:0
+[   35692ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_stop:0
+[   38619ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_clear:0
+[   73231ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_clear:0
+[   74114ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8799/api/render_stop:0
+[   79654ms] [ERROR] Failed to load resource: net::ERR_EMPTY_RESPONSE @ http://localhost:8799/api/timeline?name=asaren.yaml:0
+[   79655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_RESET @ http://localhost:8799/api/scripts:0
+[   79669ms] TypeError: Failed to fetch
+    at api (http://localhost:8799/editor/app.js:80:19)
+    at refreshTimeline (http://localhost:8799/editor/app.js:166:19)
+    at loadScript (http://localhost:8799/editor/app.js:160:9)
+    at async init (http://localhost:8799/editor/app.js:143:23)
+[   79872ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8799/api/render_status:0
+[   80158ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:8799/api/scripts:0

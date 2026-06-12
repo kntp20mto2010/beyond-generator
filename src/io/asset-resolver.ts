@@ -1,10 +1,12 @@
 import type { CharacterDoc } from "../core/schema/character.js";
 import { TEMPLATE_A } from "../presets/characters/template-a.js";
+import { TEMPLATE_B } from "../presets/characters/template-b.js";
 import type { FileSystemAdapter } from "./fs.js";
 import { characterDocIO } from "./serialize.js";
 
 const BUILTINS: Record<string, CharacterDoc> = {
   "builtin:template-a": TEMPLATE_A,
+  "builtin:template-b": TEMPLATE_B,
 };
 
 // キャラ参照(ref)→ CharacterDoc の解決。builtinは即時、ファイルは非同期ロード+キャッシュ

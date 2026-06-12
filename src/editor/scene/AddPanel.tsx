@@ -25,7 +25,10 @@ interface Props {
   onSetBackgroundImage: (image: string | null) => void;
 }
 
-const BUILTIN_BGS = ["assets/generated/bg-school-001.png"];
+const BUILTIN_BGS = [
+  "assets/generated/bg-school-001.png",
+  "assets/backgrounds/bg-classroom-001.svg",
+];
 
 const BG_SWATCHES = [
   { color: "#f4f1ec", label: "紙色" },
@@ -97,6 +100,7 @@ export function AddPanel({
   // キャラサムネを起動時に生成
   const chars: CharEntry[] = [
     { ref: "builtin:template-a", label: "ハル(内蔵)" },
+    { ref: "builtin:template-b", label: "ハナ(内蔵)" },
     ...savedCharacters.map((f) => ({ ref: `characters/${f}`, label: f.replace(/\.byc\.json$/, "") })),
   ];
 

@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2560 1080">
+  <!-- 教室背景 bg-classroom-001 / bg-school-001(校門)とパレット統一のフラット調 -->
+  <!-- 壁 -->
+  <rect x="0" y="0" width="2560" height="760" fill="#F0EDE4"/>
+  <!-- 床 -->
+  <rect x="0" y="760" width="2560" height="320" fill="#E7DFCB"/>
+  <!-- 床板ライン -->
+  <rect x="0" y="760" width="2560" height="6" fill="#D8CDB2"/>
+  <rect x="0" y="860" width="2560" height="4" fill="#DCD2B9"/>
+  <rect x="0" y="970" width="2560" height="4" fill="#DCD2B9"/>
+  <!-- 幅木 -->
+  <rect x="0" y="738" width="2560" height="22" fill="#DDD5C2"/>
+
+  <!-- 黒板(左〜中央) -->
+  <rect x="270" y="180" width="1060" height="470" rx="18" fill="#C9BFA8"/>
+  <rect x="296" y="206" width="1008" height="396" rx="10" fill="#5F7A5F"/>
+  <!-- 黒板の書き込み風 -->
+  <rect x="340" y="266" width="300" height="14" rx="7" fill="#E9E4D2" opacity="0.85"/>
+  <rect x="340" y="316" width="430" height="12" rx="6" fill="#E9E4D2" opacity="0.55"/>
+  <rect x="340" y="362" width="360" height="12" rx="6" fill="#E9E4D2" opacity="0.55"/>
+  <rect x="820" y="266" width="180" height="120" rx="8" fill="none" stroke="#E9E4D2" stroke-width="6" opacity="0.6"/>
+  <!-- チョーク受け -->
+  <rect x="296" y="612" width="1008" height="20" rx="8" fill="#B8AD93"/>
+  <rect x="380" y="606" width="56" height="10" rx="5" fill="#FFFFFF"/>
+  <rect x="460" y="606" width="44" height="10" rx="5" fill="#E8B84B"/>
+
+  <!-- 時計 -->
+  <circle cx="800" cy="100" r="46" fill="#FFFFFF"/>
+  <circle cx="800" cy="100" r="46" fill="none" stroke="#C9BFA8" stroke-width="10"/>
+  <rect x="797" y="72" width="6" height="32" rx="3" fill="#4A4458"/>
+  <rect x="797" y="97" width="24" height="6" rx="3" fill="#4A4458"/>
+
+  <!-- 窓(右側に2つ) -->
+  <g>
+    <rect x="1560" y="150" width="400" height="430" rx="14" fill="#FFFFFF"/>
+    <rect x="1576" y="166" width="368" height="398" rx="8" fill="#AEC6DD"/>
+    <!-- 雲 -->
+    <g fill="#F2EFE6">
+      <ellipse cx="1680" cy="270" rx="56" ry="24"/>
+      <ellipse cx="1722" cy="252" rx="40" ry="20"/>
+      <ellipse cx="1850" cy="380" rx="48" ry="20"/>
+    </g>
+    <!-- 遠景の緑 -->
+    <rect x="1576" y="506" width="368" height="58" fill="#9AAB7A"/>
+    <rect x="1576" y="166" width="368" height="398" rx="8" fill="none" stroke="#FFFFFF" stroke-width="0"/>
+    <!-- 桟 -->
+    <rect x="1754" y="166" width="12" height="398" fill="#FFFFFF"/>
+    <rect x="1576" y="358" width="368" height="12" fill="#FFFFFF"/>
+  </g>
+  <g>
+    <rect x="2060" y="150" width="400" height="430" rx="14" fill="#FFFFFF"/>
+    <rect x="2076" y="166" width="368" height="398" rx="8" fill="#AEC6DD"/>
+    <g fill="#F2EFE6">
+      <ellipse cx="2200" cy="300" rx="52" ry="22"/>
+      <ellipse cx="2360" cy="230" rx="44" ry="19"/>
+      <ellipse cx="2396" cy="216" rx="30" ry="15"/>
+    </g>
+    <rect x="2076" y="506" width="368" height="58" fill="#9AAB7A"/>
+    <rect x="2254" y="166" width="12" height="398" fill="#FFFFFF"/>
+    <rect x="2076" y="358" width="368" height="12" fill="#FFFFFF"/>
+  </g>
+
+  <!-- 掲示板(黒板と窓の間) -->
+  <rect x="1390" y="210" width="120" height="160" rx="8" fill="#D9CDAE"/>
+  <rect x="1402" y="224" width="96" height="60" rx="4" fill="#FFFFFF"/>
+  <rect x="1402" y="296" width="96" height="60" rx="4" fill="#F5C07A"/>
+
+  <!-- ドア(左端) -->
+  <rect x="40" y="220" width="190" height="520" rx="10" fill="#D9CDAE"/>
+  <rect x="58" y="240" width="154" height="300" rx="6" fill="#EFEAD8"/>
+  <circle cx="206" cy="500" r="9" fill="#8A8270"/>
+
+  <!-- 机と椅子(奥の列、控えめに) -->
+  <g fill="#C9B086">
+    <rect x="420" y="700" width="170" height="14" rx="6"/>
+    <rect x="432" y="714" width="12" height="70" rx="5"/>
+    <rect x="566" y="714" width="12" height="70" rx="5"/>
+  </g>
+  <g fill="#C9B086">
+    <rect x="1980" y="700" width="170" height="14" rx="6"/>
+    <rect x="1992" y="714" width="12" height="70" rx="5"/>
+    <rect x="2126" y="714" width="12" height="70" rx="5"/>
+  </g>
+  <g fill="#B8A275">
+    <rect x="650" y="724" width="90" height="10" rx="5"/>
+    <rect x="658" y="734" width="10" height="52" rx="4"/>
+    <rect x="722" y="734" width="10" height="52" rx="4"/>
+  </g>
+</svg>
