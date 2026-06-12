@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { DocStore } from "./core/doc-store.js";
 import { createEmptyProject } from "./core/schema/project.js";
-import { AppShell } from "./editor/shell/AppShell.js";
+import { ScenePage } from "./editor/scene/ScenePage.js";
 import { CharacterEditorPage } from "./editor/character/CharacterEditorPage.js";
 import { ContactSheetPage } from "./editor/character/ContactSheetPage.js";
 import { ClipSheetPage } from "./editor/character/ClipSheetPage.js";
@@ -49,7 +49,7 @@ function App() {
       {tab === "character" ? (
         <CharacterEditorPage fs={fs} />
       ) : (
-        <AppShell store={store} />
+        <ScenePage store={store} />
       )}
     </div>
   );

@@ -1,0 +1,325 @@
+import type { Draft } from "immer";
+import type { DocStore } from "./doc-store.js";
+import { newId } from "./id.js";
+import type {
+  Action,
+  Enter,
+  Exit,
+  ExpressionKey,
+  ProjectDoc,
+  SceneDoc,
+  SceneElement,
+  TextElement,
+  Transform,
+} from "./schema/project.js";
+import { createEmptyScene } from "./schema/project.js";
+
+// ---------------------------------------------------------------------------
+// Draft helpers
+// ---------------------------------------------------------------------------
+
+function findScene(d: Draft<ProjectDoc>, sceneId: string): Draft<SceneDoc> | undefined {
+  return d.scenes.find((s) => s.id === sceneId);
+}
+
+function findElement(
+  d: Draft<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+): Draft<SceneElement> | undefined {
+  const scene = findScene(d, sceneId);
+  return scene?.elements.find((e) => e.id === elementId);
+}
+
+function sortByT<T extends { t: number }>(arr: Draft<T>[]): void {
+  arr.sort((a, b) => a.t - b.t);
+}
+
+// ---------------------------------------------------------------------------
+// シーン操作
+// ---------------------------------------------------------------------------
+
+export function addScene(store: DocStore<ProjectDoc>): void {
+  store.dispatch("シーン追加", (d) => {
+    d.scenes.push(createEmptyScene(d.scenes.length) as Draft<SceneDoc>);
+  });
+}
+
+export function removeScene(store: DocStore<ProjectDoc>, sceneId: string): void {
+  store.dispatch("シーン削除", (d) => {
+    const idx = d.scenes.findIndex((s) => s.id === sceneId);
+    if (idx !== -1) d.scenes.splice(idx, 1);
+  });
+}
+
+export function duplicateScene(store: DocStore<ProjectDoc>, sceneId: string): void {
+  store.dispatch("シーン複製", (d) => {
+    const idx = d.scenes.findIndex((s) => s.id === sceneId);
+    if (idx === -1) return;
+    const src = d.scenes[idx]!;
+    // 深複製してから id を振り直す(要素idも一意に)
+    const copy = JSON.parse(JSON.stringify(src)) as SceneDoc;
+    copy.id = newId();
+    copy.elements = copy.elements.map((el) => ({ ...el, id: newId() }));
+    d.scenes.splice(idx + 1, 0, copy as Draft<SceneDoc>);
+  });
+}
+
+export function moveScene(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  dir: -1 | 1,
+): void {
+  store.dispatch("シーン並べ替え", (d) => {
+    const idx = d.scenes.findIndex((s) => s.id === sceneId);
+    if (idx === -1) return;
+    const target = idx + dir;
+    if (target < 0 || target >= d.scenes.length) return;
+    const [moved] = d.scenes.splice(idx, 1);
+    if (moved) d.scenes.splice(target, 0, moved);
+  });
+}
+
+export function setSceneDuration(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  sec: number,
+): void {
+  store.dispatch(
+    "シーン長変更",
+    (d) => {
+      const scene = findScene(d, sceneId);
+      if (scene) scene.duration = sec;
+    },
+    { mergeKey: `dur:${sceneId}` },
+  );
+}
+
+export function setSceneBackground(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  color: string | null,
+): void {
+  store.dispatch(
+    "背景色変更",
+    (d) => {
+      const scene = findScene(d, sceneId);
+      if (scene) scene.background = color === null ? null : { color };
+    },
+    { mergeKey: `bg:${sceneId}` },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 要素操作
+// ---------------------------------------------------------------------------
+
+export function addElement(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  element: SceneElement,
+): void {
+  store.dispatch("要素追加", (d) => {
+    const scene = findScene(d, sceneId);
+    if (scene) scene.elements.push(element as Draft<SceneElement>);
+  });
+}
+
+export function removeElement(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+): void {
+  store.dispatch("要素削除", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    const idx = scene.elements.findIndex((e) => e.id === elementId);
+    if (idx !== -1) scene.elements.splice(idx, 1);
+  });
+}
+
+export function updateElementTransform(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  patch: Partial<Transform>,
+): void {
+  store.dispatch(
+    "位置変更",
+    (d) => {
+      const el = findElement(d, sceneId, elementId);
+      if (el) Object.assign(el.transform, patch);
+    },
+    { mergeKey: `el:${elementId}:tf` },
+  );
+}
+
+export function setElementZ(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  z: number,
+): void {
+  store.dispatch("重なり順変更", (d) => {
+    const el = findElement(d, sceneId, elementId);
+    if (el) el.z = z;
+  });
+}
+
+export function setElementEnter(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  patch: Partial<Enter>,
+): void {
+  store.dispatch(
+    "登場効果変更",
+    (d) => {
+      const el = findElement(d, sceneId, elementId);
+      if (el) Object.assign(el.enter, patch);
+    },
+    { mergeKey: `el:${elementId}:enter` },
+  );
+}
+
+export function setElementExit(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  patch: Partial<Exit>,
+): void {
+  store.dispatch(
+    "退場効果変更",
+    (d) => {
+      const el = findElement(d, sceneId, elementId);
+      if (el) Object.assign(el.exit, patch);
+    },
+    { mergeKey: `el:${elementId}:exit` },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// アクション(キャラ要素)
+// ---------------------------------------------------------------------------
+
+function characterEl(
+  d: Draft<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+): Extract<Draft<SceneElement>, { kind: "character" }> | undefined {
+  const el = findElement(d, sceneId, elementId);
+  return el && el.kind === "character" ? el : undefined;
+}
+
+export function addAction(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  action: Action,
+): void {
+  store.dispatch("アクション追加", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    el.actions.push(action as Draft<Action>);
+    sortByT(el.actions);
+  });
+}
+
+export function updateAction(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  index: number,
+  patch: Partial<Action>,
+): void {
+  store.dispatch("アクション編集", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    const action = el.actions[index];
+    if (!action) return;
+    Object.assign(action, patch);
+    sortByT(el.actions);
+  });
+}
+
+export function removeAction(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  index: number,
+): void {
+  store.dispatch("アクション削除", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    if (index >= 0 && index < el.actions.length) el.actions.splice(index, 1);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 表情キー(キャラ要素)
+// ---------------------------------------------------------------------------
+
+export function addExpressionKey(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  key: ExpressionKey,
+): void {
+  store.dispatch("表情追加", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    el.expressions.push(key as Draft<ExpressionKey>);
+    sortByT(el.expressions);
+  });
+}
+
+export function updateExpressionKey(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  index: number,
+  patch: Partial<ExpressionKey>,
+): void {
+  store.dispatch("表情編集", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    const key = el.expressions[index];
+    if (!key) return;
+    Object.assign(key, patch);
+    sortByT(el.expressions);
+  });
+}
+
+export function removeExpressionKey(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  index: number,
+): void {
+  store.dispatch("表情削除", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    if (index >= 0 && index < el.expressions.length) el.expressions.splice(index, 1);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// テキスト要素プロパティ
+// ---------------------------------------------------------------------------
+
+export function setTextProps(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  patch: Partial<Omit<TextElement, "id" | "kind" | "transform" | "z" | "enter" | "exit">>,
+  mergeKey?: string,
+): void {
+  store.dispatch(
+    "テキスト編集",
+    (d) => {
+      const el = findElement(d, sceneId, elementId);
+      if (el && el.kind === "text") Object.assign(el, patch);
+    },
+    { mergeKey: mergeKey ?? `el:${elementId}:text` },
+  );
+}

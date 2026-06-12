@@ -31,3 +31,6 @@ export const EASINGS: Record<EasingName, (t: number) => number> = {
 export function ease(name: EasingName | undefined, t: number): number {
   return (EASINGS[name ?? "linear"] ?? EASINGS.linear)(t);
 }
+
+export const quadOut = EASINGS.quadOut;
+export const backOut = EASINGS.backOut;

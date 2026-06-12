@@ -58,12 +58,12 @@ export function sampleClip(clip: ClipDoc, t: number): ClipFrame {
   };
 }
 
-function smoothstep(k: number): number {
+export function smoothstep(k: number): number {
   const c = Math.max(0, Math.min(1, k));
   return c * c * (3 - 2 * c);
 }
 
-function blendFrames(a: ClipFrame, b: ClipFrame, k: number): ClipFrame {
+export function blendFrames(a: ClipFrame, b: ClipFrame, k: number): ClipFrame {
   const rotations: PoseRotations = {};
   const boneIds = new Set([
     ...Object.keys(a.pose.rotations ?? {}),
