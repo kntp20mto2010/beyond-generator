@@ -18,7 +18,8 @@ import {
   resolveFace,
 } from "../../runtime/expression.js";
 import { mulberry32 } from "../../runtime/rand.js";
-import { evalCycle, type CycleKind } from "../../runtime/test-cycles.js";
+import { ClipPlayer } from "../../runtime/clip-player.js";
+import { CLIPS, CLIP_ORDER } from "../../presets/clips/index.js";
 import { POSES } from "./poses.js";
 
 const PREVIEW_W = 260;
@@ -34,7 +35,7 @@ interface Props {
   charStore: DocStore<CharacterDoc>;
 }
 
-type Mode = { kind: "pose"; index: number } | { kind: "cycle"; cycle: CycleKind };
+type Mode = { kind: "pose"; index: number } | { kind: "clip"; id: string };
 
 interface PreviewState {
   mode: Mode;
@@ -46,14 +47,16 @@ export function PosePreview({ charStore }: Props) {
   const singleRef = useRef<HTMLDivElement>(null);
   const multiRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<Mode>({ kind: "pose", index: 0 });
+  const [clipSel, setClipSel] = useState<string>("walk");
+  const [flip, setFlip] = useState(false);
   const [expression, setExpression] = useState("neutral");
   const [blinkOn, setBlinkOn] = useState(true);
   const [multiMode, setMultiMode] = useState(false);
   const [zoomUp, setZoomUp] = useState(false); // 上半身ズーム(表情・髪の確認用)
 
   // ticker内から最新状態を読むためのref(effect再実行を避ける)
-  const stRef = useRef<PreviewState & { zoomUp: boolean }>({ mode, expression, blinkOn, zoomUp });
-  stRef.current = { mode, expression, blinkOn, zoomUp };
+  const stRef = useRef<PreviewState & { zoomUp: boolean; flip: boolean }>({ mode, expression, blinkOn, zoomUp, flip });
+  stRef.current = { mode, expression, blinkOn, zoomUp, flip };
 
   // 単体プレビュー(静止/アニメ共通の常駐ループ)
   useEffect(() => {
@@ -77,21 +80,21 @@ export function PosePreview({ charStore }: Props) {
       const view = new CharacterView();
       app.stage.addChild(view.container);
       const applyCamera = () => {
+        const sx = stRef.current.zoomUp ? 0.85 : SCALE;
         if (stRef.current.zoomUp) {
           // 上半身: 頭頂(-348)〜腰(+50)あたりをフレーミング
           view.container.position.set(PREVIEW_W / 2, 306);
-          view.container.scale.set(0.85);
         } else {
           view.container.position.set(PREVIEW_W / 2, GROUND_Y - 310 * SCALE);
-          view.container.scale.set(SCALE);
         }
+        view.container.scale.set(stRef.current.flip ? -sx : sx, sx);
       };
       applyCamera();
 
       let t = 0;
       let sim: HairSimulator | null = null;
       let simDocRev = -1;
-      let lastCycle: CycleKind | null = null;
+      const player = new ClipPlayer();
       const blinkSchedule: number[] = [];
       const rng = mulberry32(7);
 
@@ -109,25 +112,31 @@ export function PosePreview({ charStore }: Props) {
         const blink = st.blinkOn ? blinkAt(t, rng, blinkSchedule) : 0;
         const face = resolveFace(doc, { preset: st.expression, blink });
 
-        if (st.mode.kind === "cycle") {
-          if (!sim || simDocRev !== charStore.revision || lastCycle !== st.mode.cycle) {
+        if (st.mode.kind === "clip") {
+          const clip = CLIPS[st.mode.id];
+          if (clip && player.currentClipId !== clip.id) {
+            player.play(clip, t);
+          }
+          if (!sim || simDocRev !== charStore.revision) {
             sim = new HairSimulator(doc);
             simDocRev = charStore.revision;
-            lastCycle = st.mode.cycle;
           }
-          const frame = evalCycle(st.mode.cycle, t);
-          const bones = computeBoneWorld(doc, frame.pose);
-          const hm = headDecalMatrix(bones);
-          if (hm) sim.step(hm, dt, [frame.virtualVelocity, 0]);
-          const items = buildRenderList(doc, bones, {
-            face,
-            hairDeform: sim.getDeforms(),
-            handShape: st.mode.cycle === "run" ? "fist" : undefined,
-          });
-          view.update(doc, items);
+          const frame = player.evaluate(t);
+          if (frame) {
+            const bones = computeBoneWorld(doc, frame.pose);
+            const hm = headDecalMatrix(bones);
+            const vv = st.flip ? -frame.virtualVelocity : frame.virtualVelocity;
+            if (hm) sim.step(hm, dt, [vv, 0]);
+            const items = buildRenderList(doc, bones, {
+              face,
+              hairDeform: sim.getDeforms(),
+              handShape: frame.handShape,
+            });
+            view.update(doc, items);
+          }
         } else {
           sim = null;
-          lastCycle = null;
+          player.stop();
           const def = POSES[st.mode.index] ?? POSES[0]!;
           const bones = computeBoneWorld(doc, def.pose);
           const items = buildRenderList(doc, bones, {
@@ -219,24 +228,26 @@ export function PosePreview({ charStore }: Props) {
           4ポーズ
         </button>
       </div>
-      <div style={{ display: "flex", gap: "4px", marginBottom: "4px", flexWrap: "wrap" }}>
-        <button
-          onClick={() => { setMultiMode(false); setMode({ kind: "cycle", cycle: "idle" }); }}
-          style={chip(!multiMode && mode.kind === "cycle" && mode.cycle === "idle")}
+      <div style={{ display: "flex", gap: "4px", marginBottom: "4px", flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: "11px", color: "#888" }}>アニメ:</span>
+        <select
+          value={clipSel}
+          onChange={(e) => {
+            setClipSel(e.target.value);
+            // 再生中なら即座に切替(クロスフェード遷移)
+            if (mode.kind === "clip") setMode({ kind: "clip", id: e.target.value });
+          }}
+          style={{ fontSize: "11px" }}
         >
-          ▶待機
-        </button>
+          {CLIP_ORDER.map((id) => (
+            <option key={id} value={id}>{CLIPS[id]?.label ?? id}</option>
+          ))}
+        </select>
         <button
-          onClick={() => { setMultiMode(false); setMode({ kind: "cycle", cycle: "walk" }); }}
-          style={chip(!multiMode && mode.kind === "cycle" && mode.cycle === "walk")}
+          onClick={() => { setMultiMode(false); setMode({ kind: "clip", id: clipSel }); }}
+          style={chip(!multiMode && mode.kind === "clip")}
         >
-          ▶歩き
-        </button>
-        <button
-          onClick={() => { setMultiMode(false); setMode({ kind: "cycle", cycle: "run" }); }}
-          style={chip(!multiMode && mode.kind === "cycle" && mode.cycle === "run")}
-        >
-          ▶走り
+          ▶再生
         </button>
         <button
           onClick={() => setMode({ kind: "pose", index: 0 })}
@@ -244,6 +255,14 @@ export function PosePreview({ charStore }: Props) {
         >
           ⏹停止
         </button>
+        <label style={{ fontSize: "11px", color: "#555", display: "flex", alignItems: "center", gap: "2px" }}>
+          <input
+            type="checkbox"
+            checked={flip}
+            onChange={(e) => setFlip(e.target.checked)}
+          />
+          反転
+        </label>
       </div>
       <div style={{ display: "flex", gap: "6px", marginBottom: "4px", alignItems: "center" }}>
         <span style={{ fontSize: "11px", color: "#888" }}>表情:</span>

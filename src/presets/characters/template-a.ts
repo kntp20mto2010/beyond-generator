@@ -231,8 +231,19 @@ export const TEMPLATE_A: CharacterDoc = {
       shapes: [{ kind: "ellipse", cx: 38, cy: -8, rx: 11, ry: 12, fill: "@skin" }],
       pins: { origin: [38, -20], grip: [38, 2] },
     },
+    relax: {
+      shapes: [{ kind: "ellipse", cx: 38, cy: -8, rx: 10, ry: 11.5, fill: "@skin" }],
+      pins: { origin: [38, -20], grip: [38, 2] },
+    },
     fist: {
       shapes: [{ kind: "ellipse", cx: 38, cy: -10, rx: 10, ry: 10, fill: "@skin" }],
+      pins: { origin: [38, -20], grip: [38, 0] },
+    },
+    point: {
+      shapes: [
+        { kind: "ellipse", cx: 38, cy: -10, rx: 9.5, ry: 10, fill: "@skin" },
+        { kind: "rect", x: 35.5, y: -4, w: 5, h: 16, r: 2.5, fill: "@skin" },
+      ],
       pins: { origin: [38, -20], grip: [38, 0] },
     },
   },
