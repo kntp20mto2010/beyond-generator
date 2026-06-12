@@ -597,3 +597,133 @@ body {
   background: var(--danger);
   pointer-events: none;
 }
+
+/* =========================================================================
+   シーン帯(Phase 4c-3)
+   ========================================================================= */
+.scene-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  overflow-x: auto;
+}
+.scene-strip__slot {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.scene-strip__tail {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  flex-shrink: 0;
+}
+/* ドロップ位置インジケータ */
+.scene-strip__insert {
+  width: 3px;
+  align-self: stretch;
+  margin: 4px 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* サムネカード */
+.scene-card {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.1s;
+  flex-shrink: 0;
+}
+.scene-card:hover {
+  border-color: var(--accent-soft);
+}
+.scene-card--sel {
+  border-color: var(--accent);
+}
+.scene-card__thumb {
+  position: relative;
+  background: var(--bg-app);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scene-card__thumb img {
+  display: block;
+}
+.scene-card__num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.scene-card__progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+}
+.scene-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 2px 4px;
+}
+.scene-card__label {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scene-card__actions {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.ui-icon-btn--mini {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+}
+.ui-icon-btn--mini svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* トランジションチップ */
+.trans-chip {
+  width: 20px;
+  height: 20px;
+  margin: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+.trans-chip:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--accent);
+}
+.trans-chip--set {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 700;
+}

@@ -17,6 +17,7 @@ import {
   duplicateElement,
   duplicateScene,
   moveScene,
+  moveSceneTo,
   removeCameraKey,
   removeElement,
   reorderElement,
@@ -167,6 +168,52 @@ describe("moveScene", () => {
     const store = new DocStore(project);
     moveScene(store, s0.id, -1);
     expect(store.doc.scenes[0]!.id).toBe(s0.id);
+  });
+});
+
+describe("moveSceneTo", () => {
+  function threeScenes() {
+    const project = createEmptyProject();
+    const s0 = createEmptyScene(0);
+    const s1 = createEmptyScene(1);
+    const s2 = createEmptyScene(2);
+    project.scenes.push(s0, s1, s2);
+    return { store: new DocStore(project), ids: [s0.id, s1.id, s2.id] as const };
+  }
+
+  it("前→後ろへ移動(0 → 2)", () => {
+    const { store, ids } = threeScenes();
+    moveSceneTo(store, ids[0], 2);
+    expect(store.doc.scenes.map((s) => s.id)).toEqual([ids[1], ids[2], ids[0]]);
+  });
+
+  it("後ろ→前へ移動(2 → 0)", () => {
+    const { store, ids } = threeScenes();
+    moveSceneTo(store, ids[2], 0);
+    expect(store.doc.scenes.map((s) => s.id)).toEqual([ids[2], ids[0], ids[1]]);
+  });
+
+  it("同位置は no-op(undo履歴も増えない)", () => {
+    const { store, ids } = threeScenes();
+    const rev = store.revision;
+    moveSceneTo(store, ids[1], 1);
+    expect(store.doc.scenes.map((s) => s.id)).toEqual([ids[0], ids[1], ids[2]]);
+    expect(store.revision).toBe(rev);
+    expect(store.canUndo()).toBe(false);
+  });
+
+  it("範囲外のtoIndexは無視", () => {
+    const { store, ids } = threeScenes();
+    moveSceneTo(store, ids[0], 5);
+    moveSceneTo(store, ids[0], -1);
+    expect(store.doc.scenes.map((s) => s.id)).toEqual([ids[0], ids[1], ids[2]]);
+  });
+
+  it("undo 1回で元の並びに戻る", () => {
+    const { store, ids } = threeScenes();
+    moveSceneTo(store, ids[0], 2);
+    store.undo();
+    expect(store.doc.scenes.map((s) => s.id)).toEqual([ids[0], ids[1], ids[2]]);
   });
 });
 

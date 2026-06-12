@@ -12,6 +12,8 @@ import { drawBalloon } from "../../render/balloon.js";
 import {
   evaluateCamera,
   evaluateScene,
+  STAGE_H,
+  STAGE_W,
   type CameraState,
   type CharResolver,
   type SceneFrameItem,
@@ -34,7 +36,7 @@ const SNAP_THRESHOLD = 12;
 
 export type PlayMode = "scene" | "all";
 
-// ScenePage から Pixi bounds を参照するための命令的API(整列で使用)
+// ScenePage から Pixi bounds を参照するための命令的API(整列・カメラ寄せで使用)
 export interface StageApi {
   // 要素のステージ座標bounds。{ l,r,t,b,cx,cy }。未描画なら null
   getStageEdges(elementId: string): Edges | null;
@@ -61,6 +63,8 @@ interface Props {
   resolverRev: number;
   // グリッド+セーフエリア常時表示
   showGrid: boolean;
+  // カメラモード(ON中は要素ヒットテスト/ドラッグ/ホバー/ハンドルを無効化しカメラ枠を表示)
+  cameraEdit: boolean;
   // 右クリックメニュー要求(clientX/Y, ステージ座標, 対象elementId | null)
   onContextMenu: (info: {
     clientX: number;
@@ -69,6 +73,10 @@ interface Props {
     stageY: number;
     elementId: string | null;
   }) => void;
+  // キャラのダブルクリック → クイックアクションPopover要求
+  onQuickAction: (info: { clientX: number; clientY: number; elementId: string }) => void;
+  // カメラ枠ドラッグ確定(pointerup)。現在tでのキー更新/追加は ScenePage が担う
+  onCameraCommit: (cam: CameraState) => void;
   // 整列用に Pixi bounds を公開する命令的API
   apiRef: React.MutableRefObject<StageApi | null>;
 }
@@ -170,6 +178,19 @@ export function StageCanvas(props: Props) {
       const guides = new Graphics();
       app.stage.addChild(guides);
 
+      // ホバーハイライト(選択枠より下・スクリーン座標)
+      const hover = new Graphics();
+      app.stage.addChildAt(hover, app.stage.getChildIndex(selection));
+
+      // カメラモードのオーバーレイ(最前面)
+      const camOverlay = new Graphics();
+      app.stage.addChild(camOverlay);
+
+      // カメラ枠ドラッグ中のローカル値(確定はpointerup)。null=非ドラッグ
+      let camLive: CameraState | null = null;
+      // ドラッグ中(要素 or スケール or カメラ)はホバーを抑止
+      let dragging = false;
+
       const views = new Map<string, ElView>();
       const pool = new ScenePhysicsPool();
       let prevT = pRef.current.tRef.current;
@@ -177,6 +198,8 @@ export function StageCanvas(props: Props) {
       let throttleAcc = 0;
       let lastFrame: SceneFrameItem[] = [];
       let lastCam: CameraState = { x: 960, y: 540, zoom: 1 };
+      // カメラ枠が示すカメラ(camera-edit中はidentity表示でも枠はこの値で描く)
+      let camFrameValue: CameraState = { x: 960, y: 540, zoom: 1 };
       let transition: TransitionState | null = null;
 
       const p = () => pRef.current;
@@ -254,6 +277,39 @@ export function StageCanvas(props: Props) {
         return { x: hx, y: hy, el };
       };
 
+      // 選択枠の四隅ハンドル(スクリーン座標)。locked/カメラモード中はnull
+      const HANDLE = 8;
+      const scaleHandles = (): { corners: [number, number][]; centerScreen: [number, number] } | null => {
+        if (p().cameraEdit || p().playMode) return null;
+        const id = p().selectedId;
+        if (!id) return null;
+        const scene = currentScene();
+        const el = scene?.elements.find((e) => e.id === id);
+        if (!el || el.locked) return null;
+        const view = views.get(id);
+        if (!view) return null;
+        const b = view.container.getBounds();
+        const corners: [number, number][] = [
+          [b.x - 6, b.y - 6],
+          [b.x + b.width + 6, b.y - 6],
+          [b.x - 6, b.y + b.height + 6],
+          [b.x + b.width + 6, b.y + b.height + 6],
+        ];
+        // 要素中心(transform.x/y)のスクリーン座標 = scale基準点
+        const cs = stageToScreen(el.transform.x, el.transform.y, lastCam);
+        return { corners, centerScreen: cs };
+      };
+
+      // カメラがクロップするステージ矩形(16:9固定)を、identity視点でスクリーン座標に。
+      // カメラモード中はステージをidentity表示するため、ここは常にIDENTITY換算。
+      const cameraFrameScreen = (cam: CameraState) => {
+        const halfW = STAGE_W / 2 / cam.zoom;
+        const halfH = STAGE_H / 2 / cam.zoom;
+        const [l, t] = stageToScreen(cam.x - halfW, cam.y - halfH);
+        const [r, b] = stageToScreen(cam.x + halfW, cam.y + halfH);
+        return { l, t, r, b };
+      };
+
       // ガイド線を描画(guides: SnapGuide[]、ステージ座標 → スクリーン)
       const drawGuides = (gs: { axis: "v" | "h"; pos: number }[]) => {
         guides.clear();
@@ -277,6 +333,22 @@ export function StageCanvas(props: Props) {
         const scene = cur.store.doc.scenes.find((s) => s.id === cur.sceneId);
         if (!scene) return;
         const [sx, sy] = toCanvasPx(ev.clientX, ev.clientY);
+
+        // (0) カメラモード: 枠ドラッグ=x/y、四隅=zoom。pointerupで onCameraCommit 1回
+        if (cur.cameraEdit) {
+          startCameraDrag(ev, sx, sy);
+          return;
+        }
+
+        // (0.5) 拡縮ハンドル上ならscaleドラッグ(要素ドラッグより優先)
+        const handles = scaleHandles();
+        if (handles) {
+          const hitCorner = handles.corners.find(([hx, hy]) => Math.hypot(sx - hx, sy - hy) <= 10);
+          if (hitCorner) {
+            startScaleDrag(ev, sx, sy, handles.centerScreen);
+            return;
+          }
+        }
 
         // (1) しっぽハンドル上ならtailドラッグ(要素ドラッグより優先)
         const handle = tailHandleScreen();
@@ -324,6 +396,8 @@ export function StageCanvas(props: Props) {
           if (ov) otherEdges.push(viewStageEdges(ov));
         }
         canvas.setPointerCapture(ev.pointerId);
+        dragging = true;
+        drawHover(null);
 
         const onMove = (me: PointerEvent) => {
           const [mx, my] = toCanvasPx(me.clientX, me.clientY);
@@ -357,11 +431,122 @@ export function StageCanvas(props: Props) {
         };
         const onUp = () => {
           guides.clear();
+          dragging = false;
           canvas.removeEventListener("pointermove", onMove);
           canvas.removeEventListener("pointerup", onUp);
         };
         canvas.addEventListener("pointermove", onMove);
         canvas.addEventListener("pointerup", onUp);
+      });
+
+      // === 拡縮ハンドルドラッグ: 新scale = 開始scale × (現在→中心距離 / 開始→中心距離) ===
+      const startScaleDrag = (
+        ev: PointerEvent,
+        sx: number,
+        sy: number,
+        centerScreen: [number, number],
+      ) => {
+        const cur = pRef.current;
+        const scene = cur.store.doc.scenes.find((s) => s.id === cur.sceneId);
+        const id = cur.selectedId;
+        if (!scene || !id) return;
+        const el = scene.elements.find((e) => e.id === id);
+        if (!el || el.locked) return;
+        const startScale = el.transform.scale;
+        const startDist = Math.max(1e-3, Math.hypot(sx - centerScreen[0], sy - centerScreen[1]));
+        canvas.setPointerCapture(ev.pointerId);
+        dragging = true;
+        drawHover(null);
+        const onMove = (me: PointerEvent) => {
+          const [mx, my] = toCanvasPx(me.clientX, me.clientY);
+          const curDist = Math.hypot(mx - centerScreen[0], my - centerScreen[1]);
+          const raw = startScale * (curDist / startDist);
+          const next = Math.min(5, Math.max(0.1, raw));
+          updateElementTransform(p().store, scene.id, id, { scale: next });
+        };
+        const onUp = () => {
+          dragging = false;
+          canvas.removeEventListener("pointermove", onMove);
+          canvas.removeEventListener("pointerup", onUp);
+        };
+        canvas.addEventListener("pointermove", onMove);
+        canvas.addEventListener("pointerup", onUp);
+      };
+
+      // === カメラ枠ドラッグ: 枠内=x/y移動、四隅=zoom。pointerupで onCameraCommit 1回 ===
+      const startCameraDrag = (ev: PointerEvent, sx: number, sy: number) => {
+        // 開始時点のカメラを固定(ドラッグ中にカメラ自身が動くのでデルタ基準を固定)
+        const startCam: CameraState = { ...camFrameValue };
+        const f = cameraFrameScreen(startCam);
+        const corners: [number, number][] = [
+          [f.l, f.t],
+          [f.r, f.t],
+          [f.l, f.b],
+          [f.r, f.b],
+        ];
+        const onCorner = corners.some(([hx, hy]) => Math.hypot(sx - hx, sy - hy) <= 10);
+        // 中心(スクリーン)= 枠中心。zoom基準の対角距離
+        const cxScreen = (f.l + f.r) / 2;
+        const cyScreen = (f.t + f.b) / 2;
+        const startDiag = Math.max(1e-3, Math.hypot(sx - cxScreen, sy - cyScreen));
+        // 枠内ドラッグの開始ステージ座標(identity視点)
+        const [startStageX, startStageY] = screenToStage(sx, sy);
+        canvas.setPointerCapture(ev.pointerId);
+        dragging = true;
+
+        const onMove = (me: PointerEvent) => {
+          const [mx, my] = toCanvasPx(me.clientX, me.clientY);
+          if (onCorner) {
+            // 四隅: zoom = 開始zoom × (開始対角 / 現在対角)、クランプ0.5〜4(枠中心固定)
+            const curDiag = Math.hypot(mx - cxScreen, my - cyScreen);
+            const z = startCam.zoom * (startDiag / Math.max(1e-3, curDiag));
+            camLive = { x: startCam.x, y: startCam.y, zoom: Math.min(4, Math.max(0.5, z)) };
+          } else {
+            // 枠内: 中心x/y移動(開始カメラ基準のデルタ)
+            const [gx, gy] = screenToStage(mx, my);
+            camLive = {
+              x: startCam.x + (gx - startStageX),
+              y: startCam.y + (gy - startStageY),
+              zoom: startCam.zoom,
+            };
+          }
+        };
+        const onUp = () => {
+          dragging = false;
+          canvas.removeEventListener("pointermove", onMove);
+          canvas.removeEventListener("pointerup", onUp);
+          const committed = camLive;
+          camLive = null;
+          if (committed) pRef.current.onCameraCommit(committed);
+        };
+        canvas.addEventListener("pointermove", onMove);
+        canvas.addEventListener("pointerup", onUp);
+      };
+
+      // === ホバーハイライト(非ドラッグ・非カメラ・非再生時) ===
+      canvas.addEventListener("pointermove", (ev: PointerEvent) => {
+        const cur = pRef.current;
+        if (dragging || cur.cameraEdit || cur.playMode) {
+          drawHover(null);
+          return;
+        }
+        const [sx, sy] = toCanvasPx(ev.clientX, ev.clientY);
+        drawHover(hitTest(sx, sy));
+      });
+      canvas.addEventListener("pointerleave", () => drawHover(null));
+
+      // === ダブルクリック → クイックアクション(キャラのみ) ===
+      canvas.addEventListener("dblclick", (ev: MouseEvent) => {
+        const cur = pRef.current;
+        if (cur.playMode || cur.cameraEdit) return;
+        const [sx, sy] = toCanvasPx(ev.clientX, ev.clientY);
+        const hitId = hitTest(sx, sy);
+        if (!hitId) return;
+        const scene = cur.store.doc.scenes.find((s) => s.id === cur.sceneId);
+        const el = scene?.elements.find((e) => e.id === hitId);
+        if (el?.kind === "character") {
+          cur.onQuickAction({ clientX: ev.clientX, clientY: ev.clientY, elementId: hitId });
+        }
       });
 
       // === 右クリックメニュー ===
@@ -402,8 +587,8 @@ export function StageCanvas(props: Props) {
 
       const drawSelection = (frame: SceneFrameItem[]) => {
         selection.clear();
-        // 通し再生中は選択枠を描かない
-        if (p().playMode === "all") return;
+        // 通し再生中・カメラモード中は選択枠を描かない
+        if (p().playMode === "all" || p().cameraEdit) return;
         const id = p().selectedId;
         if (!id) return;
         const item = frame.find((f) => f.elementId === id);
@@ -414,11 +599,60 @@ export function StageCanvas(props: Props) {
         selection
           .rect(b.x - 6, b.y - 6, b.width + 12, b.height + 12)
           .stroke({ color: 0x5b7db1, width: 3 });
+        // 四隅の拡縮ハンドル(8px白角・青枠)。locked要素には出さない
+        const handles = scaleHandles();
+        if (handles) {
+          for (const [hx, hy] of handles.corners) {
+            selection
+              .rect(hx - HANDLE / 2, hy - HANDLE / 2, HANDLE, HANDLE)
+              .fill({ color: 0xffffff })
+              .stroke({ color: 0x5b7db1, width: 2 });
+          }
+        }
         // balloon選択中: しっぽ先端ハンドル(白丸+青枠、半径7px スクリーン)
         const handle = tailHandleScreen();
         if (handle) {
           selection
             .circle(handle.x, handle.y, 7)
+            .fill({ color: 0xffffff })
+            .stroke({ color: 0x5b7db1, width: 2 });
+        }
+      };
+
+      // ホバーハイライト(薄い1px枠)。ドラッグ中・カメラモード中・再生中は消す
+      const drawHover = (elementId: string | null) => {
+        hover.clear();
+        if (elementId === null) return;
+        const view = views.get(elementId);
+        if (!view) return;
+        const b = view.container.getBounds();
+        hover
+          .rect(b.x - 4, b.y - 4, b.width + 8, b.height + 8)
+          .stroke({ color: 0x5b7db1, width: 1, alpha: 0.5 });
+      };
+
+      // カメラオーバーレイ: 枠(16:9)+ 外側グレーアウト + 四隅zoomハンドル
+      const drawCameraOverlay = () => {
+        camOverlay.clear();
+        if (!p().cameraEdit) return;
+        const f = cameraFrameScreen(camFrameValue);
+        // 外側グレーアウト(4枚の矩形で枠の外を覆う)
+        const ga = { color: 0x000000, alpha: 0.35 };
+        camOverlay.rect(0, 0, VIEW_W, Math.max(0, f.t)).fill(ga);
+        camOverlay.rect(0, f.b, VIEW_W, Math.max(0, VIEW_H - f.b)).fill(ga);
+        camOverlay.rect(0, f.t, Math.max(0, f.l), Math.max(0, f.b - f.t)).fill(ga);
+        camOverlay.rect(f.r, f.t, Math.max(0, VIEW_W - f.r), Math.max(0, f.b - f.t)).fill(ga);
+        // 枠線
+        camOverlay.rect(f.l, f.t, f.r - f.l, f.b - f.t).stroke({ color: 0x5b7db1, width: 2 });
+        // 四隅ハンドル(zoom)
+        for (const [hx, hy] of [
+          [f.l, f.t],
+          [f.r, f.t],
+          [f.l, f.b],
+          [f.r, f.b],
+        ] as const) {
+          camOverlay
+            .rect(hx - HANDLE / 2, hy - HANDLE / 2, HANDLE, HANDLE)
             .fill({ color: 0xffffff })
             .stroke({ color: 0x5b7db1, width: 2 });
         }
@@ -447,16 +681,25 @@ export function StageCanvas(props: Props) {
         updateBgImage(scene);
         drawGrid();
 
-        // カメラ評価 → root変換
-        const cam = scene ? evaluateCamera(scene.camera, t) : { x: 960, y: 540, zoom: 1 };
-        lastCam = cam;
+        // カメラ評価。枠が示すカメラ = ドラッグ中ローカル値 ?? 評価値
+        const evalCam = scene ? evaluateCamera(scene.camera, t) : { x: 960, y: 540, zoom: 1 };
+        camFrameValue = camLive ?? evalCam;
         // トランジション slide の押し込み量
         let slidePush = 0;
         if (transition && transition.type === "slide") {
           const prog = transition.dur > 0 ? Math.min(t / transition.dur, 1) : 1;
           slidePush = (1 - prog) * VIEW_W;
         }
-        applyCamera(cam, slidePush);
+        // カメラモード中はステージをidentity表示(枠でクロップを示す)。
+        // lastCam(ヒットテスト/座標基準)もidentityに合わせる。
+        if (p().cameraEdit) {
+          lastCam = { x: 960, y: 540, zoom: 1 };
+          applyCamera(lastCam, 0);
+        } else {
+          lastCam = camFrameValue;
+          applyCamera(lastCam, slidePush);
+        }
+        drawCameraOverlay();
 
         if (!scene) {
           for (const [, v] of views) v.container.destroy({ children: true });

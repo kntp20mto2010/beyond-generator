@@ -11,7 +11,10 @@ import {
 import { newId } from "../../core/id.js";
 import { setTitle } from "../../core/commands.js";
 import {
+  addAction,
+  addCameraKey,
   addElement,
+  addExpressionKey,
   duplicateElement,
   removeElement,
   replaceElementRef,
@@ -20,6 +23,7 @@ import {
   setSceneBackground,
   setSceneBackgroundImage,
   unlockAllElements,
+  updateCameraKey,
   updateElementTransform,
   type ReorderOp,
 } from "../../core/commands-project.js";
@@ -41,7 +45,10 @@ import {
   type ReplaceCandidate,
 } from "./ContextMenu.js";
 import { copyElement, hasClipboard, readClipboard } from "./clipboard.js";
-import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid } from "../ui/icons.js";
+import { QuickActionPopover } from "./QuickActionPopover.js";
+import { OVERVIEW_CAMERA, focusOnBounds } from "./camera-preset.js";
+import type { CameraState } from "../../runtime/scene-eval.js";
+import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid, IconCamera } from "../ui/icons.js";
 
 interface Props {
   store: DocStore<ProjectDoc>;
@@ -81,6 +88,11 @@ export function ScenePage({ store }: Props) {
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
   const [seekNonce, setSeekNonce] = useState(0);
   const [showGrid, setShowGrid] = useState(false);
+  const [cameraEdit, setCameraEdit] = useState(false);
+  // クイックアクションPopover(キャラのダブルクリック)
+  const [quickAction, setQuickAction] = useState<
+    { clientX: number; clientY: number; elementId: string } | null
+  >(null);
   // 右クリックメニュー(対象elementId と メニュー位置のstage座標を保持)
   const [ctxMenu, setCtxMenu] = useState<
     { clientX: number; clientY: number; elementId: string | null; stageX: number; stageY: number } | null
@@ -129,6 +141,15 @@ export function ScenePage({ store }: Props) {
       live = false;
     };
   }, [fs]);
+
+  // doc/asset変化でシーンサムネを無効化(300ms debounce — 編集連打で毎回作らない)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const s of doc.scenes) thumbs.invalidateScene(s.id);
+      thumbs.notifyScenes();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [revision, resolverRev, thumbs, doc.scenes]);
 
   const bumpSeek = useCallback(() => setSeekNonce((n) => n + 1), []);
 
@@ -415,6 +436,65 @@ export function ScenePage({ store }: Props) {
     [scene, store, fs, resolver, bumpSeek],
   );
 
+  // カメラ確定: 現在tに一致するキー(|key.t − t| < 0.01)を更新、なければ追加
+  const commitCamera = useCallback(
+    (cam: CameraState) => {
+      if (!scene) return;
+      const tNow = tRef.current;
+      const idx = scene.camera.findIndex((k) => Math.abs(k.t - tNow) < 0.01);
+      if (idx !== -1) {
+        updateCameraKey(store, scene.id, idx, { x: cam.x, y: cam.y, zoom: cam.zoom });
+      } else {
+        addCameraKey(store, scene.id, { t: tNow, x: cam.x, y: cam.y, zoom: cam.zoom });
+      }
+      bumpSeek();
+    },
+    [scene, store, bumpSeek],
+  );
+
+  // プリセット「選択要素に寄る」: 選択要素のステージboundsから寄せ先を計算
+  const focusSelected = useCallback(() => {
+    if (!scene || !selectedId) return;
+    const edges = stageApiRef.current?.getStageEdges(selectedId);
+    if (!edges) return;
+    commitCamera(
+      focusOnBounds({
+        x: edges.l,
+        y: edges.t,
+        width: edges.r - edges.l,
+        height: edges.b - edges.t,
+      }),
+    );
+  }, [scene, selectedId, commitCamera]);
+
+  // クイックアクション: 現在tにアクション/表情キーを追加
+  const quickActionEl = quickAction
+    ? scene?.elements.find((e) => e.id === quickAction.elementId) ?? null
+    : null;
+  const quickActionChar =
+    quickActionEl && quickActionEl.kind === "character"
+      ? resolver.getCharacter(quickActionEl.ref) ?? null
+      : null;
+
+  const onQuickPickClip = useCallback(
+    (clip: string) => {
+      if (!scene || !quickAction) return;
+      addAction(store, scene.id, quickAction.elementId, { t: tRef.current, clip, speed: 1 });
+      setQuickAction(null);
+      bumpSeek();
+    },
+    [scene, quickAction, store, bumpSeek],
+  );
+  const onQuickPickExpression = useCallback(
+    (preset: string) => {
+      if (!scene || !quickAction) return;
+      addExpressionKey(store, scene.id, quickAction.elementId, { t: tRef.current, preset });
+      setQuickAction(null);
+      bumpSeek();
+    },
+    [scene, quickAction, store, bumpSeek],
+  );
+
   // キーボード: Delete / undo・redo / Space
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -428,6 +508,12 @@ export function ScenePage({ store }: Props) {
         return;
       }
       if (typing) return;
+
+      // Esc: カメラモード解除
+      if (e.key === "Escape") {
+        setCameraEdit(false);
+        return;
+      }
 
       // Ctrl/Cmd 系ショートカット
       if (e.ctrlKey || e.metaKey) {
@@ -581,6 +667,29 @@ export function ScenePage({ store }: Props) {
         >
           <IconGrid />
         </button>
+        <button
+          className={`ui-icon-btn${cameraEdit ? " ui-icon-btn--active" : ""}`}
+          onClick={() => setCameraEdit((c) => !c)}
+          disabled={!scene}
+          title="カメラモード"
+        >
+          <IconCamera />
+        </button>
+        {cameraEdit && (
+          <>
+            <button className="ui-btn" onClick={() => commitCamera(OVERVIEW_CAMERA)} title="カメラを全景へ">
+              全景
+            </button>
+            <button
+              className="ui-btn"
+              onClick={focusSelected}
+              disabled={!selectedId}
+              title="選択要素に寄る"
+            >
+              選択要素に寄る
+            </button>
+          </>
+        )}
         {isDirty && <span style={{ color: "var(--warn)", fontSize: "11px", marginLeft: "2px" }}>● 未保存</span>}
       </div>
 
@@ -617,7 +726,10 @@ export function ScenePage({ store }: Props) {
               revision={revision}
               resolverRev={resolverRev}
               showGrid={showGrid}
+              cameraEdit={cameraEdit}
               onContextMenu={onContextMenu}
+              onQuickAction={(info) => setQuickAction(info)}
+              onCameraCommit={commitCamera}
               apiRef={stageApiRef}
             />
           ) : (
@@ -647,6 +759,9 @@ export function ScenePage({ store }: Props) {
         doc={doc}
         selectedSceneId={sceneId}
         playingSceneId={playingSceneId}
+        playT={t}
+        resolver={resolver}
+        thumbs={thumbs}
         onSelect={selectScene}
       />
 
@@ -727,6 +842,19 @@ export function ScenePage({ store }: Props) {
             />
           );
         })()}
+
+      {/* クイックアクション(キャラのダブルクリック) */}
+      {quickAction && quickActionChar && (
+        <QuickActionPopover
+          clientX={quickAction.clientX}
+          clientY={quickAction.clientY}
+          char={quickActionChar}
+          thumbs={thumbs}
+          onPickClip={onQuickPickClip}
+          onPickExpression={onQuickPickExpression}
+          onClose={() => setQuickAction(null)}
+        />
+      )}
     </div>
   );
 }

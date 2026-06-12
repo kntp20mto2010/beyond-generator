@@ -83,6 +83,22 @@ export function moveScene(
   });
 }
 
+// シーンを toIndex へ移動(D&D並べ替え用)。1 dispatch = 1 undo、範囲外/同位置は無視
+export function moveSceneTo(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  toIndex: number,
+): void {
+  store.dispatch("シーン並べ替え", (d) => {
+    const from = d.scenes.findIndex((s) => s.id === sceneId);
+    if (from === -1) return;
+    if (toIndex < 0 || toIndex >= d.scenes.length) return;
+    if (toIndex === from) return;
+    const [moved] = d.scenes.splice(from, 1);
+    if (moved) d.scenes.splice(toIndex, 0, moved);
+  });
+}
+
 export function setSceneDuration(
   store: DocStore<ProjectDoc>,
   sceneId: string,

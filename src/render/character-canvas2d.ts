@@ -125,16 +125,30 @@ export function itemsBounds(
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
+// base 変換: 一様 scale(従来) もしくは scaleX/scaleY(flipX対応のため非対称も可)
+export type CanvasBase =
+  | { scale: number; tx: number; ty: number }
+  | { scaleX: number; scaleY: number; tx: number; ty: number };
+
+function baseScaleX(b: CanvasBase): number {
+  return "scaleX" in b ? b.scaleX : b.scale;
+}
+function baseScaleY(b: CanvasBase): number {
+  return "scaleY" in b ? b.scaleY : b.scale;
+}
+
 // items(z昇順ソート済み)をキャンバスへ描画。base = fit変換(scale + 平行移動)
 export function drawItemsToCanvas(
   ctx: CanvasRenderingContext2D,
   char: CharacterDoc,
   items: readonly RenderItem[],
-  base: { scale: number; tx: number; ty: number },
+  base: CanvasBase,
 ): void {
+  const bsx = baseScaleX(base);
+  const bsy = baseScaleY(base);
   for (const item of items) {
     const m = item.matrix;
-    ctx.setTransform(base.scale, 0, 0, base.scale, base.tx, base.ty);
+    ctx.setTransform(bsx, 0, 0, bsy, base.tx, base.ty);
     ctx.transform(m.a, m.b, m.c, m.d, m.tx, m.ty);
     for (const shape of item.shapes) {
       tracePath(ctx, shape);
