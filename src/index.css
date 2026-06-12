@@ -337,3 +337,263 @@ body {
 .balloon-mini:hover {
   border-color: var(--accent-soft);
 }
+
+/* =========================================================================
+   タイムライン(Phase 4c-2)
+   ========================================================================= */
+.tl-root {
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  padding: 6px 8px 8px;
+}
+.tl-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.tl-body {
+  position: relative; /* 再生ヘッドの基準 */
+}
+
+/* レーン共通 */
+.tl-lane {
+  display: flex;
+  align-items: center;
+}
+.tl-lane--sel .tl-track {
+  background: var(--accent-soft);
+}
+.tl-lanehead {
+  width: 110px; /* NAME_W */
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding-right: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  overflow: hidden;
+}
+.tl-lane--sel .tl-lanename {
+  color: var(--accent);
+}
+.tl-lanename {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* トラック(レーンのバー領域) */
+.tl-track {
+  position: relative;
+  flex: 1;
+  height: 22px;
+  background: var(--bg-elev);
+  border-radius: 3px;
+  touch-action: none;
+}
+.tl-track--cam {
+  background: #2c2840;
+}
+
+/* ルーラー */
+.tl-ruler {
+  position: relative;
+  flex: 1;
+  height: 20px;
+  background: var(--bg-elev);
+  border-radius: 3px;
+  cursor: pointer;
+  touch-action: none;
+}
+.tl-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border);
+  font-size: 9px;
+  color: var(--text-dim);
+  padding-left: 2px;
+  pointer-events: none;
+}
+
+/* アクションブロック */
+.tl-block {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  min-width: 6px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.tl-block:active {
+  cursor: grabbing;
+}
+.tl-block__label {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* moveTo 走行帯(▸▸▸ 模様) */
+.tl-travel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background-image: repeating-linear-gradient(
+    -60deg,
+    rgba(255, 255, 255, 0.28) 0,
+    rgba(255, 255, 255, 0.28) 2px,
+    transparent 2px,
+    transparent 7px
+  );
+  pointer-events: none;
+}
+.tl-arrival {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  pointer-events: none;
+}
+
+/* 表情キー ◆ + 顔ミニ */
+.tl-exkey {
+  position: absolute;
+  top: 1px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+  cursor: grab;
+  touch-action: none;
+  z-index: 3; /* enter/exit 帯より前で掴める */
+}
+.tl-exkey:active {
+  cursor: grabbing;
+}
+.tl-diamond {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: #e6c34c;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+.tl-diamond--cam {
+  background: #b58cf0;
+  width: 11px;
+  height: 11px;
+}
+.tl-face {
+  display: block;
+  border-radius: 2px;
+  margin-top: -2px;
+  background: var(--bg-panel);
+}
+.tl-facechar {
+  font-size: 8px;
+  color: var(--text);
+  margin-top: -1px;
+}
+
+/* enter / exit ブロック(アクションブロックの上に重ねる半透明帯) */
+.tl-ee {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  min-width: 4px;
+  border-radius: 2px;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2; /* アクションブロックより前 */
+}
+.tl-ee:active {
+  cursor: grabbing;
+}
+.tl-ee--enter {
+  background: linear-gradient(90deg, rgba(90, 164, 105, 0.7), rgba(90, 164, 105, 0.18));
+  border: 1px solid #5aa469;
+}
+.tl-ee--exit {
+  background: linear-gradient(90deg, rgba(217, 112, 76, 0.18), rgba(217, 112, 76, 0.7));
+  border: 1px solid var(--warn);
+}
+.tl-ee__handle {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 8px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.tl-ee__handle--r {
+  right: -2px;
+}
+/* cut(dur=0)の細線 */
+.tl-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1px;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+.tl-edge--enter {
+  background: #5aa469;
+}
+.tl-edge--exit {
+  background: var(--warn);
+}
+
+/* カメラキー */
+.tl-camkey {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  padding: 3px;
+}
+.tl-camkey:active {
+  cursor: grabbing;
+}
+
+/* 全レーン貫通の再生ヘッド */
+.tl-playhead-area {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.tl-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--danger);
+  pointer-events: none;
+}

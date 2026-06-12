@@ -1,36 +1,42 @@
 import { useRef } from "react";
 import type { DocStore } from "../../core/doc-store.js";
 import type { ProjectDoc, SceneDoc } from "../../core/schema/project.js";
-import { CLIPS } from "../../presets/clips/index.js";
+import type { AssetResolver } from "../../io/asset-resolver.js";
+import type { ThumbnailService } from "../thumbs/thumbnail-service.js";
 import { setSceneDuration } from "../../core/commands-project.js";
+import { CameraLane, ElementLane, NAME_W } from "./timeline-lane.js";
 
 interface Props {
   store: DocStore<ProjectDoc>;
   scene: SceneDoc;
   t: number;
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string | null) => void;
   onScrub: (t: number) => void; // live(tRef + ラベル)
   onScrubCommit: () => void; // pointerup(物理reseek)
+  resolver: AssetResolver;
+  thumbs: ThumbnailService | null;
 }
 
-const LANE_H = 26;
-const NAME_W = 110;
-
-function laneLabel(el: SceneDoc["elements"][number]): string {
-  switch (el.kind) {
-    case "character":
-      return `🙂 ${el.ref.replace(/^.*\//, "").replace(/\.byc\.json$/, "").replace("builtin:", "")}`;
-    case "text":
-      return `🅣 ${el.text}`;
-    case "balloon":
-      return `💬 ${el.text}`;
-  }
-}
-
-export function Timeline({ store, scene, t, selectedId, onSelect, onScrub, onScrubCommit }: Props) {
-  const trackRef = useRef<HTMLDivElement>(null);
+export function Timeline({
+  store,
+  scene,
+  t,
+  selectedId,
+  onSelect,
+  onScrub,
+  onScrubCommit,
+  resolver,
+  thumbs,
+}: Props) {
+  const trackRef = useRef<HTMLDivElement>(null); // ルーラー兼幅計測の基準
   const dur = scene.duration;
+
+  // トラック幅(px) / 秒 — スナップ閾値とドラッグ換算に使う
+  const pxPerSec = (): number => {
+    const w = trackRef.current?.getBoundingClientRect().width ?? 0;
+    return w > 0 && dur > 0 ? w / dur : 0;
+  };
 
   const xToTime = (clientX: number): number => {
     const track = trackRef.current;
@@ -40,6 +46,7 @@ export function Timeline({ store, scene, t, selectedId, onSelect, onScrub, onScr
     return Math.max(0, Math.min(dur, ratio * dur));
   };
 
+  // 共通スクラブ(ルーラー + レーン余白)
   const startScrub = (e: React.PointerEvent) => {
     e.preventDefault();
     onScrub(xToTime(e.clientX));
@@ -55,204 +62,87 @@ export function Timeline({ store, scene, t, selectedId, onSelect, onScrub, onScr
 
   const pct = (time: number) => `${(Math.max(0, Math.min(dur, time)) / dur) * 100}%`;
 
-  // ルーラー目盛り(1秒刻み)
+  // カメラキークリック: 要素選択を外し、そのtへスクラブ(シーン設定が見える)
+  const onPickCameraKey = (kt: number) => {
+    onSelect(null);
+    onScrub(kt);
+    onScrubCommit();
+  };
+
   const ticks: number[] = [];
   for (let s = 0; s <= Math.floor(dur); s++) ticks.push(s);
 
   return (
-    <div style={{ borderTop: "1px solid #ddd", padding: "6px 8px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-        <span style={{ fontSize: "12px", fontWeight: 700 }}>タイムライン</span>
-        <span style={{ fontSize: "12px", color: "#5B7DB1" }}>t = {t.toFixed(2)}s</span>
-        <span style={{ marginLeft: "auto", fontSize: "12px" }}>シーン長</span>
+    <div className="tl-root">
+      <div className="tl-header">
+        <span style={{ fontWeight: 700 }}>タイムライン</span>
+        <span style={{ color: "var(--accent)" }}>t = {t.toFixed(2)}s</span>
+        <span style={{ marginLeft: "auto" }}>シーン長</span>
         <input
           type="number"
           step="0.5"
           min="0.5"
-          style={{ width: "60px" }}
+          className="ui-num"
+          style={{ width: "56px" }}
           value={dur}
           onChange={(e) => setSceneDuration(store, scene.id, Number(e.target.value))}
         />
-        <span style={{ fontSize: "12px" }}>秒</span>
+        <span>秒</span>
       </div>
 
-      <div style={{ display: "flex" }}>
-        <div style={{ width: NAME_W, flexShrink: 0 }} />
-        {/* ルーラー + 再生ヘッド領域 */}
-        <div
-          ref={trackRef}
-          onPointerDown={startScrub}
-          style={{
-            position: "relative",
-            flex: 1,
-            height: "20px",
-            background: "#f0f0f0",
-            borderRadius: "3px",
-            cursor: "pointer",
-            touchAction: "none",
-          }}
-        >
-          {ticks.map((s) => (
-            <div
-              key={s}
-              style={{
-                position: "absolute",
-                left: pct(s),
-                top: 0,
-                bottom: 0,
-                borderLeft: "1px solid #ccc",
-                fontSize: "9px",
-                color: "#999",
-                paddingLeft: "2px",
-              }}
-            >
-              {s}
-            </div>
-          ))}
-          {/* playhead */}
-          <div
-            style={{
-              position: "absolute",
-              left: pct(t),
-              top: "-2px",
-              bottom: "-2px",
-              width: "2px",
-              background: "#e0533b",
-              pointerEvents: "none",
-            }}
-          />
+      {/* レーン群 + 全レーン貫通の再生ヘッド */}
+      <div className="tl-body">
+        {/* 再生ヘッド(トラック領域に重ねる。NAME_W ぶん右にずらす) */}
+        <div className="tl-playhead-area" style={{ left: NAME_W }}>
+          <div className="tl-playhead" style={{ left: pct(t) }} />
         </div>
-      </div>
 
-      {/* カメラレーン(キーがある場合のみ・表示専用) */}
-      {scene.camera.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", height: LANE_H, marginTop: "4px" }}>
-          <div style={{ width: NAME_W, flexShrink: 0, fontSize: "11px", color: "#444" }}>
-            📷 カメラ
-          </div>
-          <div
-            style={{
-              position: "relative",
-              flex: 1,
-              height: "18px",
-              background: "#f3eefc",
-              borderRadius: "3px",
-            }}
-          >
-            {scene.camera.map((k, i) => (
-              <div
-                key={i}
-                title={`t=${k.t}s zoom=${k.zoom}`}
-                style={{
-                  position: "absolute",
-                  left: pct(k.t),
-                  top: "2px",
-                  width: "8px",
-                  height: "8px",
-                  marginLeft: "-4px",
-                  borderRadius: "50%",
-                  background: "#8a5fd0",
-                }}
-              />
+        {/* ルーラー */}
+        <div className="tl-lane" style={{ height: 20 }}>
+          <div className="tl-lanehead" style={{ height: 20 }} />
+          <div ref={trackRef} className="tl-ruler" onPointerDown={startScrub}>
+            {ticks.map((s) => (
+              <div key={s} className="tl-tick" style={{ left: pct(s) }}>
+                {s}
+              </div>
             ))}
           </div>
         </div>
-      )}
 
-      {/* 要素レーン */}
-      <div style={{ marginTop: "4px" }}>
+        {/* カメラレーン(キーがある時のみ) */}
+        {scene.camera.length > 0 && (
+          <CameraLane
+            store={store}
+            sceneId={scene.id}
+            camera={scene.camera}
+            duration={dur}
+            pxPerSec={pxPerSec}
+            onScrubEmpty={startScrub}
+            onPickKey={onPickCameraKey}
+          />
+        )}
+
+        {/* 要素レーン */}
         {scene.elements.length === 0 && (
-          <div style={{ fontSize: "11px", color: "#999", paddingLeft: NAME_W }}>
+          <div style={{ fontSize: "11px", color: "var(--text-dim)", paddingLeft: NAME_W + 8 }}>
             要素がありません
           </div>
         )}
-        {scene.elements.map((el) => {
-          const selected = el.id === selectedId;
-          const exitAt = el.exit.at;
-          return (
-            <div
-              key={el.id}
-              onClick={() => onSelect(el.id)}
-              style={{ display: "flex", alignItems: "center", height: LANE_H, cursor: "pointer" }}
-            >
-              <div
-                style={{
-                  width: NAME_W,
-                  flexShrink: 0,
-                  fontSize: "11px",
-                  fontWeight: selected ? 700 : 400,
-                  color: selected ? "#5B7DB1" : "#444",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {el.locked && "🔒 "}
-                {laneLabel(el)}
-              </div>
-              <div
-                style={{
-                  position: "relative",
-                  flex: 1,
-                  height: "18px",
-                  background: selected ? "#eef4fc" : "#f7f7f7",
-                  borderRadius: "3px",
-                }}
-              >
-                {/* enter マーカー */}
-                <div
-                  title={`登場 ${el.enter.type}`}
-                  style={{
-                    position: "absolute",
-                    left: pct(el.enter.delay),
-                    top: 0,
-                    bottom: 0,
-                    width: "3px",
-                    background: "#5aa469",
-                  }}
-                />
-                {/* exit マーカー */}
-                {exitAt !== null && (
-                  <div
-                    title={`退場 ${el.exit.type}`}
-                    style={{
-                      position: "absolute",
-                      left: pct(exitAt),
-                      top: 0,
-                      bottom: 0,
-                      width: "3px",
-                      background: "#c2603f",
-                    }}
-                  />
-                )}
-                {/* action チップ */}
-                {el.kind === "character" &&
-                  el.actions.map((a, i) => (
-                    <div
-                      key={i}
-                      title={`${a.t}s ${CLIPS[a.clip]?.label ?? a.clip}`}
-                      style={{
-                        position: "absolute",
-                        left: pct(a.t),
-                        top: "2px",
-                        height: "14px",
-                        padding: "0 4px",
-                        background: "#5B7DB1",
-                        color: "#fff",
-                        fontSize: "9px",
-                        lineHeight: "14px",
-                        borderRadius: "2px",
-                        transform: "translateX(0)",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {CLIPS[a.clip]?.label ?? a.clip}
-                    </div>
-                  ))}
-              </div>
-            </div>
-          );
-        })}
+        {scene.elements.map((el) => (
+          <ElementLane
+            key={el.id}
+            store={store}
+            sceneId={scene.id}
+            el={el}
+            duration={dur}
+            selected={el.id === selectedId}
+            onSelect={onSelect}
+            pxPerSec={pxPerSec}
+            resolver={resolver}
+            thumbs={thumbs}
+            onScrubEmpty={startScrub}
+          />
+        ))}
       </div>
     </div>
   );

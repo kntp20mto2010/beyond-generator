@@ -9,6 +9,11 @@ import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
 
+// DEV専用: ヘッドレス検証で store.doc を読むためのフック(本番ビルドでは無効)
+if (import.meta.env.DEV) {
+  (globalThis as unknown as { __byondStore?: unknown }).__byondStore = store;
+}
+
 type Tab = "scene" | "character";
 
 // ハッシュルートは初回判定のみ(リアクティブルーティング不要)

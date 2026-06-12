@@ -660,6 +660,8 @@ export function ScenePage({ store }: Props) {
           onSelect={setSelectedId}
           onScrub={onScrub}
           onScrubCommit={onScrubCommit}
+          resolver={resolver}
+          thumbs={thumbs}
         />
       )}
 
