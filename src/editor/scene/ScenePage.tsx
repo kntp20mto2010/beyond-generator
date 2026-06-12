@@ -46,6 +46,7 @@ import {
 } from "./ContextMenu.js";
 import { copyElement, hasClipboard, readClipboard } from "./clipboard.js";
 import { QuickActionPopover } from "./QuickActionPopover.js";
+import { ScriptPanel } from "./ScriptPanel.js";
 import { OVERVIEW_CAMERA, focusOnBounds } from "./camera-preset.js";
 import type { CameraState } from "../../runtime/scene-eval.js";
 import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid, IconCamera } from "../ui/icons.js";
@@ -89,6 +90,7 @@ export function ScenePage({ store }: Props) {
   const [seekNonce, setSeekNonce] = useState(0);
   const [showGrid, setShowGrid] = useState(false);
   const [cameraEdit, setCameraEdit] = useState(false);
+  const [rightTab, setRightTab] = useState<"property" | "script">("property");
   // クイックアクションPopover(キャラのダブルクリック)
   const [quickAction, setQuickAction] = useState<
     { clientX: number; clientY: number; elementId: string } | null
@@ -738,18 +740,59 @@ export function ScenePage({ store }: Props) {
             </div>
           )}
         </div>
-        <div className="ui-panel--right" style={{ width: "268px", flexShrink: 0, overflowY: "auto" }}>
-          {scene && (
-            <PropertyPanel
-              store={store}
-              sceneId={scene.id}
-              scene={scene}
-              element={selectedEl}
-              t={t}
-              resolver={resolver}
-              thumbs={thumbs}
-            />
-          )}
+        <div className="ui-panel--right" style={{ width: "268px", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+          {/* タブヘッダ */}
+          <div className="ui-seg" style={{ margin: "6px 8px 0", flexShrink: 0 }}>
+            <button
+              className={`ui-seg__btn${rightTab === "property" ? " ui-seg__btn--active" : ""}`}
+              onClick={() => setRightTab("property")}
+            >
+              プロパティ
+            </button>
+            <button
+              className={`ui-seg__btn${rightTab === "script" ? " ui-seg__btn--active" : ""}`}
+              onClick={() => setRightTab("script")}
+            >
+              台本
+            </button>
+          </div>
+          {/* タブ内容 */}
+          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+            {rightTab === "property" && scene && (
+              <PropertyPanel
+                store={store}
+                sceneId={scene.id}
+                scene={scene}
+                element={selectedEl}
+                t={t}
+                resolver={resolver}
+                thumbs={thumbs}
+              />
+            )}
+            {rightTab === "script" && scene && (() => {
+              const sceneIdx = doc.scenes.findIndex((s) => s.id === scene.id);
+              const nextScene = doc.scenes[sceneIdx + 1] ?? null;
+              return (
+                <ScriptPanel
+                  store={store}
+                  project={doc}
+                  scene={scene}
+                  nextScene={nextScene}
+                  currentT={t}
+                  selectedId={selectedId}
+                  onJump={(event) => {
+                    if (event.kind === "camera" || event.kind === "transition") {
+                      setSelectedId(null);
+                    } else {
+                      setSelectedId(event.elementId);
+                    }
+                    setTime(event.t);
+                    bumpSeek();
+                  }}
+                />
+              );
+            })()}
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-# 開発ログ(2026-06-12 時点の現在地 / Phase 4b完了)
+# 開発ログ(2026-06-12 時点の現在地 / Phase 4c完了)
 
 仕様書(docs/spec/)とは別の「いまどこまで動くか」の記録。新しいセッションはまずここを読む。
 
@@ -12,16 +12,18 @@
 | 3 クリップ | ✅ | キーフレーム評価器、クロスフェード遷移、プリセット10本、flip、クリップシートCLI | 136 |
 | 4a シーンエディタ | ✅ | evaluateScene(シーン相対タイム)、enter/exit7種、ステージ/タイムライン/シーン帯、画像背景 | 188 |
 | 4b 編集UX | ✅ | 4b-1: moveTo歩行(到着idle・自動向き・髪実速度)、カメラ(キーease補間)、シーントランジション(snapshot方式 fade/wipe/slide)、背景画像FS解決。4b-2: 右クリックメニュー、スナップ+ガイド+グリッド、**Replace**、吹き出し3種+しっぽドラッグ、ロック、ショートカット(Ctrl+C/V/D/L・矢印・[ ]) | 245 |
+| 4c 編集UXオーバーホール | ✅ | 仕様: docs/spec/11。4c-1: ダークテーマCSS変数・SVGアイコン22種・共通UI部品・**サムネ基盤(Canvas 2D)**・アセットパネルのサムネグリッド・表情/ポーズピッカー。4c-2: タイムライン区間ブロック+全種ドラッグ(pointerup 1 dispatch=undo 1回)+時刻スナップ+カメラレーン。4c-3: ホバー/四隅拡縮ハンドル/ダブルクリック→クイックアクション/**カメラモード(枠ドラッグ+寄せプリセット)**/シーン帯サムネ+D&D+トランジションチップ。4c-4: **台本ビュー**(時系列イベント列・ジャンプ・セリフ編集 — AI台本駆動の布石) | 296 |
 | 5 音声と書き出し | ⬜ M2 | VO/BGM、リップフラップ、WebCodecs MP4 | — |
 | 6 仕上げ | ⬜ | アセットパック量産、ダッキング、faceFx | — |
+| 7 発展 | ⬜ | **AI台本駆動**(台本JSON→ProjectDocコンパイル。spec11§H参照)、母音リップシンク他 | — |
 
-ハンドオフ文書(各フェーズの設計指示書): docs/handoffs/phase0〜4a.md、phase4b-1-runtime.md、phase4b-2-ux.md
+ハンドオフ文書(各フェーズの設計指示書): docs/handoffs/phase0〜4a.md、phase4b-*.md、phase4c-1〜4c-4
 
 ## 動かし方
 
 ```
 npm run dev          # http://localhost:5273 (ポート固定・strictPort。Chrome/Edgeのみ — FS AccessはSafari非対応)
-npm test             # vitest 245件
+npm test             # vitest 296件
 npm run contactsheet # ポーズ4×表情6の検収PNG → exports/(要: インストール済みChrome)
 npm run clipsheet    # クリップ10本×位相4の検収PNG → exports/
 ```
@@ -44,6 +46,8 @@ npm run clipsheet    # クリップ10本×位相4の検収PNG → exports/
 
 Phase 4bでヘッドレス確認済み: moveTo歩行の中間位置/自動向き、カメラzoom補間とズーム中のクリック選択、右クリックメニュー一式(削除実行込み)、ドラッグ移動(複利なし)、グリッド+セーフエリア、吹き出し3種の描画、矢印ナッジ
 
+Phase 4cでヘッドレス確認済み: ダークテーマ+全パネルのサムネ表示(キャラ/顔/ポーズ/背景/シーン帯)、タイムラインの区間ブロック・走行帯・カメラレーン+全種ドラッグのundo 1回復元、カメラモード(枠+グレーアウト+寄せプリセットでのキー追加)、シーン帯D&D並べ替え、台本ビューの時系列表示と行クリックジャンプ。**実機で要確認**: 各種ドラッグ(タイムラインブロック/カメラ枠/D&D/しっぽ)の実マウス操作感、ThumbnailServiceの体感速度(キャラ数が増えた時)
+
 ## エージェント向けの検証の落とし穴(実際に踏んだもの)
 
 1. **PixiのuseEffect([])はHMRで再実行されない** — エフェクト系コードを変更したら、ブラウザ検証の前に必ずフルリロード(2回踏んだ)
@@ -53,6 +57,9 @@ Phase 4bでヘッドレス確認済み: moveTo歩行の中間位置/自動向き
 5. 超縦長の検収シートを縮小レビューしてアーティファクトを疑ったら、原寸クロップで確認してから判定
 6. **合成PointerEventでのドラッグ検証は `canvas.setPointerCapture` が例外を投げてハンドラが死ぬ** — 検証前に `canvas.setPointerCapture = () => {}` でパッチする(実ポインタでは問題ない)
 7. キーボードハンドラの read-modify-write はクロージャのReactスナップショットではなく `store.doc` から読む(連続keydownが同一レンダリングサイクルに入ると更新が失われる。nudgeで実踏)
+8. **Pixiレンダラーを2つ作るとStageCanvasが無描画になる**(内部プールのレンダラー間混線。initを直列化しても再発)— サムネ等の付加的描画はWebGLを使わず `render/character-canvas2d.ts` のCanvas 2Dで。Pixi initは保険として全箇所 `pixi-init-lock.ts` 経由
+9. preview_evalの `await import(...)` は「Promise was collected」で死にやすい — importを`window`変数へプリロードする2段階方式にする。doc操作はDEV専用 `globalThis.__byondStore` + `window.__cmds` で
+10. このリグのボーン行列は回転のみで並進は原点(腰)。頭の位置はheadDecalMatrixではなく**bboxの上端比率**から取る(顔クロップで実踏)
 
 ## 既知の制約
 
