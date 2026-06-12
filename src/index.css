@@ -10,6 +10,7 @@
   --accent-soft: #3d4f6e;
   --warn: #d9704c;
   --danger: #e05656;
+  --audio: #4caa8f;
   --radius: 6px;
   --sp: 8px;
 }
@@ -564,6 +565,36 @@ body {
 }
 .tl-edge--exit {
   background: var(--warn);
+}
+
+/* セリフ音声ブロック(レーン下半分・幅=音声長) */
+.tl-talk {
+  position: absolute;
+  top: 50%;
+  bottom: 2px;
+  min-width: 6px;
+  background: var(--audio);
+  border: 1px solid var(--audio);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  opacity: 0.92;
+  z-index: 3; /* enter/exit 帯より前で掴める */
+}
+.tl-talk:active {
+  cursor: grabbing;
+}
+.tl-talk__label {
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 8px;
+  line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* カメラキー */

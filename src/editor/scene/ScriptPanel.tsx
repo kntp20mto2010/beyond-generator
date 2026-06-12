@@ -66,6 +66,15 @@ function IconCam() {
   );
 }
 
+function IconTalk() {
+  return (
+    <svg viewBox="0 0 14 14" width={13} height={13} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 5.5 L4.5 5.5 L7.5 3 L7.5 11 L4.5 8.5 L2 8.5 Z" />
+      <path d="M10 5 Q11.5 7 10 9" />
+    </svg>
+  );
+}
+
 function IconTransAnim() {
   return (
     <svg viewBox="0 0 14 14" width={13} height={13} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -173,6 +182,10 @@ function ScriptRow({ event, isActive, isSelected, store, sceneId, onJump }: RowP
     case "expression":
       icon = <IconExpr />;
       content = `${event.name} ${event.presetLabel}`;
+      break;
+    case "talk":
+      icon = <IconTalk />;
+      content = `${event.name}（${event.audioLabel}）`;
       break;
     case "camera":
       icon = <IconCam />;

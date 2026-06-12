@@ -43,6 +43,7 @@ function charElement(id: string, overrides: Record<string, unknown> = {}) {
     exit: { type: "cut" as const, at: null, dur: 0.4 },
     actions: [] as Array<{ t: number; clip: string; speed: number; moveTo?: { x: number; y?: number } }>,
     expressions: [] as Array<{ t: number; preset: string }>,
+    talks: [] as Array<{ t: number; audio: string; gain: number }>,
     ...overrides,
   };
 }
@@ -313,5 +314,32 @@ describe("buildScriptEvents: 空シーン", () => {
     const proj = makeProject([scene]);
     const events = buildScriptEvents(proj, scene, null);
     expect(events).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// セリフ音声(talk)
+// ---------------------------------------------------------------------------
+
+describe("buildScriptEvents: talk 行", () => {
+  it("talk が t 位置にキャラ名+ラベル付きで出る", () => {
+    const scene = makeScene({
+      elements: [
+        charElement("el1", {
+          talks: [
+            { t: 0.5, audio: "assets/audio/vo-001.wav", gain: 1 },
+            { t: 2, audio: "assets/audio/vo-002.wav", gain: 0.8 },
+          ],
+        }),
+      ],
+    });
+    const proj = makeProject([scene]);
+    const events = buildScriptEvents(proj, scene, null);
+    const talks = events.filter(
+      (e): e is Extract<ScriptEvent, { kind: "talk" }> => e.kind === "talk",
+    );
+    expect(talks).toHaveLength(2);
+    expect(talks[0]).toMatchObject({ t: 0.5, elementId: "el1", name: "template-a", audioLabel: "vo-001" });
+    expect(talks[1]).toMatchObject({ t: 2, audioLabel: "vo-002" });
   });
 });

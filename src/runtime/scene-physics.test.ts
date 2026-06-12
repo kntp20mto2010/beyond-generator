@@ -24,6 +24,7 @@ function build(): { project: ProjectDoc; scene: SceneDoc } {
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [{ t: 0, clip: "jump", speed: 1 }],
     expressions: [],
+    talks: [],
   };
   scene.elements = [el];
   project.scenes.push(scene);

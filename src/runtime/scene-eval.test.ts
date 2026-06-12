@@ -39,6 +39,7 @@ function makeCharEl(over: Partial<CharacterElement> = {}): CharacterElement {
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [],
     expressions: [],
+    talks: [],
     ...over,
   };
 }

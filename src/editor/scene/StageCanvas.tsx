@@ -711,6 +711,8 @@ export function StageCanvas(props: Props) {
 
         const frame = evaluateScene(p().store.doc, scene, t, resolver, {
           hairDeforms: collectDeforms(scene),
+          // 口パク: 再生中もスクラブ中も同じエンベロープ参照(音は鳴らずとも口は動く)
+          audio: { lookup: (path) => pRef.current.resolver.getAudio(path) },
         });
         lastFrame = frame;
 

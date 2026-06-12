@@ -31,6 +31,8 @@ import { toJson, parseProject } from "../../io/serialize.js";
 import { FsAccessAdapter, PROJECT_FILE, isFsAccessSupported } from "../../io/fs.js";
 import type { FileSystemAdapter } from "../../io/fs.js";
 import { AssetResolver } from "../../io/asset-resolver.js";
+import { AudioPlayback } from "./audio-playback.js";
+import { collectAudioPaths } from "./audio-paths.js";
 import { useUiStore } from "../ui-store.js";
 import { ThumbnailService } from "../thumbs/thumbnail-service.js";
 import { StageCanvas, type PlayMode, type StageApi } from "./StageCanvas.js";
@@ -77,8 +79,11 @@ export function ScenePage({ store }: Props) {
 
   const resolver = useMemo(() => new AssetResolver(), []);
   const thumbs = useMemo(() => new ThumbnailService(), []);
+  const audioPlayback = useMemo(() => new AudioPlayback(), []);
   const [resolverRev, setResolverRev] = useState(0);
   useEffect(() => resolver.subscribe(() => setResolverRev((r) => r + 1)), [resolver]);
+  // アンマウント時(タブ切替等)に鳴っている音を止める
+  useEffect(() => () => audioPlayback.stopAll(), [audioPlayback]);
 
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -126,6 +131,10 @@ export function ScenePage({ store }: Props) {
       .map((s) => s.background?.image)
       .filter((img): img is string => !!img);
     if (images.length > 0) void resolver.ensureImagesLoaded(images, fs);
+
+    // セリフ音声 / BGM をデコード(エンベロープ算出含む)。口パクと再生の両方に使う
+    const audioPaths = collectAudioPaths(doc);
+    if (audioPaths.length > 0) void resolver.ensureAudioLoaded(audioPaths, fs);
   }, [doc, fs, resolver, savedCharacters]);
 
   // 保存済キャラ(characters/*.byc.json)を一覧化
@@ -186,16 +195,17 @@ export function ScenePage({ store }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // シーン切替: 時刻リセット + 物理再構築
+  // シーン切替: 時刻リセット + 物理再構築 + 音声全停止
   const selectScene = useCallback(
     (id: string) => {
+      audioPlayback.stopAll();
       setSelectedSceneId(id);
       setSelectedId(null);
       setPlayMode(null);
       setTime(0);
       bumpSeek();
     },
-    [setTime, bumpSeek],
+    [setTime, bumpSeek, audioPlayback],
   );
 
   // === 再生制御 ===
@@ -203,6 +213,9 @@ export function ScenePage({ store }: Props) {
     if (!scene) return;
     if (tRef.current >= scene.duration - 1e-3) setTime(0);
     bumpSeek();
+    // 再生ボタンのイベント内で AudioContext を生成/resume(autoplay制約)
+    audioPlayback.stopAll();
+    audioPlayback.playScene(scene, tRef.current, resolver);
     setPlayMode("scene");
   };
   const playAll = () => {
@@ -211,15 +224,20 @@ export function ScenePage({ store }: Props) {
     setSelectedSceneId(first.id);
     setTime(0);
     bumpSeek();
+    audioPlayback.stopAll();
+    if (doc.bgm[0]) audioPlayback.startBgm(doc.bgm[0], resolver);
+    audioPlayback.playScene(first, 0, resolver);
     setPlayMode("all");
   };
   const stop = () => {
+    audioPlayback.stopAll();
     setPlayMode(null);
   };
 
   const onReachEnd = useCallback(
     (mode: PlayMode) => {
       if (mode === "scene") {
+        audioPlayback.stopAll();
         setPlayMode(null);
         setT(tRef.current);
         return;
@@ -228,23 +246,31 @@ export function ScenePage({ store }: Props) {
       const idx = doc.scenes.findIndex((s) => s.id === (selectedSceneId ?? doc.scenes[0]?.id));
       const next = doc.scenes[idx + 1];
       if (next) {
+        // シーン跨ぎ: 前シーンのtalkだけ止め(BGMは継続)、次シーンの先頭からtalkを鳴らす
+        audioPlayback.stopTalks();
+        audioPlayback.playScene(next, 0, resolver);
         setSelectedSceneId(next.id);
         setTime(0);
         bumpSeek();
       } else {
+        audioPlayback.stopAll();
         setPlayMode(null);
         setT(tRef.current);
       }
     },
-    [doc.scenes, selectedSceneId, setTime, bumpSeek],
+    [doc.scenes, selectedSceneId, setTime, bumpSeek, audioPlayback, resolver],
   );
 
-  // スクラブ
-  const onScrub = useCallback((next: number) => {
-    setPlayMode(null);
-    tRef.current = next;
-    setT(next);
-  }, []);
+  // スクラブ(無音だが口は動く。鳴っている音は確実に止める)
+  const onScrub = useCallback(
+    (next: number) => {
+      audioPlayback.stopAll();
+      setPlayMode(null);
+      tRef.current = next;
+      setT(next);
+    },
+    [audioPlayback],
+  );
   const onScrubCommit = useCallback(() => bumpSeek(), [bumpSeek]);
 
   // === 要素追加 ===
@@ -261,6 +287,7 @@ export function ScenePage({ store }: Props) {
       exit: { type: "cut", at: null, dur: 0.4 },
       actions: [],
       expressions: [],
+      talks: [],
     };
     addElement(store, scene.id, el);
     setSelectedId(el.id);
@@ -573,9 +600,17 @@ export function ScenePage({ store }: Props) {
       } else if (e.key === " ") {
         e.preventDefault();
         setPlayMode((m) => {
-          if (m) return null;
+          if (m) {
+            audioPlayback.stopAll();
+            return null;
+          }
           if (scene && tRef.current >= scene.duration - 1e-3) setTime(0);
           bumpSeek();
+          // Space はユーザー操作なので AudioContext 生成/resume が許される
+          if (scene) {
+            audioPlayback.stopAll();
+            audioPlayback.playScene(scene, tRef.current, resolver);
+          }
           return "scene";
         });
       } else if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -606,6 +641,8 @@ export function ScenePage({ store }: Props) {
     toggleLockSelected,
     nudgeSelected,
     reorderSelected,
+    audioPlayback,
+    resolver,
   ]);
 
   // === ファイル ===
@@ -810,6 +847,7 @@ export function ScenePage({ store }: Props) {
                 t={t}
                 resolver={resolver}
                 thumbs={thumbs}
+                fs={fs}
               />
             )}
             {rightTab === "script" && scene && (() => {

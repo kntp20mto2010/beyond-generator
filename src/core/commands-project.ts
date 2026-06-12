@@ -4,6 +4,7 @@ import { newId } from "./id.js";
 import type {
   Action,
   BalloonElement,
+  Bgm,
   CameraKey,
   Enter,
   Exit,
@@ -11,6 +12,7 @@ import type {
   ProjectDoc,
   SceneDoc,
   SceneElement,
+  Talk,
   TextElement,
   Transform,
   Transition,
@@ -507,6 +509,61 @@ export function removeExpressionKey(
     const el = characterEl(d, sceneId, elementId);
     if (!el) return;
     if (index >= 0 && index < el.expressions.length) el.expressions.splice(index, 1);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// セリフ音声(キャラ要素)/ BGM(プロジェクト)
+// ---------------------------------------------------------------------------
+
+export function addTalk(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  talk: Talk,
+): void {
+  store.dispatch("セリフ音声追加", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    el.talks.push(talk as Draft<Talk>);
+    sortByT(el.talks);
+  });
+}
+
+export function updateTalk(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  index: number,
+  patch: Partial<Talk>,
+): void {
+  store.dispatch("セリフ音声編集", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    const talk = el.talks[index];
+    if (!talk) return;
+    Object.assign(talk, patch);
+    sortByT(el.talks);
+  });
+}
+
+export function removeTalk(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  index: number,
+): void {
+  store.dispatch("セリフ音声削除", (d) => {
+    const el = characterEl(d, sceneId, elementId);
+    if (!el) return;
+    if (index >= 0 && index < el.talks.length) el.talks.splice(index, 1);
+  });
+}
+
+// v1はBGM1本。bgm=null でクリア、Bgm で doc.bgm[0] を設定
+export function setBgm(store: DocStore<ProjectDoc>, bgm: Bgm | null): void {
+  store.dispatch(bgm ? "BGM設定" : "BGM解除", (d) => {
+    d.bgm = bgm ? [bgm as Draft<Bgm>] : [];
   });
 }
 

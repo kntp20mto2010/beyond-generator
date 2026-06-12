@@ -14,14 +14,17 @@ import {
   addCameraKey,
   addElement,
   addExpressionKey,
+  addTalk,
   duplicateElement,
   duplicateScene,
   moveScene,
   moveSceneTo,
   removeCameraKey,
   removeElement,
+  removeTalk,
   reorderElement,
   replaceElementRef,
+  setBgm,
   setElementEnter,
   setElementLocked,
   setSceneBackground,
@@ -31,6 +34,7 @@ import {
   updateAction,
   updateCameraKey,
   updateElementTransform,
+  updateTalk,
 } from "./commands-project.js";
 
 afterEach(() => {
@@ -56,6 +60,7 @@ function charEl(id: string): CharacterElement {
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [],
     expressions: [],
+    talks: [],
   };
 }
 
@@ -520,5 +525,79 @@ describe("replaceElementRef", () => {
     const el = store.doc.scenes[0]!.elements[0]!;
     expect(el.kind).toBe("text");
     expect((el as Record<string, unknown>)["ref"]).toBeUndefined();
+  });
+});
+
+describe("セリフ音声(talk)コマンド", () => {
+  function charTalks(store: DocStore<ProjectDoc>) {
+    const el = store.doc.scenes[0]!.elements[0]!;
+    if (el.kind !== "character") throw new Error("char");
+    return el.talks;
+  }
+
+  it("addTalk は t 昇順で挿入される", () => {
+    const { store, sceneId } = storeWithScene();
+    addElement(store, sceneId, charEl("e1"));
+    addTalk(store, sceneId, "e1", { t: 2, audio: "assets/audio/vo-002.wav", gain: 1 });
+    addTalk(store, sceneId, "e1", { t: 0.5, audio: "assets/audio/vo-001.wav", gain: 1 });
+    addTalk(store, sceneId, "e1", { t: 1, audio: "assets/audio/vo-003.wav", gain: 1 });
+    expect(charTalks(store).map((t) => t.t)).toEqual([0.5, 1, 2]);
+  });
+
+  it("updateTalk は t 変更後に再ソートされる", () => {
+    const { store, sceneId } = storeWithScene();
+    addElement(store, sceneId, charEl("e1"));
+    addTalk(store, sceneId, "e1", { t: 0.5, audio: "assets/audio/vo-001.wav", gain: 1 });
+    addTalk(store, sceneId, "e1", { t: 1, audio: "assets/audio/vo-002.wav", gain: 1 });
+    // index 0(t=0.5)を t=3 に → 末尾へ並べ替わる
+    updateTalk(store, sceneId, "e1", 0, { t: 3 });
+    expect(charTalks(store).map((t) => t.t)).toEqual([1, 3]);
+    expect(charTalks(store)[1]!.audio).toBe("assets/audio/vo-001.wav");
+  });
+
+  it("updateTalk で gain だけ変更できる", () => {
+    const { store, sceneId } = storeWithScene();
+    addElement(store, sceneId, charEl("e1"));
+    addTalk(store, sceneId, "e1", { t: 0, audio: "assets/audio/vo-001.wav", gain: 1 });
+    updateTalk(store, sceneId, "e1", 0, { gain: 0.3 });
+    expect(charTalks(store)[0]!.gain).toBe(0.3);
+  });
+
+  it("removeTalk は指定indexを除去", () => {
+    const { store, sceneId } = storeWithScene();
+    addElement(store, sceneId, charEl("e1"));
+    addTalk(store, sceneId, "e1", { t: 0, audio: "assets/audio/vo-001.wav", gain: 1 });
+    addTalk(store, sceneId, "e1", { t: 1, audio: "assets/audio/vo-002.wav", gain: 1 });
+    removeTalk(store, sceneId, "e1", 0);
+    expect(charTalks(store).map((t) => t.audio)).toEqual(["assets/audio/vo-002.wav"]);
+  });
+
+  it("addTalk は undo 1回で戻る", () => {
+    const { store, sceneId } = storeWithScene();
+    addElement(store, sceneId, charEl("e1"));
+    addTalk(store, sceneId, "e1", { t: 0, audio: "assets/audio/vo-001.wav", gain: 1 });
+    expect(charTalks(store)).toHaveLength(1);
+    store.undo();
+    expect(charTalks(store)).toHaveLength(0);
+  });
+});
+
+describe("BGM コマンド", () => {
+  it("setBgm で doc.bgm[0] を設定、null でクリア", () => {
+    const project = createEmptyProject();
+    const store = new DocStore(project);
+    setBgm(store, { audio: "assets/audio/bgm.mp3", gain: 0.4, loop: true });
+    expect(store.doc.bgm).toEqual([{ audio: "assets/audio/bgm.mp3", gain: 0.4, loop: true }]);
+    setBgm(store, null);
+    expect(store.doc.bgm).toEqual([]);
+  });
+
+  it("setBgm は undo 1回で戻る", () => {
+    const project = createEmptyProject();
+    const store = new DocStore(project);
+    setBgm(store, { audio: "assets/audio/bgm.mp3", gain: 0.5, loop: true });
+    expect(store.doc.bgm).toHaveLength(1);
+    store.undo();
+    expect(store.doc.bgm).toHaveLength(0);
   });
 });

@@ -11,6 +11,7 @@ import type {
   ProjectDoc,
   SceneDoc,
   SceneElement,
+  Talk,
   TextElement,
   Transform,
 } from "../core/schema/project.js";
@@ -343,8 +344,37 @@ export interface SceneFrameItem {
   payload: SceneFramePayload;
 }
 
+// 音声エンベロープ参照(プレビュー/書き出し共通。データを渡せば口パクが決まる)
+export interface AudioEnvelopeLookup {
+  lookup(path: string): { envelope: Uint8Array; duration: number } | undefined;
+}
+
 export interface EvaluateSceneOptions {
   hairDeforms?: Map<string, Map<string, Mat2D>>; // elementId → (strandKey → Mat2D)
+  audio?: AudioEnvelopeLookup;
+}
+
+const ENVELOPE_FPS = 30;
+
+// アクティブtalk(talk.t <= t < talk.t + duration の最後)のエンベロープから口の開閉を導く。
+// open区間で "open"、それ以外は undefined(表情の口を使う)。
+function mouthOverrideAt(
+  talks: readonly Talk[],
+  t: number,
+  audio: AudioEnvelopeLookup | undefined,
+): string | undefined {
+  if (!audio || talks.length === 0) return undefined;
+  let active: { talk: Talk; envelope: Uint8Array } | undefined;
+  for (const talk of talks) {
+    const a = audio.lookup(talk.audio);
+    if (!a) continue;
+    if (talk.t <= t && t < talk.t + a.duration) {
+      active = { talk, envelope: a.envelope }; // t昇順前提で最後が勝つ
+    }
+  }
+  if (!active) return undefined;
+  const frame = Math.floor((t - active.talk.t) * ENVELOPE_FPS);
+  return active.envelope[frame] === 1 ? "open" : undefined;
 }
 
 // 表情キー: t <= t の最後(default neutral)
@@ -364,6 +394,7 @@ function evaluateCharacter(
   t: number,
   seed: number,
   hairDeform: Map<string, Mat2D> | undefined,
+  audio: AudioEnvelopeLookup | undefined,
 ): SceneFramePayload {
   const origin: [number, number] = [el.transform.x, el.transform.y];
   const frame = evaluateActionTrack(origin, el.actions, t);
@@ -374,7 +405,9 @@ function evaluateCharacter(
   const rng = mulberry32(seed);
   const schedule: number[] = [];
   const blink = char.blink.enabled ? blinkAt(t, rng, schedule) : 0;
-  const face = resolveFace(char, { preset, blink });
+  // 音声リップフラップ: アクティブtalkのエンベロープで口を上書き(無音区間は表情の口)
+  const mouthOverride = mouthOverrideAt(el.talks, t, audio);
+  const face = resolveFace(char, { preset, blink, mouthOverride });
 
   const items = buildRenderList(char, bones, {
     face,
@@ -420,7 +453,7 @@ function evaluateElement(
         payload = { kind: "placeholder", ref: el.ref, transform: el.transform };
       } else {
         const seed = scene.seed * 31 + index;
-        payload = evaluateCharacter(el, char, t, seed, opts?.hairDeforms?.get(el.id));
+        payload = evaluateCharacter(el, char, t, seed, opts?.hairDeforms?.get(el.id), opts?.audio);
       }
       break;
     }

@@ -1,15 +1,18 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DocStore } from "../../core/doc-store.js";
 import type {
   BalloonElement,
+  Bgm,
   EffectType,
   ProjectDoc,
   SceneDoc,
   SceneElement,
+  Talk,
   Transition,
 } from "../../core/schema/project.js";
 import type { CharacterDoc } from "../../core/schema/character.js";
 import type { AssetResolver } from "../../io/asset-resolver.js";
+import type { FileSystemAdapter } from "../../io/fs.js";
 import type { ThumbnailService } from "../thumbs/thumbnail-service.js";
 import { EXPRESSION_PRESETS } from "../../runtime/expression.js";
 import { evaluateCamera } from "../../runtime/scene-eval.js";
@@ -19,10 +22,13 @@ import {
   addAction,
   addCameraKey,
   addExpressionKey,
+  addTalk,
   removeAction,
   removeCameraKey,
   removeExpressionKey,
+  removeTalk,
   setBalloonProps,
+  setBgm,
   setElementEnter,
   setElementExit,
   setElementLocked,
@@ -33,7 +39,9 @@ import {
   updateCameraKey,
   updateElementTransform,
   updateExpressionKey,
+  updateTalk,
 } from "../../core/commands-project.js";
+import { audioLabel, listAudioOptions } from "./audio-options.js";
 import { Section } from "../ui/Section.js";
 import { SegmentedButtons } from "../ui/SegmentedButtons.js";
 import { Popover } from "../ui/Popover.js";
@@ -49,6 +57,22 @@ interface Props {
   t: number;
   resolver: AssetResolver;
   thumbs: ThumbnailService | null;
+  fs: FileSystemAdapter | null;
+}
+
+// 音声選択肢を非同期ロードして提供する共有フック
+function useAudioOptions(fs: FileSystemAdapter | null): string[] {
+  const [opts, setOpts] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    void listAudioOptions(fs).then((o) => {
+      if (live) setOpts(o);
+    });
+    return () => {
+      live = false;
+    };
+  }, [fs]);
+  return opts;
 }
 
 const TRANS_TYPES: Transition["type"][] = ["cut", "fade", "wipe", "slide"];
@@ -86,9 +110,9 @@ const KIND_LABEL: Record<SceneElement["kind"], string> = {
   balloon: "吹き出し",
 };
 
-export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thumbs }: Props) {
+export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thumbs, fs }: Props) {
   if (!element) {
-    return <SceneSettings store={store} sceneId={sceneId} scene={scene} t={t} />;
+    return <SceneSettings store={store} sceneId={sceneId} scene={scene} t={t} fs={fs} />;
   }
   const id = element.id;
   const tf = element.transform;
@@ -268,6 +292,7 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
           element={element}
           resolver={resolver}
           thumbs={thumbs}
+          fs={fs}
         />
       )}
       {element.kind === "text" && (
@@ -290,11 +315,13 @@ interface CharacterSectionsProps {
   element: Extract<SceneElement, { kind: "character" }>;
   resolver: AssetResolver;
   thumbs: ThumbnailService | null;
+  fs: FileSystemAdapter | null;
 }
 
-function CharacterSections({ store, sceneId, element, resolver, thumbs }: CharacterSectionsProps) {
+function CharacterSections({ store, sceneId, element, resolver, thumbs, fs }: CharacterSectionsProps) {
   const id = element.id;
   const char: CharacterDoc | undefined = resolver.getCharacter(element.ref);
+  const audioOptions = useAudioOptions(fs);
 
   return (
     <>
@@ -343,7 +370,85 @@ function CharacterSections({ store, sceneId, element, resolver, thumbs }: Charac
           + 表情キー
         </button>
       </Section>
+
+      {/* セリフ音声 */}
+      <Section title="セリフ音声" defaultOpen={true}>
+        {element.talks.map((talk, i) => (
+          <TalkRow
+            key={i}
+            store={store}
+            sceneId={sceneId}
+            elementId={id}
+            talk={talk}
+            index={i}
+            options={audioOptions}
+          />
+        ))}
+        <button
+          className="ui-btn"
+          style={{ marginTop: "4px", width: "100%", justifyContent: "center" }}
+          disabled={audioOptions.length === 0}
+          onClick={() => {
+            const first = audioOptions[0];
+            if (first) addTalk(store, sceneId, id, { t: 0, audio: first, gain: 1 });
+          }}
+        >
+          + セリフ音声
+        </button>
+      </Section>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// セリフ音声行
+// ---------------------------------------------------------------------------
+
+interface TalkRowProps {
+  store: DocStore<ProjectDoc>;
+  sceneId: string;
+  elementId: string;
+  talk: Talk;
+  index: number;
+  options: string[];
+}
+
+function TalkRow({ store, sceneId, elementId, talk, index: i, options }: TalkRowProps) {
+  // 選択肢に無いパス(プロジェクト固有等)も値として保持できるよう補う
+  const opts = options.includes(talk.audio) ? options : [talk.audio, ...options];
+  return (
+    <div className="ui-row" style={{ marginBottom: "4px" }}>
+      <label>t</label>
+      <input
+        type="number"
+        step="0.1"
+        min="0"
+        className="ui-num"
+        style={{ width: "44px" }}
+        value={talk.t}
+        onChange={(e) => updateTalk(store, sceneId, elementId, i, { t: Number(e.target.value) })}
+      />
+      <select
+        className="ui-input"
+        style={{ flex: 1, fontSize: "11px", minWidth: 0 }}
+        value={talk.audio}
+        onChange={(e) => updateTalk(store, sceneId, elementId, i, { audio: e.target.value })}
+      >
+        {opts.map((p) => (
+          <option key={p} value={p}>
+            {audioLabel(p)}
+          </option>
+        ))}
+      </select>
+      <button
+        className="ui-btn"
+        onClick={() => removeTalk(store, sceneId, elementId, i)}
+        title="削除"
+        style={{ padding: "2px 6px" }}
+      >
+        ×
+      </button>
+    </div>
   );
 }
 
@@ -677,17 +782,70 @@ interface SceneSettingsProps {
   sceneId: string;
   scene: SceneDoc;
   t: number;
+  fs: FileSystemAdapter | null;
 }
 
-function SceneSettings({ store, sceneId, scene, t }: SceneSettingsProps) {
+function SceneSettings({ store, sceneId, scene, t, fs }: SceneSettingsProps) {
   const trans = scene.transition;
   const cam = scene.camera;
+  const audioOptions = useAudioOptions(fs);
+  const bgm = store.doc.bgm[0] ?? null;
 
   return (
     <div style={{ overflowY: "auto", height: "100%", background: "var(--bg-panel)", color: "var(--text)" }}>
       <div style={{ padding: "6px 8px", fontWeight: 700, fontSize: "11px", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
         シーン設定
       </div>
+
+      {/* BGM(プロジェクト共通・1本) */}
+      <Section title="BGM" defaultOpen={true}>
+        <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "4px" }}>
+          プロジェクト共通・通し再生で鳴る
+        </div>
+        <div className="ui-row">
+          <label>曲</label>
+          <select
+            className="ui-input"
+            style={{ flex: 1, fontSize: "11px", minWidth: 0 }}
+            value={bgm?.audio ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) {
+                setBgm(store, null);
+              } else {
+                const next: Bgm = { audio: v, gain: bgm?.gain ?? 0.5, loop: bgm?.loop ?? true };
+                setBgm(store, next);
+              }
+            }}
+          >
+            <option value="">（なし）</option>
+            {audioOptions.map((p) => (
+              <option key={p} value={p}>
+                {audioLabel(p)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {bgm && (
+          <div className="ui-row">
+            <label>音量</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={bgm.gain}
+              style={{ flex: 1 }}
+              onChange={(e) =>
+                setBgm(store, { ...bgm, gain: Number(e.target.value) })
+              }
+            />
+            <span style={{ color: "var(--text-dim)", fontSize: "11px", minWidth: "28px" }}>
+              {bgm.gain.toFixed(2)}
+            </span>
+          </div>
+        )}
+      </Section>
 
       {/* トランジション */}
       <Section title="トランジション" defaultOpen={true}>

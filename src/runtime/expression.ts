@@ -6,6 +6,7 @@ export interface FacePose {
   preset?: string; // EXPRESSION_PRESETS のキー
   blink?: number; // 0=開 .. 1=閉
   gaze?: Vec2; // 視線 -1..1(x: 左右, y: 上下)
+  mouthOverride?: string; // 音声リップフラップ等で口シェイプを最後に上書き(blinkとは独立)
 }
 
 export interface FaceResolution {
@@ -118,6 +119,15 @@ export function resolveFace(
     }
 
     out.set(slot, res);
+  }
+
+  // リップフラップ: 表情合成の最後に mouth スロットだけ上書き(blink=目には不干渉)
+  if (fp.mouthOverride) {
+    const mouthSlot = char.face["mouth"];
+    const cur = out.get("mouth");
+    if (mouthSlot && cur) {
+      cur.shapeName = pickShape(mouthSlot.shapes, fp.mouthOverride);
+    }
   }
   return out;
 }

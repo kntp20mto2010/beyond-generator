@@ -1,8 +1,26 @@
 import type { CharacterDoc } from "../core/schema/character.js";
 import { TEMPLATE_A } from "../presets/characters/template-a.js";
 import { TEMPLATE_B } from "../presets/characters/template-b.js";
+import { computeMouthEnvelope } from "../runtime/mouth-envelope.js";
 import type { FileSystemAdapter } from "./fs.js";
 import { characterDocIO } from "./serialize.js";
+
+// デコード用の共有 AudioContext(モジュール内で遅延生成)。再生用とは別でよい。
+let sharedDecodeCtx: AudioContext | null = null;
+function decodeContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const Ctor =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return null;
+  if (!sharedDecodeCtx) sharedDecodeCtx = new Ctor();
+  return sharedDecodeCtx;
+}
+
+export interface LoadedAudio {
+  buffer: AudioBuffer;
+  envelope: Uint8Array; // フレーム毎(30fps)の口開閉
+  duration: number; // 秒
+}
 
 const BUILTINS: Record<string, CharacterDoc> = {
   "builtin:template-a": TEMPLATE_A,
@@ -20,6 +38,11 @@ export class AssetResolver {
   #imageUrls = new Map<string, string>();
   #imageFailed = new Set<string>();
   #imagePending = new Map<string, Promise<void>>();
+
+  // 音声: パス → デコード済みバッファ+エンベロープ
+  #audio = new Map<string, LoadedAudio>();
+  #audioFailed = new Set<string>();
+  #audioPending = new Map<string, Promise<void>>();
 
   getCharacter(ref: string): CharacterDoc | undefined {
     const builtin = BUILTINS[ref];
@@ -117,12 +140,66 @@ export class AssetResolver {
     }
   }
 
+  // --- 音声の解決(デコード + エンベロープ算出) ---
+
+  getAudio(path: string): LoadedAudio | undefined {
+    return this.#audio.get(path);
+  }
+
+  async ensureAudioLoaded(paths: readonly string[], fs: FileSystemAdapter | null): Promise<void> {
+    const jobs: Promise<void>[] = [];
+    for (const path of paths) {
+      if (!path) continue;
+      if (this.#audio.has(path) || this.#audioFailed.has(path)) continue;
+      const existing = this.#audioPending.get(path);
+      if (existing) {
+        jobs.push(existing);
+        continue;
+      }
+      const job = this.#loadAudio(path, fs);
+      this.#audioPending.set(path, job);
+      jobs.push(job);
+    }
+    await Promise.all(jobs);
+  }
+
+  async #loadAudio(path: string, fs: FileSystemAdapter | null): Promise<void> {
+    try {
+      // 1) プロジェクトフォルダ(FS Access) 2) リポジトリ内蔵(devサーバー配信)
+      let bytes: ArrayBuffer | null = fs ? await fs.readBinaryFile(path) : null;
+      if (!bytes) {
+        const res = await fetch(encodeURI(`/${path}`));
+        if (res.ok) bytes = await res.arrayBuffer();
+      }
+      if (!bytes) {
+        this.#audioFailed.add(path);
+        return;
+      }
+      const ctx = decodeContext();
+      if (!ctx) {
+        this.#audioFailed.add(path);
+        return;
+      }
+      // decodeAudioData は ArrayBuffer を detach するので slice() でコピーを渡す
+      const buffer = await ctx.decodeAudioData(bytes.slice(0));
+      const envelope = computeMouthEnvelope(buffer, 30);
+      this.#audio.set(path, { buffer, envelope, duration: buffer.duration });
+      this.#notify();
+    } catch {
+      this.#audioFailed.add(path);
+    } finally {
+      this.#audioPending.delete(path);
+    }
+  }
+
   // ロード再試行のため失敗記録を消す(フォルダ再選択時など)
   invalidate(): void {
     this.#failed.clear();
     this.#imageFailed.clear();
     for (const url of this.#imageUrls.values()) URL.revokeObjectURL(url);
     this.#imageUrls.clear();
+    this.#audioFailed.clear();
+    this.#audio.clear();
   }
 
   subscribe(cb: () => void): () => void {

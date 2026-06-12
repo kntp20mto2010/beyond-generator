@@ -33,6 +33,10 @@ function buildPopulatedProject() {
       { t: 0, preset: "neutral" },
       { t: 2, preset: "smile" },
     ],
+    talks: [
+      { t: 0.5, audio: "assets/audio/vo-001.wav", gain: 1 },
+      { t: 3, audio: "assets/audio/vo-002.wav", gain: 0.8 },
+    ],
   };
   const textEl: TextElement = {
     id: "el-text",
@@ -73,6 +77,7 @@ function buildProjectWithCameraAndMove() {
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [{ t: 0, clip: "walk", speed: 1, moveTo: { x: 1400, y: 720 } }],
     expressions: [],
+    talks: [],
   };
   scene.elements = [charEl];
   doc.scenes.push(scene);
@@ -299,5 +304,62 @@ describe("project schema: 効果/transform の default", () => {
     expect(parsed.enter.dur).toBe(0.4);
     expect(parsed.exit.at).toBe(null);
     expect(parsed.z).toBe(0);
+  });
+});
+
+describe("project schema: talks / bgm", () => {
+  it("talks 無しの旧キャラが default [] で開ける", () => {
+    const scene = SceneDocSchema.parse({
+      id: "s",
+      duration: 4,
+      durationMode: "manual",
+      seed: 0,
+      elements: [
+        { id: "c", kind: "character", ref: "builtin:template-a", transform: { x: 1, y: 2 } },
+      ],
+    });
+    const c = scene.elements[0];
+    if (c?.kind !== "character") throw new Error("expected character");
+    expect(c.talks).toEqual([]);
+  });
+
+  it("bgm が空配列の旧ファイルがそのまま開ける", () => {
+    const doc = parseProject(toJson(createEmptyProject()));
+    expect(doc.bgm).toEqual([]);
+  });
+
+  it("talks / bgm 入りプロジェクトが round-trip で deep equal", () => {
+    const doc = createEmptyProject();
+    doc.bgm = [{ audio: "assets/audio/bgm.mp3", gain: 0.4, loop: true }];
+    const scene = createEmptyScene(0);
+    scene.elements = [
+      {
+        id: "c",
+        kind: "character",
+        ref: "builtin:template-a",
+        transform: { x: 960, y: 700, scale: 0.9, flipX: false },
+        z: 0,
+        locked: false,
+        enter: { type: "cut", delay: 0, dur: 0.4 },
+        exit: { type: "cut", at: null, dur: 0.4 },
+        actions: [],
+        expressions: [],
+        talks: [{ t: 1.2, audio: "assets/audio/vo-003.wav", gain: 0.9 }],
+      },
+    ];
+    doc.scenes.push(scene);
+    expect(parseProject(toJson(doc))).toEqual(doc);
+  });
+
+  it("BgmSchema の gain / loop が default 補完される", () => {
+    const parsed = ProjectDocSchema.parse({
+      formatVersion: 1,
+      id: "p",
+      title: "t",
+      stage: { w: 1920, h: 1080, fps: 30 },
+      bgm: [{ audio: "assets/audio/bgm.mp3" }],
+      scenes: [],
+    });
+    expect(parsed.bgm[0]).toMatchObject({ audio: "assets/audio/bgm.mp3", gain: 0.5, loop: true });
   });
 });

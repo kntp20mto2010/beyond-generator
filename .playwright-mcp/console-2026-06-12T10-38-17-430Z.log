@@ -7,3 +7,10 @@
 [ 6168794ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337
 [ 6193638ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337
 [ 6194927ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337
+[ 7273733ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337
+[ 7290048ms] [WARNING] WebGL: INVALID_VALUE: texImage2D: bad image data @ http://localhost:5273/node_modules/.vite/deps/pixi__js.js?v=3154e13a:24501
+[ 7632214ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337
+[ 7662415ms] [WARNING] WebGL: INVALID_VALUE: texImage2D: bad image data @ http://localhost:5273/node_modules/.vite/deps/pixi__js.js?v=3154e13a:24501
+[ 9239077ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5273/src/editor/scene/ScenePage.tsx?t=1781269935954:0
+[ 9239080ms] [ERROR] [vite] Failed to reload /src/editor/scene/ScenePage.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5273/@vite/client:928
+[ 9731810ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5273/node_modules/.vite/deps/react-dom_client.js?v=bfdbbd16:14337

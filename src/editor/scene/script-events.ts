@@ -12,6 +12,7 @@ export type ScriptEvent =
   | { t: number; kind: "action"; elementId: string; name: string; clipLabel: string; moveToX?: number }
   | { t: number; kind: "expression"; elementId: string; name: string; presetLabel: string }
   | { t: number; kind: "dialogue"; elementId: string; text: string }
+  | { t: number; kind: "talk"; elementId: string; name: string; audioLabel: string }
   | { t: number; kind: "camera"; index: number; zoom: number }
   | { t: number; kind: "transition"; type: string; dur: number };
 
@@ -38,11 +39,12 @@ function elementName(el: { kind: string; ref?: string; text?: string }): string 
   return "";
 }
 
-// 同t内の種別順(enter < dialogue < action < expression < camera)
+// 同t内の種別順(enter < dialogue/talk < action < expression < camera)
 const KIND_ORDER: Record<ScriptEvent["kind"], number> = {
   enter: 0,
   exit: 0,
   dialogue: 1,
+  talk: 1,
   action: 2,
   expression: 3,
   camera: 4,
@@ -123,6 +125,17 @@ export function buildScriptEvents(
           elementId: el.id,
           name,
           presetLabel,
+        });
+      }
+
+      // talk 行(セリフ音声)
+      for (const talk of el.talks) {
+        events.push({
+          t: talk.t,
+          kind: "talk",
+          elementId: el.id,
+          name,
+          audioLabel: talk.audio.replace(/^.*\//, "").replace(/\.(wav|mp3)$/i, ""),
         });
       }
     }

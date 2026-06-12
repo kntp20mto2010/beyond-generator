@@ -63,6 +63,16 @@ export const ExpressionKeySchema = z
   .passthrough();
 export type ExpressionKey = z.infer<typeof ExpressionKeySchema>;
 
+// セリフ音声。長さはバッファ実長から導出(差し替えで自動追従)するためスキーマに持たない
+export const TalkSchema = z
+  .object({
+    t: z.number().min(0),
+    audio: z.string(), // "assets/audio/vo-001.wav"(リポジトリ配信 or プロジェクト相対)
+    gain: z.number().min(0).default(1),
+  })
+  .passthrough();
+export type Talk = z.infer<typeof TalkSchema>;
+
 // ---------------------------------------------------------------------------
 // カメラ / シーントランジション
 // ---------------------------------------------------------------------------
@@ -102,9 +112,20 @@ export const CharacterElementSchema = z
     exit: ExitSchema.default({}),
     actions: z.array(ActionSchema).default([]),
     expressions: z.array(ExpressionKeySchema).default([]),
+    talks: z.array(TalkSchema).default([]), // t昇順で保持
   })
   .passthrough();
 export type CharacterElement = z.infer<typeof CharacterElementSchema>;
+
+// プロジェクトBGM(v1はUI上1本のみ扱う)
+export const BgmSchema = z
+  .object({
+    audio: z.string(),
+    gain: z.number().min(0).default(0.5),
+    loop: z.boolean().default(true),
+  })
+  .passthrough();
+export type Bgm = z.infer<typeof BgmSchema>;
 
 export const TextElementSchema = z
   .object({
@@ -197,7 +218,7 @@ export const ProjectDocSchema = z
     id: z.string(),
     title: z.string(),
     stage: StageSchema,
-    bgm: z.array(z.unknown()),
+    bgm: z.array(BgmSchema), // 旧ファイルは空配列なので互換OK。v1はUI上1本のみ
     scenes: z.array(SceneDocSchema),
   })
   .passthrough();

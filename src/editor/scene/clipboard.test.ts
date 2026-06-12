@@ -14,6 +14,7 @@ function charEl(): CharacterElement {
     exit: { type: "cut", at: null, dur: 0.4 },
     actions: [{ t: 0, clip: "wave", speed: 1 }],
     expressions: [{ t: 0, preset: "smile" }],
+    talks: [],
   };
 }
 

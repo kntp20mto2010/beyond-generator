@@ -19,6 +19,8 @@ import {
   updateExpressionKey,
 } from "../../core/commands-project.js";
 import { actionBlocks, clampTime, snapCandidates, snapTime } from "./time-snap.js";
+import { audioLabel } from "./audio-options.js";
+import { updateTalk } from "../../core/commands-project.js";
 import {
   IconCamera,
   IconCharacter,
@@ -139,6 +141,7 @@ export function ElementLane(props: LaneProps) {
         <ExitBlock {...props} pct={pct} />
         {el.kind === "character" && <ActionBlocks {...props} el={el} pct={pct} />}
         {el.kind === "character" && <ExpressionMarkers {...props} el={el} pct={pct} />}
+        {el.kind === "character" && <TalkBlocks {...props} el={el} pct={pct} />}
       </div>
     </div>
   );
@@ -271,6 +274,54 @@ function ExpressionMarkers(props: BlockProps) {
             tLabel={t}
             onDown={onDown}
           />
+        );
+      })}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// セリフ音声ブロック(レーン下半分・幅=音声長。ドラッグでt)
+// ---------------------------------------------------------------------------
+
+function TalkBlocks(props: BlockProps) {
+  const { store, sceneId, el, duration, pxPerSec, pct, resolver } = props;
+  const [preview, setPreview] = useState<{ index: number; t: number } | null>(null);
+
+  return (
+    <>
+      {el.talks.map((talk, i) => {
+        const isDrag = preview?.index === i;
+        const t = isDrag ? preview!.t : talk.t;
+        // 未ロード時は 0.5s 仮幅。ロード後は実音声長
+        const dur = resolver.getAudio(talk.audio)?.duration ?? 0.5;
+        const widthPct = `${(Math.max(0.05, dur) / duration) * 100}%`;
+
+        // 候補: 他キー全般 + 自分以外のtalk
+        const others = allOtherTimes(el, "none");
+        el.talks.forEach((o, j) => {
+          if (j !== i) others.push(o.t);
+        });
+        const onDown = makeTimeDrag({
+          startValue: talk.t,
+          duration,
+          pxPerSec,
+          candidates: snapCandidates(others, duration),
+          toDelta: (dxPx) => dxPx / pxPerSec(),
+          onPreview: (v) => setPreview(v === null ? null : { index: i, t: v }),
+          onCommit: (v) => updateTalk(store, sceneId, el.id, i, { t: v }),
+        });
+
+        return (
+          <div
+            key={i}
+            className="tl-talk"
+            onPointerDown={onDown}
+            title={`🔊 ${audioLabel(talk.audio)} t=${t.toFixed(2)}s`}
+            style={{ left: pct(t), width: widthPct }}
+          >
+            <span className="tl-talk__label">🔊 {audioLabel(talk.audio)}</span>
+          </div>
         );
       })}
     </>
