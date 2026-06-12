@@ -154,4 +154,35 @@ describe("プリセットクリップ", () => {
     const t0 = sampleClip(walk, 0);
     expect(t0.pose.rotations?.thighL).toBeCloseTo(-(t0.pose.rotations?.thighR ?? 0));
   });
+
+  it("CLIPSに10本登録されている", () => {
+    expect(Object.keys(CLIPS).length).toBe(10);
+  });
+
+  it("各クリップのidがファイル名(キー)と一致する", () => {
+    for (const [key, clip] of Object.entries(CLIPS)) {
+      expect(clip.id).toBe(key);
+    }
+  });
+});
+
+describe("Phase3b 新クリップ", () => {
+  it("point: loop=false、t=10で最終姿勢を保持(upperArmL ≈ -95)", () => {
+    const point = CLIPS["point"]!;
+    expect(point.loop).toBe(false);
+    const frame = sampleClip(point, 10);
+    expect(frame.pose.rotations?.upperArmL).toBeCloseTo(-95, 0);
+  });
+
+  it("jump: t=0.4 で root.y < -40(跳躍中)", () => {
+    const jump = CLIPS["jump"]!;
+    const frame = sampleClip(jump, 0.4);
+    expect(frame.pose.rootOffset?.[1]).toBeLessThan(-40);
+  });
+
+  it("jump: t=1.0 で root.y ≈ 0(着地復帰)", () => {
+    const jump = CLIPS["jump"]!;
+    const frame = sampleClip(jump, 1.0);
+    expect(frame.pose.rootOffset?.[1]).toBeCloseTo(0, 0);
+  });
 });

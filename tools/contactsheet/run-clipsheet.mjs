@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// コンタクトシートCLI: playwright-core (channel:"chrome") を使ってPNG出力
+// クリップシートCLI: 全クリップ×位相4サンプルのグリッドPNGを出力
 import { readFileSync, mkdirSync } from "fs";
 import { resolve, basename } from "path";
 import {
@@ -10,9 +10,9 @@ import {
   ensureExportsDir,
 } from "./lib.mjs";
 
-const PAGE_URL = `${DEV_URL}/#contact-sheet`;
-const VIEWPORT_W = 1500;
-const VIEWPORT_H = 1600;
+const PAGE_URL = `${DEV_URL}/#clip-sheet`;
+const VIEWPORT_W = 900;
+const VIEWPORT_H = 3200;
 
 const args = process.argv.slice(2);
 let inputFile = null;
@@ -44,11 +44,11 @@ try {
     await sleep(1000);
   }
 
-  await page.waitForFunction(() => globalThis.__contactSheetReady === true, {
+  await page.waitForFunction(() => globalThis.__clipSheetReady === true, {
     timeout: 15000,
   });
 
-  const canvasEl = await page.locator("#contact-sheet-canvas canvas").first();
+  const canvasEl = await page.locator("#clip-sheet-canvas canvas").first();
 
   if (!outputFile) {
     let charName = "template";
@@ -56,7 +56,7 @@ try {
       charName = basename(inputFile, ".byc.json").replace(/[^a-z0-9_-]/gi, "_");
     }
     const exportsDir = ensureExportsDir();
-    outputFile = resolve(exportsDir, `contactsheet-${charName}.png`);
+    outputFile = resolve(exportsDir, `clipsheet-${charName}.png`);
   } else {
     const dir = resolve(outputFile, "..");
     mkdirSync(dir, { recursive: true });

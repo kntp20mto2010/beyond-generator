@@ -4,14 +4,16 @@ import { createEmptyProject } from "./core/schema/project.js";
 import { AppShell } from "./editor/shell/AppShell.js";
 import { CharacterEditorPage } from "./editor/character/CharacterEditorPage.js";
 import { ContactSheetPage } from "./editor/character/ContactSheetPage.js";
+import { ClipSheetPage } from "./editor/character/ClipSheetPage.js";
 import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
 
 type Tab = "scene" | "character";
 
-// #contact-sheet ハッシュルートは初回判定のみ(リアクティブルーティング不要)
+// ハッシュルートは初回判定のみ(リアクティブルーティング不要)
 const IS_CONTACT_SHEET = location.hash === "#contact-sheet";
+const IS_CLIP_SHEET = location.hash === "#clip-sheet";
 
 function App() {
   const [tab, setTab] = useState<Tab>("character");
@@ -19,6 +21,10 @@ function App() {
 
   if (IS_CONTACT_SHEET) {
     return <ContactSheetPage />;
+  }
+
+  if (IS_CLIP_SHEET) {
+    return <ClipSheetPage />;
   }
 
   const tabStyle = (active: boolean) => ({
