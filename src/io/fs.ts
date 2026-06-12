@@ -1,5 +1,8 @@
 import "./fs-access.d.js";
 
+export const isFsAccessSupported =
+  typeof window !== "undefined" && "showDirectoryPicker" in window;
+
 export interface FileSystemAdapter {
   pickProjectFolder(): Promise<boolean>;
   readTextFile(relPath: string): Promise<string | null>;

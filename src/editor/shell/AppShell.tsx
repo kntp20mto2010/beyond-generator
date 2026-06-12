@@ -11,7 +11,16 @@ import { toJson, parseProject } from "../../io/serialize.js";
 import {
   FsAccessAdapter,
   PROJECT_FILE,
+  isFsAccessSupported,
 } from "../../io/fs.js";
+
+function ensureFsSupport(): boolean {
+  if (isFsAccessSupported) return true;
+  alert(
+    "このブラウザはフォルダ保存に非対応です。Chrome または Edge で開いてください。",
+  );
+  return false;
+}
 import { createEmptyProject } from "../../core/schema/project.js";
 import { useUiStore } from "../ui-store.js";
 
@@ -41,6 +50,7 @@ export function AppShell({ store }: Props) {
   const isDirty = revision !== savedRevision;
 
   async function handleOpenFolder() {
+    if (!ensureFsSupport()) return;
     const adapter = new FsAccessAdapter();
     const ok = await adapter.pickProjectFolder();
     if (!ok) return;
@@ -66,6 +76,7 @@ export function AppShell({ store }: Props) {
   }
 
   async function handleSave() {
+    if (!ensureFsSupport()) return;
     let adapter = fs;
     if (!adapter) {
       const newAdapter = new FsAccessAdapter();
