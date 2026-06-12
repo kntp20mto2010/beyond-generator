@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "id": "01KTWSTFXN7RKWE27XR7D15R4S",
+  "title": "新しいプロジェクト",
+  "stage": {
+    "w": 1920,
+    "h": 1080,
+    "fps": 30
+  },
+  "bgm": [],
+  "scenes": [
+    {
+      "id": "01KTWSTJ9S3WNJW0ZKSGJ84XHF",
+      "duration": 4,
+      "durationMode": "manual",
+      "background": null,
+      "camera": [],
+      "elements": [],
+      "seed": 0
+    }
+  ]
+}

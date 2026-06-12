@@ -6,6 +6,8 @@
 - ID: ULID。アセット参照は**プロジェクトフォルダからの相対パス**
 - 座標: y-down、単位px(キャラは標準身長600u基準のローカル座標)
 - 色: パレットスロット名(`"@primary"`)or 固定HEX(`"#3E6FB0"`)
+- 形状kind: `rect`(r=角丸半径。カプセルはエディタ上のプリセットで r=w/2 のrect)/ `ellipse` / `polygon` / `path`(M/L/Q/C/Z)。fill か stroke の少なくとも一方必須
+- パーツの形状・ピン座標は**キャラ空間**(全身キャンバス、root=原点、y-down)で保持
 - 拡張子: キャラ `*.byc.json` / プロジェクト `*.byp.json` / クリップ `*.clip.json`
 
 ## プロジェクトフォルダ構成
@@ -37,9 +39,9 @@ my-video/
     {
       "slot": "upperArmL",
       "z": 90,
-      "pins": { "origin": [0, 0], "joint": [0, 86] },
-      "shapes": [   // プリミティブ合成(パートエディタの出力)
-        { "kind": "capsule", "x": -9, "y": 0, "w": 18, "h": 90, "fill": "@primary" }
+      "pins": { "origin": [38, -185], "joint": [38, -100] },   // キャラ空間(肩・肘の位置)
+      "shapes": [   // プリミティブ合成(パートエディタの出力)。座標もキャラ空間
+        { "kind": "rect", "x": 30, "y": -190, "w": 16, "h": 98, "r": 8, "fill": "@primary" }
       ]
     }
     // ... torso, head, thighL/R, ...
