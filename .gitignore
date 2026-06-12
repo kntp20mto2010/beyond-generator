@@ -3,3 +3,6 @@ dist
 .DS_Store
 *.autosave.json
 exports/
+
+# エージェント間キュー(履歴に残すかは運用で判断 — docs/spec/10参照)
+.agent-tasks/

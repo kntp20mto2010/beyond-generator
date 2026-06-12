@@ -113,7 +113,11 @@ export const SceneDocSchema = z
     duration: z.number(),
     durationMode: z.literal("manual"),
     background: z
-      .object({ color: z.string() })
+      .object({
+        color: z.string().optional(),
+        // リポジトリ/プロジェクト相対パスの画像(devはHTTP配信、FS解決はPhase 4b)
+        image: z.string().optional(),
+      })
       .passthrough()
       .nullable()
       .default(null), // null = 紙色 #f4f1ec

@@ -8,7 +8,12 @@ import {
 } from "../../core/schema/project.js";
 import { newId } from "../../core/id.js";
 import { setTitle } from "../../core/commands.js";
-import { addElement, removeElement, setSceneBackground } from "../../core/commands-project.js";
+import {
+  addElement,
+  removeElement,
+  setSceneBackground,
+  setSceneBackgroundImage,
+} from "../../core/commands-project.js";
 import { toJson, parseProject } from "../../io/serialize.js";
 import { FsAccessAdapter, PROJECT_FILE, isFsAccessSupported } from "../../io/fs.js";
 import type { FileSystemAdapter } from "../../io/fs.js";
@@ -176,6 +181,10 @@ export function ScenePage({ store }: Props) {
     if (!scene) return;
     setSceneBackground(store, scene.id, color);
   };
+  const setBackgroundImage = (image: string | null) => {
+    if (!scene) return;
+    setSceneBackgroundImage(store, scene.id, image);
+  };
 
   const deleteSelected = useCallback(() => {
     if (!scene || !selectedId) return;
@@ -289,6 +298,7 @@ export function ScenePage({ store }: Props) {
             onAddCharacter={addCharacter}
             onAddText={addText}
             onAddBackground={addBackground}
+            onSetBackgroundImage={setBackgroundImage}
           />
         </div>
         <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: "12px", overflow: "auto", background: "#e9e7e2" }}>

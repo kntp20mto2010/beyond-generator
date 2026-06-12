@@ -16,6 +16,7 @@ Vyondの視覚的編集の快適さに、**キャラクターを0から自作で
 | 07 | [data-formats](docs/spec/07-data-formats.md) | .byc / .byp / .clip のJSONスキーマと互換性ルール |
 | 08 | [roadmap](docs/spec/08-roadmap.md) | Phase 0〜7、受入条件、マイルストーン、フェーズ別に読む仕様書の対応表 |
 | 09 | [model-strategy](docs/spec/09-model-strategy.md) | fable5/opus/sonnet割り当て、トークン節約の4つの仕組み |
+| 10 | [agent-image-generation-handoff](docs/spec/10-agent-image-generation-handoff.md) | Claude CodeからCodexへ画像生成を依頼するJSONキュー仕様 |
 
 ## コア設計判断(5点)
 

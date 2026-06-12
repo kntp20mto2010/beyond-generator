@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Application, Container, Graphics, Text } from "pixi.js";
+import { Application, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import type { DocStore } from "../../core/doc-store.js";
 import { PAPER_COLOR, type ProjectDoc, type SceneDoc } from "../../core/schema/project.js";
 import { CharacterView } from "../../render/character-pixi.js";
@@ -83,6 +83,31 @@ export function StageCanvas(props: Props) {
 
       const bg = new Graphics();
       root.addChild(bg);
+
+      // 背景画像(色レイヤの上・要素の下)。高さフィット+中央クロップ
+      const bgImageLayer = new Container();
+      root.addChild(bgImageLayer);
+      let bgImgKey: string | null = null;
+      const updateBgImage = (scene: SceneDoc | undefined) => {
+        const img = scene?.background?.image ?? null;
+        if (img === bgImgKey) return;
+        bgImgKey = img;
+        for (const c of bgImageLayer.removeChildren()) c.destroy();
+        if (!img) return;
+        const want = img;
+        const imgEl = new Image();
+        imgEl.onload = () => {
+          if (disposed || bgImgKey !== want) return;
+          const tex = Texture.from(imgEl);
+          const s = Math.max(1920 / tex.width, 1080 / tex.height);
+          const sp = new Sprite(tex);
+          sp.scale.set(s);
+          sp.position.set((1920 - tex.width * s) / 2, (1080 - tex.height * s) / 2);
+          bgImageLayer.addChild(sp);
+        };
+        // 読込失敗時は背景色のみ(devサーバー外・未配置パス等)。onerrorは無視
+        imgEl.src = encodeURI(`/${want}`);
+      };
 
       const elLayer = new Container();
       root.addChild(elLayer);
@@ -195,6 +220,7 @@ export function StageCanvas(props: Props) {
         bg.clear();
         const color = scene?.background?.color ?? PAPER_COLOR;
         bg.rect(0, 0, 1920, 1080).fill({ color });
+        updateBgImage(scene);
 
         if (!scene) {
           for (const [, v] of views) v.container.destroy({ children: true });

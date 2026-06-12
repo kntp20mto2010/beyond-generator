@@ -104,9 +104,36 @@ export function setSceneBackground(
     "背景色変更",
     (d) => {
       const scene = findScene(d, sceneId);
-      if (scene) scene.background = color === null ? null : { color };
+      if (!scene) return;
+      const image = scene.background?.image;
+      if (color === null) {
+        scene.background = image ? { image } : null;
+      } else {
+        scene.background = image ? { color, image } : { color };
+      }
     },
     { mergeKey: `bg:${sceneId}` },
+  );
+}
+
+export function setSceneBackgroundImage(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  image: string | null,
+): void {
+  store.dispatch(
+    "背景画像変更",
+    (d) => {
+      const scene = findScene(d, sceneId);
+      if (!scene) return;
+      const color = scene.background?.color;
+      if (image === null) {
+        scene.background = color !== undefined ? { color } : null;
+      } else {
+        scene.background = color !== undefined ? { color, image } : { image };
+      }
+    },
+    { mergeKey: `bgimg:${sceneId}` },
   );
 }
 

@@ -7,6 +7,7 @@ interface Props {
   onAddCharacter: (ref: string) => void;
   onAddText: () => void;
   onAddBackground: (color: string) => void;
+  onSetBackgroundImage: (image: string | null) => void;
 }
 
 const panelBtn: React.CSSProperties = {
@@ -22,9 +23,10 @@ const panelBtn: React.CSSProperties = {
   fontSize: "13px",
 };
 
-export function AddPanel({ fs, disabled, onAddCharacter, onAddText, onAddBackground }: Props) {
+export function AddPanel({ fs, disabled, onAddCharacter, onAddText, onAddBackground, onSetBackgroundImage }: Props) {
   const [saved, setSaved] = useState<string[]>([]);
   const [bgColor, setBgColor] = useState("#cfe3f7");
+  const [bgImage, setBgImage] = useState("assets/generated/bg-school-001.png");
 
   useEffect(() => {
     let live = true;
@@ -85,6 +87,30 @@ export function AddPanel({ fs, disabled, onAddCharacter, onAddText, onAddBackgro
           onClick={() => onAddBackground(bgColor)}
         >
           適用
+        </button>
+      </div>
+
+      <div style={{ fontWeight: 700, margin: "10px 0 4px" }}>背景画像</div>
+      <input
+        value={bgImage}
+        onChange={(e) => setBgImage(e.target.value)}
+        placeholder="assets/generated/..."
+        style={{ width: "100%", fontSize: "11px", padding: "3px 4px", boxSizing: "border-box" }}
+      />
+      <div style={{ display: "flex", gap: "4px", marginTop: "3px" }}>
+        <button
+          style={{ ...panelBtn, width: "auto", margin: 0 }}
+          disabled={disabled || bgImage.trim() === ""}
+          onClick={() => onSetBackgroundImage(bgImage.trim())}
+        >
+          適用
+        </button>
+        <button
+          style={{ ...panelBtn, width: "auto", margin: 0 }}
+          disabled={disabled}
+          onClick={() => onSetBackgroundImage(null)}
+        >
+          クリア
         </button>
       </div>
     </div>
