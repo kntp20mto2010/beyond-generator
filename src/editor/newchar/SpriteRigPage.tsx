@@ -126,14 +126,14 @@ export function SpriteRigPage() {
   const playingRef = useRef(true);
   const signRef = useRef(1);
   const bonesRef = useRef(false);
-  const meshRef = useRef(true);
+  const legModeRef = useRef<"mesh" | "mix" | "cutout">("mesh");
   const ikRef = useRef(true);
   const skinRef = useRef(true);
   const bulgeRef = useRef(true);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
-  const [meshMode, setMeshMode] = useState(true);
+  const [legMode, setLegMode] = useState<"mesh" | "mix" | "cutout">("mesh");
   const [ikMode, setIkMode] = useState(true);
   const [skinMode, setSkinMode] = useState(true);
   const [bulgeMode, setBulgeMode] = useState(true);
@@ -141,10 +141,11 @@ export function SpriteRigPage() {
   playingRef.current = playing;
   signRef.current = sign;
   bonesRef.current = showBones;
-  meshRef.current = meshMode;
+  legModeRef.current = legMode;
   ikRef.current = ikMode;
   skinRef.current = skinMode;
   bulgeRef.current = bulgeMode;
+  const LEG_LABEL = { mesh: "単一メッシュ", mix: "ミックス(剛体+継ぎ目/左右分離)", cutout: "剛体カットアウト" } as const;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -247,6 +248,42 @@ export function SpriteRigPage() {
       root.addChild(legMesh);
       const posBuf = geom.getBuffer("aPosition");
 
+      // 2.5) ミックス用: 脚ごとに分離したメッシュ。剛体ベース(太腿/脛は剛体)+ 膝の継ぎ目
+      //      だけ変形。左右を別メッシュにして z で重ね(近=左を手前)、被っても潰れない。
+      type LegMeshData = { rest: Float32Array; W: Float32Array; posBuf: ReturnType<MeshGeometry["getBuffer"]>; mesh: Mesh; nV: number };
+      const buildLegMesh = (xLo: number, xHi: number, cols: number, thighIdx: number, shinIdx: number): LegMeshData => {
+        const rows = ROWS, n = cols * rows;
+        const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
+        const WA = new Float32Array(n * 5);
+        let k = 0;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          const x = xLo + (xHi - xLo) * (c / (cols - 1));
+          const y = gy0 + (gy1 - gy0) * (r / (rows - 1));
+          rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
+          const wP = 1 - smooth(500, 620, y);        // 上=骨盤(静止帯)
+          const kT = smooth(748, 816, y);            // 膝の継ぎ目(剛体ベースなので狭く)
+          const rest5 = 1 - wP;
+          WA[k * 5] = wP;
+          WA[k * 5 + thighIdx] = rest5 * (1 - kT);   // 太腿(剛体)
+          WA[k * 5 + shinIdx] = rest5 * kT;          // 脛(剛体)
+          k++;
+        }
+        const ix: number[] = [];
+        for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols - 1; c++) {
+          const i = r * cols + c; ix.push(i, i + 1, i + cols, i + 1, i + cols + 1, i + cols);
+        }
+        for (let v = 0; v < n; v++) { pA[v * 2] = rA[v * 2]! - HIP[0]; pA[v * 2 + 1] = rA[v * 2 + 1]! - HIP[1]; }
+        const g = new MeshGeometry({ positions: pA.slice(), uvs: uA, indices: new Uint32Array(ix) });
+        const m = new Mesh({ geometry: g, texture: texByFile.get("legwear.png")! });
+        return { rest: rA, W: WA, posBuf: g.getBuffer("aPosition"), mesh: m, nV: n };
+      };
+      const legMixR = buildLegMesh(608, 720, 7, 3, 4); // 右脚(奥/far)
+      const legMixL = buildLegMesh(520, 632, 7, 1, 2); // 左脚(手前/near)
+      legMixR.mesh.tint = 0xc9c9c9;                    // far脚を少し暗く(奥行き)
+      root.addChild(legMixR.mesh);                     // far を先(奥)
+      root.addChild(legMixL.mesh);                     // near を後(手前)
+      legMixR.mesh.visible = false; legMixL.mesh.visible = false;
+
       // 剛体カットアウト版の脚(比較トグル用)
       const legCutout = new Container();
       legCutout.visible = false;
@@ -345,18 +382,15 @@ export function SpriteRigPage() {
         const WthighR = mul(transBob, rotAbout(HIP_R[0], HIP_R[1], thR));
         const WshinR = mul(WthighR, rotAbout(KNEE_R[0], KNEE_R[1], shR));
 
-        const useMesh = meshRef.current;
-        legMesh.visible = useMesh;
-        legCutout.visible = !useMesh;
-        if (useMesh) {
-          // 「関節中心まわりの回転ブレンド」スキニング(2D版DQS相当)。
-          // 行列のまま平均するLBSは関節で回転がつぶれて細る(candy-wrapper)。
-          // 各ボーンを「中心C_bまわりに角度φ_bだけ回す」と表し、Cとφを重み平均して
-          // 一回の純回転として適用すると、回転の大きさが保たれ太さがつぶれない。
-          // 各ボーン剛体変換の「対数(スクリュー運動)」を重み平均して指数で戻す
-          // (log-blend / 2Dスクリューブレンド)。回転の大きさが保たれ(=つぶれない)、
-          // かつ剛体変換を正しく内挿する(=中心が離れていてもせん断/段差が出ない)。
-          // M=(R(θ),t) → log=(θ,u), u=A(θ)^-1·t, A(θ)=[[sinc,-(1-cosθ)/θ],[(1-cosθ)/θ,sinc]]。
+        const lMode = legModeRef.current;
+        legMesh.visible = lMode === "mesh";
+        legMixL.mesh.visible = legMixR.mesh.visible = lMode === "mix";
+        legCutout.visible = lMode === "cutout";
+        if (lMode === "cutout") {
+          for (const { cont, bone, amp } of cutPieces) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
+        } else {
+          // 対数(スクリュー)ブレンドスキニング。各ボーン剛体変換の log を重み平均し exp で戻す
+          // → 回転の大きさが保たれ(つぶれない)剛体変換を正しく内挿する(段差/せん断なし)。
           const lbsBones = [transBob, WthighL, WshinL, WthighR, WshinR];
           const bTh: number[] = [], bUx: number[] = [], bUy: number[] = [];
           for (let b = 0; b < 5; b++) {
@@ -365,63 +399,48 @@ export function SpriteRigPage() {
             let aC: number, bC: number;
             if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; }
             else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
-            const den = aC * aC + bC * bC; // A^-1·t
-            bTh[b] = th;
-            bUx[b] = (aC * M.tx + bC * M.ty) / den;
-            bUy[b] = (-bC * M.tx + aC * M.ty) / den;
+            const den = aC * aC + bC * bC;
+            bTh[b] = th; bUx[b] = (aC * M.tx + bC * M.ty) / den; bUy[b] = (-bC * M.tx + aC * M.ty) / den;
           }
-          const pd = posBuf.data as Float32Array;
-          // 関節バルジ: 曲げると脚を紡錘形に太らせる(細るのではなく膨らむ)。スキニング前に
-          // rest頂点xを脚中心から外側へ拡大。縦プロファイル= 股下→膝で増加・膝→足首で減少
-          // (膝が最高潮)。曲げ量= 膝屈曲|shin|。膝だけでなく太腿/脛も滑らかに膨らむ。両方式対応。
+          // 関節バルジ(紡錘形): 股下→膝で増加・膝→足首で減少、曲げ量に比例。
           const bulgeOn = bulgeRef.current;
-          const absShL = Math.abs(shL), absShR = Math.abs(shR);
-          const CROTCH_Y = 560, KNEE_Y = KNEE_L[1], ANK_Y = ANKLE_L[1]; // 縦プロファイルの節
-          const bulgeX = (v: number, rx: number): number => {
-            if (!bulgeOn) return rx;
-            const lw = W[v * 5 + 1]! + W[v * 5 + 2]!, rw = W[v * 5 + 3]! + W[v * 5 + 4]!;
-            const legW = lw + rw;
-            if (legW < 1e-4) return rx; // 脚でない(骨盤帯)
-            const ry = rest[v * 2 + 1]!;
-            // 紡錘プロファイル: 股下(0)→膝(1)→足首(0)を smoothstep で滑らかに
-            const prof = ry <= KNEE_Y ? smooth(CROTCH_Y, KNEE_Y, ry) : 1 - smooth(KNEE_Y, ANK_Y, ry);
-            if (prof <= 0) return rx;
-            const bend = (lw * absShL + rw * absShR) / legW; // 該当脚の屈曲量(rad)
-            const cX = (lw * 590 + rw * 654) / legW;          // 脚中心x(左590/右654)
-            return cX + (rx - cX) * (1 + BULGE_K * prof * bend);
+          const absSh = [0, Math.abs(shL), Math.abs(shL), Math.abs(shR), Math.abs(shR)];
+          const CROTCH_Y = 560, KNEE_Y = KNEE_L[1], ANK_Y = ANKLE_L[1];
+          const useLog = skinRef.current;
+          // 1メッシュ分をスキニング(restA/WA/pd)。log-blend or LBS、バルジ適用。
+          const skin = (restA: Float32Array, WA: Float32Array, pd: Float32Array, count: number) => {
+            for (let v = 0; v < count; v++) {
+              let rx = restA[v * 2]!; const ry = restA[v * 2 + 1]!;
+              if (bulgeOn) {
+                const lw = WA[v * 5 + 1]! + WA[v * 5 + 2]!, rw = WA[v * 5 + 3]! + WA[v * 5 + 4]!, legW = lw + rw;
+                if (legW >= 1e-4) {
+                  const prof = ry <= KNEE_Y ? smooth(CROTCH_Y, KNEE_Y, ry) : 1 - smooth(KNEE_Y, ANK_Y, ry);
+                  if (prof > 0) {
+                    const bend = (lw * absSh[1]! + rw * absSh[3]!) / legW;
+                    const cX = (lw * 590 + rw * 654) / legW;
+                    rx = cX + (rx - cX) * (1 + BULGE_K * prof * bend);
+                  }
+                }
+              }
+              if (useLog) {
+                let th = 0, ux = 0, uy = 0;
+                for (let b = 0; b < 5; b++) { const w = WA[v * 5 + b]!; if (w === 0) continue; th += w * bTh[b]!; ux += w * bUx[b]!; uy += w * bUy[b]!; }
+                let aC: number, bC: number;
+                if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; } else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
+                const tx = aC * ux - bC * uy, ty = bC * ux + aC * uy, c = Math.cos(th), s = Math.sin(th);
+                pd[v * 2] = (c * rx - s * ry + tx) - HIP[0]; pd[v * 2 + 1] = (s * rx + c * ry + ty) - HIP[1];
+              } else {
+                let dx = 0, dy = 0;
+                for (let b = 0; b < 5; b++) { const w = WA[v * 5 + b]!; if (w === 0) continue; const M = lbsBones[b]!; dx += w * ax(M, rx, ry); dy += w * ay(M, rx, ry); }
+                pd[v * 2] = dx - HIP[0]; pd[v * 2 + 1] = dy - HIP[1];
+              }
+            }
           };
-          if (skinRef.current) {
-            for (let v = 0; v < nV; v++) {
-              const rx = bulgeX(v, rest[v * 2]!), ry = rest[v * 2 + 1]!;
-              let th = 0, ux = 0, uy = 0;
-              for (let b = 0; b < 5; b++) {
-                const w = W[v * 5 + b]!; if (w === 0) continue;
-                th += w * bTh[b]!; ux += w * bUx[b]!; uy += w * bUy[b]!;
-              }
-              let aC: number, bC: number; // exp: t* = A(θ*)·u*
-              if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; }
-              else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
-              const tx = aC * ux - bC * uy, ty = bC * ux + aC * uy;
-              const c = Math.cos(th), s = Math.sin(th);
-              pd[v * 2] = (c * rx - s * ry + tx) - HIP[0];
-              pd[v * 2 + 1] = (s * rx + c * ry + ty) - HIP[1];
-            }
-          } else {
-            // 比較用: 従来のLBS(行列のまま線形ブレンド → 関節でつぶれる candy-wrapper)
-            for (let v = 0; v < nV; v++) {
-              const rx = bulgeX(v, rest[v * 2]!), ry = rest[v * 2 + 1]!;
-              let dx = 0, dy = 0;
-              for (let b = 0; b < 5; b++) {
-                const w = W[v * 5 + b]!; if (w === 0) continue;
-                const M = lbsBones[b]!;
-                dx += w * ax(M, rx, ry); dy += w * ay(M, rx, ry);
-              }
-              pd[v * 2] = dx - HIP[0]; pd[v * 2 + 1] = dy - HIP[1];
-            }
+          if (lMode === "mesh") { skin(rest, W, posBuf.data as Float32Array, nV); posBuf.update(); }
+          else {
+            skin(legMixL.rest, legMixL.W, legMixL.posBuf.data as Float32Array, legMixL.nV); legMixL.posBuf.update();
+            skin(legMixR.rest, legMixR.W, legMixR.posBuf.data as Float32Array, legMixR.nV); legMixR.posBuf.update();
           }
-          posBuf.update();
-        } else {
-          for (const { cont, bone, amp } of cutPieces) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
         }
 
         // 足を脛末端へ(脛のworldで位置)。接地中(w)は脛追従をやめて床に水平、
@@ -494,7 +513,7 @@ export function SpriteRigPage() {
       </div>
       <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
         <button className="ui-btn" onClick={() => setPlaying((p) => !p)}>{playing ? "⏹ 停止" : "▶ 歩く"}</button>
-        <button className="ui-btn" onClick={() => setMeshMode((m) => !m)}>脚: {meshMode ? "メッシュ変形" : "剛体カットアウト"}</button>
+        <button className="ui-btn" onClick={() => setLegMode((m) => (m === "mesh" ? "mix" : m === "mix" ? "cutout" : "mesh"))}>脚: {LEG_LABEL[legMode]}</button>
         <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK(地面固定)" : "FK(従来)"}</button>
         <button className="ui-btn" onClick={() => setSkinMode((m) => !m)}>スキン: {skinMode ? "対数ブレンド(自然)" : "LBS(線形=つぶれ)"}</button>
         <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "膨らむ(バルジ)" : "通常"}</button>
