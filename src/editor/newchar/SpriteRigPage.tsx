@@ -260,7 +260,9 @@ export function SpriteRigPage() {
           const x = xLo + (xHi - xLo) * (c / (cols - 1));
           const y = gy0 + (gy1 - gy0) * (r / (rows - 1));
           rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
-          const wP = 1 - smooth(500, 620, y);        // 上=骨盤(静止帯)
+          // 骨盤帯は股関節(y=545)で鋭く終わる。緩く伸ばすと左右メッシュの股が
+          // 互いに別方向へ回って継ぎ目にV字の鋭い裂け目が出る。
+          const wP = 1 - smooth(540, 558, y);
           const kT = smooth(748, 816, y);            // 膝の継ぎ目(剛体ベースなので狭く)
           const rest5 = 1 - wP;
           WA[k * 5] = wP;
