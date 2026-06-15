@@ -338,38 +338,11 @@ export function SpriteRigPage() {
 
       setStatus("");
 
-      // 舞台用: facing 状態が変わったとき root.scale.x の反転 + 腕コンテナ入れ替え + 脚z順入れ替え + tint入れ替え
-      // を1関数にまとめる。scale.x 反転だけでは奥/手前関係が逆転するため(レビュー指摘)。
-      let appliedFacing: "left" | "right" = "left";
+      // 舞台用: facing 反転は scale.x のみ。チビ前向き体型は texture-L が見た目の右半身、
+      // texture-R が見た目の左半身を担うため、鏡反転だけで前/奥の関係も z順も tint も
+      // 自動的に正しく入れ替わる(texture-Rの「奥側」のtintは鏡で奥側に飛ぶ)。
       applyFacingRef.current = (newFacing: "left" | "right") => {
-        if (newFacing === appliedFacing) return;
-        appliedFacing = newFacing;
-        const facingLeft = newFacing === "left";
-        // 1) 幾何反転
-        root.scale.x = facingLeft ? S : -S;
-        // 2) 腕コンテナ入れ替え:
-        //    左向き: upperArmL/forearmL = backArm(後ろ腕), upperArmR/forearmR = upper(前腕)
-        //    右向き: 反転。texture-L腕は前へ、texture-R腕は後ろへ
-        const armL = conts.get("upperArmL"), armR = conts.get("upperArmR");
-        if (armL && armR) {
-          const armLTarget = facingLeft ? backArm : upper;
-          const armRTarget = facingLeft ? upper : backArm;
-          if (armL.parent && armL.parent !== armLTarget) { armL.parent.removeChild(armL); armLTarget.addChild(armL); }
-          if (armR.parent && armR.parent !== armRTarget) { armR.parent.removeChild(armR); armRTarget.addChild(armR); }
-        }
-        // 3) 脚 z順入れ替え: 奥側を先(後ろ)に、手前側を後(前)に。
-        const legBack = facingLeft ? legMixR.mesh : legMixL.mesh;
-        const legFront = facingLeft ? legMixL.mesh : legMixR.mesh;
-        if (legBack.parent === root && legFront.parent === root) {
-          const backIdx = root.getChildIndex(legBack), frontIdx = root.getChildIndex(legFront);
-          if (backIdx > frontIdx) {
-            root.setChildIndex(legBack, frontIdx);
-            root.setChildIndex(legFront, backIdx);
-          }
-        }
-        // 4) tint: 奥側だけ暗く
-        legMixR.mesh.tint = facingLeft ? 0xc9c9c9 : 0xffffff;
-        legMixL.mesh.tint = facingLeft ? 0xffffff : 0xc9c9c9;
+        root.scale.x = newFacing === "left" ? S : -S;
       };
 
       const walk = CLIP_WALK_GIRL;
@@ -558,7 +531,18 @@ export function SpriteRigPage() {
 
   // 舞台の向きが変わったら、scale.x反転 + 腕コンテナ入れ替え + 脚z順入れ替え + tint入れ替えを一括適用。
   useEffect(() => {
-    applyFacingRef.current?.(facing);
+    let cancelled = false;
+    const tryApply = () => {
+      if (cancelled) return;
+      if (applyFacingRef.current) {
+        applyFacingRef.current(facing);
+      } else {
+        // mount内のasync IIFEがまだ完了していない場合に備えて、次フレームで再試行
+        requestAnimationFrame(tryApply);
+      }
+    };
+    tryApply();
+    return () => { cancelled = true; };
   }, [facing]);
 
   return (
