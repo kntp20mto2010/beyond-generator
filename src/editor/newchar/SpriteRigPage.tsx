@@ -251,7 +251,10 @@ export function SpriteRigPage() {
       // 2.5) ミックス用: 脚ごとに分離したメッシュ。剛体ベース(太腿/脛は剛体)+ 膝の継ぎ目
       //      だけ変形。左右を別メッシュにして z で重ね(近=左を手前)、被っても潰れない。
       type LegMeshData = { rest: Float32Array; W: Float32Array; posBuf: ReturnType<MeshGeometry["getBuffer"]>; mesh: Mesh; nV: number };
-      const buildLegMesh = (xLo: number, xHi: number, cols: number, thighIdx: number, shinIdx: number): LegMeshData => {
+      // 両脚のボーンを共有する重み構造(単一メッシュと同じ sL ブレンド)で各脚を作る。
+      // 共有重みなので、左右メッシュの境界(midline)が常に同じ位置に来る → 継ぎ目が出ない。
+      // 違いは描画範囲(xLo..xHi)とz順/tintのみ。
+      const buildLegMesh = (xLo: number, xHi: number, cols: number): LegMeshData => {
         const rows = ROWS, n = cols * rows;
         const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
         const WA = new Float32Array(n * 5);
@@ -260,14 +263,16 @@ export function SpriteRigPage() {
           const x = xLo + (xHi - xLo) * (c / (cols - 1));
           const y = gy0 + (gy1 - gy0) * (r / (rows - 1));
           rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
-          // 骨盤帯は股関節(y=545)で鋭く終わる。緩く伸ばすと左右メッシュの股が
-          // 互いに別方向へ回って継ぎ目にV字の鋭い裂け目が出る。
-          const wP = 1 - smooth(540, 558, y);
-          const kT = smooth(748, 816, y);            // 膝の継ぎ目(剛体ベースなので狭く)
+          // 単一メッシュと同じ重み構造: 上=骨盤(static), 膝でthigh→shin, 中心帯で左右脚をブレンド。
+          const wP = 1 - smooth(500, 620, y);
+          const kT = smooth(720, 840, y);
+          const sL = 1 - smooth(590, 650, x);
           const rest5 = 1 - wP;
           WA[k * 5] = wP;
-          WA[k * 5 + thighIdx] = rest5 * (1 - kT);   // 太腿(剛体)
-          WA[k * 5 + shinIdx] = rest5 * kT;          // 脛(剛体)
+          WA[k * 5 + 1] = rest5 * sL * (1 - kT);       // thighL
+          WA[k * 5 + 2] = rest5 * sL * kT;             // shinL
+          WA[k * 5 + 3] = rest5 * (1 - sL) * (1 - kT); // thighR
+          WA[k * 5 + 4] = rest5 * (1 - sL) * kT;       // shinR
           k++;
         }
         const ix: number[] = [];
@@ -279,8 +284,9 @@ export function SpriteRigPage() {
         const m = new Mesh({ geometry: g, texture: texByFile.get("legwear.png")! });
         return { rest: rA, W: WA, posBuf: g.getBuffer("aPosition"), mesh: m, nV: n };
       };
-      const legMixR = buildLegMesh(608, 720, 7, 3, 4); // 右脚(奥/far)
-      const legMixL = buildLegMesh(520, 632, 7, 1, 2); // 左脚(手前/near)
+      // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
+      const legMixR = buildLegMesh(620, 720, 7);
+      const legMixL = buildLegMesh(520, 620, 7);
       legMixR.mesh.tint = 0xc9c9c9;                    // far脚を少し暗く(奥行き)
       root.addChild(legMixR.mesh);                     // far を先(奥)
       root.addChild(legMixL.mesh);                     // near を後(手前)
