@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Application, Assets, Container, Graphics, Mesh, MeshGeometry, Rectangle, Sprite, Texture } from "pixi.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 import { sampleClip } from "../../runtime/clip-player.js";
-import { CLIPS } from "../../presets/clips/index.js";
+import { CLIP_WALK_GIRL } from "./walk-girl.js";
 import type { BoneId } from "../../runtime/skeleton.js";
 
 // See-through(SIGGRAPH 2026)出力を深度z順で個別レイヤー描画。
@@ -89,9 +89,8 @@ const ANKLE_R: [number, number] = [662, 1085];
 const HIP_L: [number, number] = [598, 545];
 const HIP_R: [number, number] = [646, 545];
 
-// 歩きの「自信」パラメータ。振り幅が小さいと遠慮した歩き(後ろ歩きに見える一因)。
-const LEG_AMP = 0.9; // 脚の振り幅(1=クリップ等倍 thigh±25°)
-const LEAN_DEG = -6; // 上体の前傾(左向き=画像左へ倒す)。歩行は前に倒れて受け止める動作
+// クリップ(walk-girl)が既に最終角度なので脚は等倍。値はチューニング用に残す。
+const LEG_AMP = 1.0;
 
 export function SpriteRigPage() {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -235,14 +234,21 @@ export function SpriteRigPage() {
       app.stage.addChild(bonesG);
 
       setStatus("");
-      const walk = CLIPS["walk"]!;
+      const walk = CLIP_WALK_GIRL;
       let t = 0;
       const bobK = 1185 / 658;
 
+      // DEV: 位相を固定してキーポーズ単体を検証するためのスクラブフック
+      const scrubRef = { current: null as number | null };
+      if (import.meta.env.DEV) {
+        (globalThis as unknown as { __rigScrub?: (v: number | null) => void }).__rigScrub = (v) => { scrubRef.current = v; };
+      }
+
       app.ticker.add(() => {
         const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
-        if (playingRef.current) t += dt;
-        const frame = sampleClip(walk, t % walk.duration);
+        if (scrubRef.current == null && playingRef.current) t += dt;
+        const tt = scrubRef.current ?? t;
+        const frame = sampleClip(walk, tt % walk.duration);
         const rot = frame.pose.rotations ?? {};
         const sg = signRef.current;
         // 脚ボーンの world アフィン(rest空間)。画像左脚=clip L で駆動 →
@@ -287,8 +293,8 @@ export function SpriteRigPage() {
 
         // 腕(剛体)
         for (const { cont, bone, amp } of armDriven) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
-        // 上体は前傾(後傾だと後ろ歩きに見える)。胴の微小スウェイを前傾に重ねる。
-        const lean = deg2rad(LEAN_DEG + 0.5 * (rot["torso"] ?? 0));
+        // 上体の前傾(クリップの torso が負=前傾を表す)。沈みで屈み蹴り上げで起きる。
+        const lean = deg2rad(rot["torso"] ?? 0);
         upper.rotation = lean;
         backArm.rotation = lean;
         root.position.set(hipCanvas[0], hipCanvas[1] + (frame.pose.rootOffset?.[1] ?? 0) * bobK * S);
