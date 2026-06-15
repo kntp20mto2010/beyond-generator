@@ -326,10 +326,11 @@ export function SpriteRigPage() {
       const tR = buildCut([613, 480, 67, 228], HIP_R, legCutout, HIP, "thighR", FK_THIGH_AMP);
       buildCut([629, 705, 47, 187], KNEE_R, tR, HIP_R, "shinR", FK_SHIN_AMP);
 
-      // 足(footwear)。実測ギャップ最小は y=955 で x=602-611(幅10)。境界を x=606 にして
-      // L/R が互いに食い込まないように非重複に分割。底(y=983+)は2靴接触領域だが許容範囲。
-      const FOOT_L: Frame = [523, 875, 83, 119]; // 左靴のみ(x523-605)
-      const FOOT_R: Frame = [607, 880, 71, 114]; // 右靴のみ(x607-677)
+      // 足(footwear)。実測 L_max=605(y=947)/R_min=601(y=975-979) なので、
+      // 完全に非重複にするには boundary を x=600(L)と x=606(R)で挟む。x=601-605 の
+      // 細いストリップ(主に底のmerged領域)は捨てる。
+      const FOOT_L: Frame = [523, 875, 78, 119]; // 左靴のみ(x523-600)
+      const FOOT_R: Frame = [606, 880, 72, 114]; // 右靴のみ(x606-677)
       const footL = new Container(); const fls = new Sprite(sub("footwear.png", FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); root.addChild(footL);
       const footR = new Container(); const frs = new Sprite(sub("footwear.png", FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); root.addChild(footR);
 
