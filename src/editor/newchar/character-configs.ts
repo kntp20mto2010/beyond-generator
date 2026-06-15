@@ -133,20 +133,23 @@ export const SAKURA_CFG: CharConfig = {
 export const RYOUTA_CFG: CharConfig = {
   dir: "/assets/characters/ryouta",
   label: "リョウタ(男子)",
-  // hip は「ボーン表示」で脚2つが合流する点。hipL/hipR の中点(x=637)を上に少し上げた所。
-  // hipCanvas は canvas 上の HIP 描画位置で、`position = frame - HIP` の式から
-  // HIP を変えると見た目位置が逆向きにズレるため、hipCanvas で打ち消す。
-  hip: [637, 575],
+  // 脚の付け根/膝/踵の座標は legwear.png/footwear_*.png の実画素計測値:
+  //   真の股下(両脚が分かれる y)= 639, 左脚 centroid x=567, 右脚 centroid x=656
+  //   左靴/右靴の頂点 y = 1085 / 1097 → ankle y。
+  // hip(合流点)は新 hipL/hipR の中点 x=611.5 ≒ 612 に置き、joint線(y=629)から
+  // 約54px 上の y=575 とする(サクラ比とほぼ同じ寄せ方)。
+  // hipCanvas は `position = frame - HIP` を S=0.40 倍した分だけ逆補正。
+  hip: [612, 575],
   hairPivot: [628, 70],
-  hipL: [612, 595],
-  hipR: [662, 595],
-  kneeL: [570, 850],
-  kneeR: [670, 850],
-  ankleL: [572, 1115],
-  ankleR: [678, 1115],
-  hipCanvas: [238, 291],
+  hipL: [567, 629],
+  hipR: [656, 629],
+  kneeL: [572, 857],
+  kneeR: [672, 863],
+  ankleL: [569, 1085],
+  ankleR: [679, 1097],
+  hipCanvas: [228, 291],
   bobK: 1.4,
-  groundY: 1100, step: 140, lift: 70,
+  groundY: 1097, step: 140, lift: 70,
   backLayers: [{ jp: "後ろ髪", file: "back_hair.png", frame: [520, 22, 216, 212] }],
   frontLayers: [
     { jp: "上着", file: "topwear.png", frame: [519, 244, 232, 358] },
@@ -175,15 +178,17 @@ export const RYOUTA_CFG: CharConfig = {
   footLFile: "footwear_L.png", footRFile: "footwear_R.png",
   footLFrame: [478, 1085, 128, 97],
   footRFrame: [606, 1097, 107, 112],
-  meshGx0: 531, meshGx1: 704, meshGy0: 551, meshGy1: 1121,
-  midline: 635,
-  wPRange: [620, 690],
-  kTRange: [800, 875],
-  sLRange: [605, 665],
+  // meshGy0=608: 上着の塗り下端=605 の3px下まで下げ、ミックスの legMixR が
+  //  上着裾の上に被って見える 54px の帯を解消する(上のメッシュ帯は上着で隠れる領域)。
+  meshGx0: 531, meshGx1: 704, meshGy0: 608, meshGy1: 1122,
+  midline: 612,
+  wPRange: [620, 680],
+  kTRange: [820, 880],
+  sLRange: [582, 642],
   lowerYRange: [800, 870],
-  crotchY: 700,
-  legCenterLX: 570,
-  legCenterRX: 670,
+  crotchY: 639,
+  legCenterLX: 567,
+  legCenterRX: 656,
   armLBbox: [487, 284, 602, 691],
   armRBbox: [691, 285, 784, 703],
   elbowYL: 487,
