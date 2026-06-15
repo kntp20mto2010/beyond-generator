@@ -130,6 +130,7 @@ export function SpriteRigPage() {
   const ikRef = useRef(true);
   const skinRef = useRef(true);
   const bulgeRef = useRef(true);
+  const armModeRef = useRef<"cutout" | "mix">("cutout");
   const facingRef = useRef<"left" | "right">("left");
   const applyFacingRef = useRef<((f: "left" | "right") => void) | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -139,6 +140,7 @@ export function SpriteRigPage() {
   const [ikMode, setIkMode] = useState(true);
   const [skinMode, setSkinMode] = useState(true);
   const [bulgeMode, setBulgeMode] = useState(true);
+  const [armMode, setArmMode] = useState<"cutout" | "mix">("cutout");
   const [facing, setFacing] = useState<"left" | "right">("left");
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
@@ -148,6 +150,7 @@ export function SpriteRigPage() {
   ikRef.current = ikMode;
   skinRef.current = skinMode;
   bulgeRef.current = bulgeMode;
+  armModeRef.current = armMode;
   facingRef.current = facing;
   const LEG_LABEL = { mesh: "単一メッシュ", mix: "ミックス(剛体+継ぎ目/左右分離)", cutout: "剛体カットアウト" } as const;
 
@@ -358,6 +361,44 @@ export function SpriteRigPage() {
       root.addChild(frontArmCont);
       buildArm("upperArmR", frontArmCont); buildArm("forearmR", frontArmCont);
 
+      // 6) 腕ミックス用メッシュ(剛体+肘継ぎ目)。左右別メッシュ。bboxはhandwear texture内の
+      //    各腕領域。重みは smoothstep で肘前後37pxバンド(~3行)、上下は剛体binary。
+      //    upperArm/forearm の bone matrix を log-blend スキニング。
+      type ArmMeshData = { rest: Float32Array; W: Float32Array; posBuf: ReturnType<MeshGeometry["getBuffer"]>; mesh: Mesh; nV: number; upperKey: BoneId; foreKey: BoneId; uppPivot: [number, number]; forPivot: [number, number] };
+      const buildArmMesh = (bbox: [number, number, number, number], elbowY: number, upperKey: BoneId, foreKey: BoneId, uppPivot: [number, number], forPivot: [number, number]): ArmMeshData => {
+        const [xLo, yLo, xHi, yHi] = bbox;
+        const cols = 5, rows = 14, n = cols * rows;
+        const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
+        const WA = new Float32Array(n * 2); // 2 bones only(upperArm, forearm)
+        let k = 0;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          const x = xLo + (xHi - xLo) * (c / (cols - 1));
+          const y = yLo + (yHi - yLo) * (r / (rows - 1));
+          rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
+          // 肘前後 37px バンドで forearm 重みを smoothstep
+          const wF = smooth(elbowY - 18.5, elbowY + 18.5, y);
+          WA[k * 2] = 1 - wF; // upperArm
+          WA[k * 2 + 1] = wF; // forearm
+          k++;
+        }
+        const ix: number[] = [];
+        for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols - 1; c++) {
+          const i = r * cols + c; ix.push(i, i + 1, i + cols, i + 1, i + cols + 1, i + cols);
+        }
+        for (let v = 0; v < n; v++) { pA[v * 2] = rA[v * 2]!; pA[v * 2 + 1] = rA[v * 2 + 1]!; }
+        const g = new MeshGeometry({ positions: pA.slice(), uvs: uA, indices: new Uint32Array(ix) });
+        const m = new Mesh({ geometry: g, texture: texByFile.get("handwear.png")! });
+        return { rest: rA, W: WA, posBuf: g.getBuffer("aPosition"), mesh: m, nV: n, upperKey, foreKey, uppPivot, forPivot };
+      };
+      // L腕(画像左=texture-L=奥側): bbox=[534,332,610,655], elbow y=493。bone駆動は upperArmL/forearmL。
+      const armMeshL = buildArmMesh([534, 332, 610, 655], 493, "upperArmL", "forearmL", [572, 340], [555, 500]);
+      // R腕(画像右=texture-R=手前側): bbox=[663,323,739,668], elbow y=495。
+      const armMeshR = buildArmMesh([663, 323, 739, 668], 495, "upperArmR", "forearmR", [701, 332], [706, 502]);
+      // 奥腕 mesh は backArm に、手前腕 mesh は frontArmCont に入れる(z順は腕と同じ)。
+      backArm.addChild(armMeshL.mesh);
+      frontArmCont.addChild(armMeshR.mesh);
+      armMeshL.mesh.visible = false; armMeshR.mesh.visible = false;
+
       const bonesG = new Graphics();
       app.stage.addChild(bonesG);
 
@@ -506,6 +547,47 @@ export function SpriteRigPage() {
 
         // 腕(剛体)
         for (const { cont, bone, amp } of armDriven) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
+        // 腕ミックス: cutout↔mix トグル。mix時は cutout sprite を隠して mesh を log-blendスキニング。
+        const armMixOn = armModeRef.current === "mix";
+        conts.get("upperArmL")!.visible = !armMixOn;
+        conts.get("upperArmR")!.visible = !armMixOn;
+        armMeshL.mesh.visible = armMixOn;
+        armMeshR.mesh.visible = armMixOn;
+        if (armMixOn) {
+          const skinArm = (a: typeof armMeshL) => {
+            const uA = deg2rad(sg * 1.0 * (rot[a.upperKey] ?? 0));
+            const fA = deg2rad(sg * 1.0 * (rot[a.foreKey] ?? 0));
+            const Wupp = rotAbout(a.uppPivot[0], a.uppPivot[1], uA);
+            const Wfor = mul(Wupp, rotAbout(a.forPivot[0], a.forPivot[1], fA));
+            // log-blend(2ボーン): θ*=Σwθ, u*=Σwu, t*=A(θ*)·u*, p'=R(θ*)p+t*
+            const bones = [Wupp, Wfor];
+            const bTh: number[] = [], bUx: number[] = [], bUy: number[] = [];
+            for (let b = 0; b < 2; b++) {
+              const M = bones[b]!;
+              const th = Math.atan2(M.b, M.a);
+              let aC: number, bC: number;
+              if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; }
+              else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
+              const den = aC * aC + bC * bC;
+              bTh[b] = th; bUx[b] = (aC * M.tx + bC * M.ty) / den; bUy[b] = (-bC * M.tx + aC * M.ty) / den;
+            }
+            const pd = a.posBuf.data as Float32Array;
+            for (let v = 0; v < a.nV; v++) {
+              const rx = a.rest[v * 2]!, ry = a.rest[v * 2 + 1]!;
+              let th = 0, ux = 0, uy = 0;
+              for (let b = 0; b < 2; b++) { const w = a.W[v * 2 + b]!; if (w === 0) continue; th += w * bTh[b]!; ux += w * bUx[b]!; uy += w * bUy[b]!; }
+              let aC: number, bC: number;
+              if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; } else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
+              const tx = aC * ux - bC * uy, ty = bC * ux + aC * uy, c = Math.cos(th), s = Math.sin(th);
+              // 親(backArm/frontArmCont)が lean/bob を適用するので、ここでは image-coord - HIP のみ
+              pd[v * 2] = (c * rx - s * ry + tx) - HIP[0];
+              pd[v * 2 + 1] = (s * rx + c * ry + ty) - HIP[1];
+            }
+            a.posBuf.update();
+          };
+          skinArm(armMeshL);
+          skinArm(armMeshR);
+        }
         // 上体の前傾(クリップの torso が負=前傾を表す)。沈みで屈み蹴り上げで起きる。
         // 上半身・腕・後ろ髪・剛体脚は腰の上下動(bobImg)で一緒に上下(足は接地で固定)。
         const lean = deg2rad(rot["torso"] ?? 0);
@@ -586,6 +668,7 @@ export function SpriteRigPage() {
         <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK(地面固定)" : "FK(従来)"}</button>
         <button className="ui-btn" onClick={() => setSkinMode((m) => !m)}>スキン: {skinMode ? "対数ブレンド(自然)" : "LBS(線形=つぶれ)"}</button>
         <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "膨らむ(バルジ)" : "通常"}</button>
+        <button className="ui-btn" onClick={() => setArmMode((m) => m === "cutout" ? "mix" : "cutout")}>腕: {armMode === "cutout" ? "剛体カットアウト" : "ミックス(剛体+肘継ぎ目)"}</button>
         <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
         <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
         <button className="ui-btn" onClick={() => setFacing((f) => f === "left" ? "right" : "left")}>舞台: {facing === "left" ? "← 左向き" : "右向き →"}</button>
