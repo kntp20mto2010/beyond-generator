@@ -125,17 +125,20 @@ export function SpriteRigPage() {
   const bonesRef = useRef(false);
   const meshRef = useRef(true);
   const ikRef = useRef(true);
+  const skinRef = useRef(true);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
   const [meshMode, setMeshMode] = useState(true);
   const [ikMode, setIkMode] = useState(true);
+  const [skinMode, setSkinMode] = useState(true);
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
   bonesRef.current = showBones;
   meshRef.current = meshMode;
   ikRef.current = ikMode;
+  skinRef.current = skinMode;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -335,22 +338,56 @@ export function SpriteRigPage() {
         const WshinL = mul(WthighL, rotAbout(KNEE_L[0], KNEE_L[1], shL));
         const WthighR = mul(transBob, rotAbout(HIP_R[0], HIP_R[1], thR));
         const WshinR = mul(WthighR, rotAbout(KNEE_R[0], KNEE_R[1], shR));
-        const bones = [transBob, WthighL, WshinL, WthighR, WshinR];
 
         const useMesh = meshRef.current;
         legMesh.visible = useMesh;
         legCutout.visible = !useMesh;
         if (useMesh) {
+          // 「関節中心まわりの回転ブレンド」スキニング(2D版DQS相当)。
+          // 行列のまま平均するLBSは関節で回転がつぶれて細る(candy-wrapper)。
+          // 各ボーンを「中心C_bまわりに角度φ_bだけ回す」と表し、Cとφを重み平均して
+          // 一回の純回転として適用すると、回転の大きさが保たれ太さがつぶれない。
+          // bone1=太腿L(中心HIP_L,角thL), bone2=脛L(中心=現在の膝, 角thL+shL), R同様。
+          // bone0=骨盤(恒等)。bobは骨盤無回転なので最後に一律加算(接地は脛IKが補償済)。
+          const kxL = ax(WthighL, KNEE_L[0], KNEE_L[1]), kyL = ay(WthighL, KNEE_L[0], KNEE_L[1]) - bobImg;
+          const kxR = ax(WthighR, KNEE_R[0], KNEE_R[1]), kyR = ay(WthighR, KNEE_R[0], KNEE_R[1]) - bobImg;
+          const bAng = [0, thL, thL + shL, thR, thR + shR];
+          const bCx = [0, HIP_L[0], kxL, HIP_R[0], kxR];
+          const bCy = [0, HIP_L[1], kyL, HIP_R[1], kyR];
           const pd = posBuf.data as Float32Array;
-          for (let v = 0; v < nV; v++) {
-            const rx = rest[v * 2]!, ry = rest[v * 2 + 1]!;
-            let dx = 0, dy = 0;
-            for (let b = 0; b < 5; b++) {
-              const w = W[v * 5 + b]!; if (w === 0) continue;
-              const M = bones[b]!;
-              dx += w * ax(M, rx, ry); dy += w * ay(M, rx, ry);
+          if (skinRef.current) {
+            for (let v = 0; v < nV; v++) {
+              const rx = rest[v * 2]!, ry = rest[v * 2 + 1]!;
+              let ang = 0, cx = 0, cy = 0, wrot = 0;
+              for (let b = 1; b < 5; b++) {
+                const w = W[v * 5 + b]!; if (w === 0) continue;
+                ang += w * bAng[b]!; cx += w * bCx[b]!; cy += w * bCy[b]!; wrot += w;
+              }
+              let dx: number, dy: number;
+              if (wrot < 1e-6) { dx = rx; dy = ry; } // 骨盤=恒等
+              else {
+                const Cx = cx / wrot, Cy = cy / wrot; // ブレンド中心
+                const px = rx - Cx, py = ry - Cy;
+                const c = Math.cos(ang), s = Math.sin(ang); // 総重み付き角(骨盤分は0)
+                dx = c * px - s * py + Cx;
+                dy = s * px + c * py + Cy;
+              }
+              pd[v * 2] = dx - HIP[0];
+              pd[v * 2 + 1] = dy + bobImg - HIP[1]; // bobは一律加算
             }
-            pd[v * 2] = dx - HIP[0]; pd[v * 2 + 1] = dy - HIP[1];
+          } else {
+            // 比較用: 従来のLBS(行列のまま線形ブレンド → 関節でつぶれる candy-wrapper)
+            const lbsBones = [transBob, WthighL, WshinL, WthighR, WshinR];
+            for (let v = 0; v < nV; v++) {
+              const rx = rest[v * 2]!, ry = rest[v * 2 + 1]!;
+              let dx = 0, dy = 0;
+              for (let b = 0; b < 5; b++) {
+                const w = W[v * 5 + b]!; if (w === 0) continue;
+                const M = lbsBones[b]!;
+                dx += w * ax(M, rx, ry); dy += w * ay(M, rx, ry);
+              }
+              pd[v * 2] = dx - HIP[0]; pd[v * 2 + 1] = dy - HIP[1];
+            }
           }
           posBuf.update();
         } else {
@@ -429,6 +466,7 @@ export function SpriteRigPage() {
         <button className="ui-btn" onClick={() => setPlaying((p) => !p)}>{playing ? "⏹ 停止" : "▶ 歩く"}</button>
         <button className="ui-btn" onClick={() => setMeshMode((m) => !m)}>脚: {meshMode ? "メッシュ変形" : "剛体カットアウト"}</button>
         <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK(地面固定)" : "FK(従来)"}</button>
+        <button className="ui-btn" onClick={() => setSkinMode((m) => !m)}>スキン: {skinMode ? "中心回転(つぶれ無)" : "LBS(線形)"}</button>
         <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
         <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
       </div>
