@@ -38,9 +38,11 @@ const deg2rad = (d: number) => (d * Math.PI) / 180;
 export function SpriteRigPage() {
   const hostRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(true);
-  const signRef = useRef(1); // 脚の回転符号(視覚調整用)
+  // 脚の回転符号。歩行クリップは右向き歩行用なので、左向きの女の子は全脚ボーンを反転
+  // (= 歩容の水平ミラー → 進行方向が逆になり、膝の曲がりも正しいまま)
+  const signRef = useRef(-1);
   const [playing, setPlaying] = useState(true);
-  const [sign, setSign] = useState(1);
+  const [sign, setSign] = useState(-1);
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
