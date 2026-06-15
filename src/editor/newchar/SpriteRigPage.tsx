@@ -9,36 +9,9 @@ import type { BoneId } from "../../runtime/skeleton.js";
 // 下半身(ズボン)は剛体カットアウトだと股で継ぎ目が出るため、1枚のメッシュを
 // 骨盤+両脚にスキニング(線形ブレンド)して連続変形させる(継ぎ目が出ない)。
 // 腕は剛体カットアウト、上半身は静止レイヤー。
-const DIR = "/assets/characters/seethrough-girl";
-const HIP: [number, number] = [614, 540];
+import { CHARS, type CharKey, type CharConfig, type Frame, type Layer } from "./character-configs.js";
+
 const TEXW = 1280;
-
-type Frame = [number, number, number, number];
-interface Layer { jp: string; file: string; frame: Frame }
-const BACK_LAYERS: Layer[] = [{ jp: "後ろ髪", file: "back_hair.png", frame: [540, 125, 202, 185] }];
-const FRONT_LAYERS: Layer[] = [
-  { jp: "上着", file: "topwear.png", frame: [557, 291, 154, 195] },
-  { jp: "首", file: "neck.png", frame: [618, 272, 37, 57] },
-  { jp: "頭", file: "head.png", frame: [564, 158, 122, 135] },
-  { jp: "耳", file: "ears.png", frame: [657, 237, 30, 37] },
-  { jp: "顔", file: "face.png", frame: [564, 135, 111, 157] },
-  { jp: "口", file: "mouth.png", frame: [587, 268, 13, 6] },
-  { jp: "白目", file: "eyewhite.png", frame: [570, 220, 69, 36] },
-  { jp: "瞳", file: "irides.png", frame: [573, 224, 52, 32] },
-  { jp: "睫毛", file: "eyelash.png", frame: [567, 215, 75, 32] },
-  { jp: "眉", file: "eyebrow.png", frame: [572, 199, 67, 12] },
-  { jp: "前髪", file: "front_hair.png", frame: [547, 129, 155, 181] },
-];
-
-// 腕(剛体)
-interface Piece { key: string; file: string; frame: Frame; pivot: [number, number]; parent: string; bone: BoneId | null; amp?: number }
-// 腕は左右一致トラックで駆動(画像左腕=clip L)。amp大きめで前進感のある振りに。
-const ARMS: Piece[] = [
-  { key: "upperArmL", file: "handwear.png", frame: [534, 332, 76, 161], pivot: [572, 340], parent: "upper", bone: "upperArmL", amp: 1.0 },
-  { key: "forearmL", file: "handwear.png", frame: [517, 493, 77, 162], pivot: [555, 500], parent: "upperArmL", bone: "forearmL", amp: 1.0 },
-  { key: "upperArmR", file: "handwear.png", frame: [663, 323, 76, 171], pivot: [701, 332], parent: "upper", bone: "upperArmR", amp: 1.0 },
-  { key: "forearmR", file: "handwear.png", frame: [666, 495, 81, 173], pivot: [706, 502], parent: "upperArmR", bone: "forearmR", amp: 1.0 },
-];
 
 const TABLE: { jp: string; file: string; bone: string }[] = [
   { jp: "後ろ髪", file: "back_hair.png", bone: "頭に追従+毛先揺れ(バネ)" },
@@ -80,33 +53,11 @@ function mul(A: Aff, B: Aff): Aff {
 const ax = (M: Aff, x: number, y: number) => M.a * x + M.c * y + M.tx;
 const ay = (M: Aff, x: number, y: number) => M.b * x + M.d * y + M.ty;
 
-// 脚の関節(実測・新版=脚短縮 clean版 y=480-890)
-const KNEE_L: [number, number] = [581, 705];
-const KNEE_R: [number, number] = [652, 705];
-const ANKLE_L: [number, number] = [575, 885];
-const ANKLE_R: [number, number] = [660, 885];
-const HIP_L: [number, number] = [594, 595];
-const HIP_R: [number, number] = [640, 595];
-
 // FKの脚振り。太腿(振り幅)を小さめにして遊脚が支持脚に「振り被る」のを抑える。
 // 膝の曲げ(shin)は保って歩きの表情は残す。IKモードはこの値を使わない。
 const FK_THIGH_AMP = 0.3; // 太腿の前後振り(小さい=脚が重ならない)
 const FK_SHIN_AMP = 0.6;  // 膝の曲げ量も控えめに合わせる
-
-// 接地IK(その場トレッドミル): 支持脚の足首を地面へ固定し、接地中は一定速度で
-// 後方へ流す → 足が滑らない(Spine流の grounded walk)。遊脚はFK。
-const L1L = Math.hypot(KNEE_L[0] - HIP_L[0], KNEE_L[1] - HIP_L[1]);
-const L2L = Math.hypot(ANKLE_L[0] - KNEE_L[0], ANKLE_L[1] - KNEE_L[1]);
-const L1R = Math.hypot(KNEE_R[0] - HIP_R[0], KNEE_R[1] - HIP_R[1]);
-const L2R = Math.hypot(ANKLE_R[0] - KNEE_R[0], ANKLE_R[1] - KNEE_R[1]);
-const REST_TH_L = Math.atan2(KNEE_L[1] - HIP_L[1], KNEE_L[0] - HIP_L[0]);
-const REST_SH_L = Math.atan2(ANKLE_L[1] - KNEE_L[1], ANKLE_L[0] - KNEE_L[0]);
-const REST_TH_R = Math.atan2(KNEE_R[1] - HIP_R[1], KNEE_R[0] - HIP_R[0]);
-const REST_SH_R = Math.atan2(ANKLE_R[1] - KNEE_R[1], ANKLE_R[0] - KNEE_R[0]);
-const GROUND_Y = 875;  // 足を接地させる画像Y(rest足首885より少し上=膝に余裕)
-const STEP = 100;      // 接地中に足が後退する水平距離(画像px)。脚短縮版
-const LIFT = 50;       // 遊脚中の足の持ち上げ高さ(画像px)→ 膝の畳み量を決める
-const BULGE_K = 0.9;   // 関節バルジ: 曲げ量に応じて脚を太らせる係数(膝でピーク)
+const BULGE_K = 0.9;      // 関節バルジ: 曲げ量に応じて脚を太らせる係数(膝でピーク)
 
 // 2ボーンIK: 股(hx,hy)→目標足首(tx,ty)。bend=膝の向き(+1で前/画像左へ膨らむ)。
 // 戻り値は world 角 [太腿角, 脛角](rest空間)。
@@ -121,7 +72,7 @@ function legIK(hx: number, hy: number, tx: number, ty: number, L1: number, L2: n
   return [th, Math.atan2(ty - ky, tx - kx)];
 }
 
-export function SpriteRigPage() {
+function CharRig({ cfg }: { cfg: CharConfig }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(true);
   const signRef = useRef(1);
@@ -163,6 +114,25 @@ export function SpriteRigPage() {
     let disposed = false;
     const app = new Application();
 
+    // キャラ別ランドマーク/フレーム/閾値は cfg から取り出して以降は既存名で参照する
+    const DIR = cfg.dir;
+    const HIP = cfg.hip;
+    const HAIR_PIVOT = cfg.hairPivot;
+    const HIP_L = cfg.hipL, HIP_R = cfg.hipR;
+    const KNEE_L = cfg.kneeL, KNEE_R = cfg.kneeR;
+    const ANKLE_L = cfg.ankleL, ANKLE_R = cfg.ankleR;
+    const GROUND_Y = cfg.groundY, STEP = cfg.step, LIFT = cfg.lift;
+    const BACK_LAYERS = cfg.backLayers, FRONT_LAYERS = cfg.frontLayers, ARMS = cfg.arms;
+    // IK derived
+    const L1L = Math.hypot(KNEE_L[0] - HIP_L[0], KNEE_L[1] - HIP_L[1]);
+    const L2L = Math.hypot(ANKLE_L[0] - KNEE_L[0], ANKLE_L[1] - KNEE_L[1]);
+    const L1R = Math.hypot(KNEE_R[0] - HIP_R[0], KNEE_R[1] - HIP_R[1]);
+    const L2R = Math.hypot(ANKLE_R[0] - KNEE_R[0], ANKLE_R[1] - KNEE_R[1]);
+    const REST_TH_L = Math.atan2(KNEE_L[1] - HIP_L[1], KNEE_L[0] - HIP_L[0]);
+    const REST_SH_L = Math.atan2(ANKLE_L[1] - KNEE_L[1], ANKLE_L[0] - KNEE_L[0]);
+    const REST_TH_R = Math.atan2(KNEE_R[1] - HIP_R[1], KNEE_R[0] - HIP_R[0]);
+    const REST_SH_R = Math.atan2(ANKLE_R[1] - KNEE_R[1], ANKLE_R[0] - KNEE_R[0]);
+
     (async () => {
       await withPixiInitLock(() =>
         app.init({ width: 480, height: 660, background: "#eef1f5", antialias: true, resolution: window.devicePixelRatio || 1, autoDensity: true }),
@@ -179,7 +149,7 @@ export function SpriteRigPage() {
       const S = 0.40;
       const root = new Container();
       root.scale.set(S);
-      const hipCanvas: [number, number] = [240, 296];
+      const hipCanvas = cfg.hipCanvas;
       root.position.set(hipCanvas[0], hipCanvas[1]);
       app.stage.addChild(root);
 
@@ -204,7 +174,6 @@ export function SpriteRigPage() {
       // 1) 後ろ髪(最奥)。頭の前傾に追従(股中心の hairLean)しつつ、毛先が遅れて
       //    揺れる(生え際中心の hairSway をバネ減衰で遅延 = フォロースルー)。
       const bh = BACK_LAYERS[0]!;
-      const HAIR_PIVOT: [number, number] = [641, 175]; // 髪の生え際(頭頂後ろ・新版)
       const hairLeanCont = new Container();
       root.addChild(hairLeanCont);
       const hairSwayCont = new Container();
@@ -222,7 +191,7 @@ export function SpriteRigPage() {
 
       // 2) 下半身メッシュ(ズボン全体を骨盤+両脚にスキニング)
       const COLS = 11, ROWS = 16;
-      const gx0 = 548, gx1 = 680, gy0 = 480, gy1 = 890; // 静止時のズボン外接(rest・脚短縮clean版)
+      const gx0 = cfg.meshGx0, gx1 = cfg.meshGx1, gy0 = cfg.meshGy0, gy1 = cfg.meshGy1;
       const nV = COLS * ROWS;
       const rest = new Float32Array(nV * 2); // 画像px(rest)
       const pos = new Float32Array(nV * 2); // root-local(変形後)
@@ -236,10 +205,10 @@ export function SpriteRigPage() {
           const y = gy0 + (gy1 - gy0) * (r / (ROWS - 1));
           rest[vi * 2] = x; rest[vi * 2 + 1] = y;
           uvs[vi * 2] = x / TEXW; uvs[vi * 2 + 1] = y / TEXW;
-          // 重み: 上部=骨盤、膝でthigh/shin、中心帯で左右ブレンド(脚短縮clean版)
-          const wP = 1 - smooth(530, 600, y); // ウエスト〜股上は静止
-          const kT = smooth(670, 740, y); // 膝で太腿→脛
-          const sL = 1 - smooth(584, 644, x); // x中心帯で左右脚をブレンド(midline=614)
+          // 重み: 上部=骨盤、膝でthigh/shin、中心帯で左右ブレンド(キャラ設定値)
+          const wP = 1 - smooth(cfg.wPRange[0], cfg.wPRange[1], y); // ウエスト〜股上は静止
+          const kT = smooth(cfg.kTRange[0], cfg.kTRange[1], y); // 膝で太腿→脛
+          const sL = 1 - smooth(cfg.sLRange[0], cfg.sLRange[1], x); // x中心帯で左右脚をブレンド
           const rest5 = 1 - wP;
           W[vi * 5 + 0] = wP;
           W[vi * 5 + 1] = rest5 * sL * (1 - kT); // thighL
@@ -271,20 +240,20 @@ export function SpriteRigPage() {
         const rows = ROWS, n = cols * rows;
         const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
         const WA = new Float32Array(n * 5);
-        const isLeftMesh = xLo < 600; // legMixL=548, legMixR=614
+        const isLeftMesh = xLo < cfg.midline - 1; // L=midより前、R=midより後
         let k = 0;
         for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
           const x = xLo + (xHi - xLo) * (c / (cols - 1));
           const y = gy0 + (gy1 - gy0) * (r / (rows - 1));
           rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
-          const wP = 1 - smooth(530, 600, y);
-          const kT = smooth(670, 740, y);
+          const wP = 1 - smooth(cfg.wPRange[0], cfg.wPRange[1], y);
+          const kT = smooth(cfg.kTRange[0], cfg.kTRange[1], y);
           // sL は y で振る舞いを変える:
           //  ・上半身(股付近): 左右脚をブレンド → midline の継ぎ目が出ない
           //  ・膝より下: 各メッシュは自分側の脚に振り切る → 足首が引かれて細くならない
-          const sL_upper = 1 - smooth(584, 644, x);  // 緩やか(midline=614)
-          const sL_lower = isLeftMesh ? 1 : 0;       // 自分側に固定
-          const lowerY = smooth(640, 720, y);        // 0=股, 1=膝より下
+          const sL_upper = 1 - smooth(cfg.sLRange[0], cfg.sLRange[1], x);
+          const sL_lower = isLeftMesh ? 1 : 0;
+          const lowerY = smooth(cfg.lowerYRange[0], cfg.lowerYRange[1], y);
           const sL = sL_upper * (1 - lowerY) + sL_lower * lowerY;
           const rest5 = 1 - wP;
           WA[k * 5] = wP;
@@ -304,8 +273,8 @@ export function SpriteRigPage() {
         return { rest: rA, W: WA, posBuf: g.getBuffer("aPosition"), mesh: m, nV: n };
       };
       // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
-      const legMixR = buildLegMesh(614, 680, 7);
-      const legMixL = buildLegMesh(548, 614, 7);
+      const legMixR = buildLegMesh(cfg.midline, gx1, 7);
+      const legMixL = buildLegMesh(gx0, cfg.midline, 7);
       // 腕(backArm/upper) と同じ構造で脚の depth を出す。腕の規約と合わせて
       // texture-R(画像左向きでは画像右に見えるもの)が「前」、texture-L が「後」:
       //  ・legBack(深い z): legMixL(texture-L)
@@ -330,16 +299,12 @@ export function SpriteRigPage() {
         if (bone) cutPieces.push({ cont, bone, pivot, amp });
         return cont;
       };
-      const tL = buildCut([548, 480, 65, 230], HIP_L, legCutout, HIP, "thighL", FK_THIGH_AMP);
-      buildCut([553, 705, 50, 187], KNEE_L, tL, HIP_L, "shinL", FK_SHIN_AMP);
-      const tR = buildCut([613, 480, 67, 228], HIP_R, legCutout, HIP, "thighR", FK_THIGH_AMP);
-      buildCut([629, 705, 47, 187], KNEE_R, tR, HIP_R, "shinR", FK_SHIN_AMP);
+      const tL = buildCut(cfg.thighLFrame, HIP_L, legCutout, HIP, "thighL", FK_THIGH_AMP);
+      buildCut(cfg.shinLFrame, KNEE_L, tL, HIP_L, "shinL", FK_SHIN_AMP);
+      const tR = buildCut(cfg.thighRFrame, HIP_R, legCutout, HIP, "thighR", FK_THIGH_AMP);
+      buildCut(cfg.shinRFrame, KNEE_R, tR, HIP_R, "shinR", FK_SHIN_AMP);
 
-      // 足(footwear)。実測 L_max=605(y=947)/R_min=601(y=975-979) なので、
-      // 完全に非重複にするには boundary を x=600(L)と x=606(R)で挟む。x=601-605 の
-      // 細いストリップ(主に底のmerged領域)は捨てる。
-      const FOOT_L: Frame = [523, 875, 78, 119]; // 左靴のみ(x523-600)
-      const FOOT_R: Frame = [606, 880, 72, 114]; // 右靴のみ(x606-677)
+      const FOOT_L: Frame = cfg.footLFrame, FOOT_R: Frame = cfg.footRFrame;
       // footL は texture-L = 奥側 → shoeBack へ。footR は texture-R = 手前側 → shoeFront へ。
       // 鏡反転で前/奥が自動的に正しい canvas 側に飛ぶ(legBack/legFront と同じ規約)。
       const shoeFront = new Container(); // upper の後で root に追加(z位置=手前脚の直前)
@@ -393,10 +358,14 @@ export function SpriteRigPage() {
         const m = new Mesh({ geometry: g, texture: texByFile.get("handwear.png")! });
         return { rest: rA, W: WA, posBuf: g.getBuffer("aPosition"), mesh: m, nV: n, upperKey, foreKey, uppPivot, forPivot };
       };
-      // L腕(画像左=texture-L=奥側): bbox=[534,332,610,655], elbow y=493。bone駆動は upperArmL/forearmL。
-      const armMeshL = buildArmMesh([534, 332, 610, 655], 493, "upperArmL", "forearmL", [572, 340], [555, 500]);
-      // R腕(画像右=texture-R=手前側): bbox=[663,323,739,668], elbow y=495。
-      const armMeshR = buildArmMesh([663, 323, 739, 668], 495, "upperArmR", "forearmR", [701, 332], [706, 502]);
+      // L腕(画像左=texture-L=奥側)
+      const armPivL = ARMS.find((a) => a.key === "upperArmL")!.pivot;
+      const forePivL = ARMS.find((a) => a.key === "forearmL")!.pivot;
+      const armMeshL = buildArmMesh(cfg.armLBbox, cfg.elbowYL, "upperArmL", "forearmL", armPivL, forePivL);
+      // R腕(画像右=texture-R=手前側)
+      const armPivR = ARMS.find((a) => a.key === "upperArmR")!.pivot;
+      const forePivR = ARMS.find((a) => a.key === "forearmR")!.pivot;
+      const armMeshR = buildArmMesh(cfg.armRBbox, cfg.elbowYR, "upperArmR", "forearmR", armPivR, forePivR);
       // 奥腕 mesh は backArm に、手前腕 mesh は frontArmCont に入れる(z順は腕と同じ)。
       backArm.addChild(armMeshL.mesh);
       frontArmCont.addChild(armMeshR.mesh);
@@ -418,7 +387,7 @@ export function SpriteRigPage() {
 
       const walk = CLIP_WALK_GIRL;
       let t = 0;
-      const bobK = 850 / 658; // 新版(身長短縮)に合わせて縮小
+      const bobK = cfg.bobK;
       // 後ろ髪フォロースルー用のバネ状態
       let hairAng = 0, hairVel = 0, prevBob = 0;
 
@@ -502,7 +471,7 @@ export function SpriteRigPage() {
           // 関節バルジ(紡錘形): 股下→膝で増加・膝→足首で減少、曲げ量に比例。
           const bulgeOn = bulgeRef.current;
           const absSh = [0, Math.abs(shL), Math.abs(shL), Math.abs(shR), Math.abs(shR)];
-          const CROTCH_Y = 575, KNEE_Y = KNEE_L[1], ANK_Y = ANKLE_L[1];
+          const CROTCH_Y = cfg.crotchY, KNEE_Y = KNEE_L[1], ANK_Y = ANKLE_L[1];
           const useLog = skinRef.current;
           // 1メッシュ分をスキニング(restA/WA/pd)。log-blend or LBS、バルジ適用。
           const skin = (restA: Float32Array, WA: Float32Array, pd: Float32Array, count: number) => {
@@ -514,7 +483,7 @@ export function SpriteRigPage() {
                   const prof = ry <= KNEE_Y ? smooth(CROTCH_Y, KNEE_Y, ry) : 1 - smooth(KNEE_Y, ANK_Y, ry);
                   if (prof > 0) {
                     const bend = (lw * absSh[1]! + rw * absSh[3]!) / legW;
-                    const cX = (lw * 582 + rw * 652) / legW; // 新版の脚中心x(KNEE x)
+                    const cX = (lw * cfg.legCenterLX + rw * cfg.legCenterRX) / legW;
                     rx = cX + (rx - cX) * (1 + BULGE_K * prof * bend);
                   }
                 }
@@ -676,10 +645,10 @@ export function SpriteRigPage() {
           bonesG.moveTo(hipC.x, hipC.y).lineTo(pHipL.x, pHipL.y).lineTo(pKL.x, pKL.y).lineTo(pAL.x, pAL.y);
           bonesG.moveTo(hipC.x, hipC.y).lineTo(pHipR.x, pHipR.y).lineTo(pKR.x, pKR.y).lineTo(pAR.x, pAR.y);
           const sh = (k: string) => conts.get(k)!.toGlobal({ x: 0, y: 0 });
-          const wL = conts.get("forearmL")!.toGlobal({ x: -24, y: 155 }), wR = conts.get("forearmR")!.toGlobal({ x: -11, y: 155 });
+          const wL = conts.get("forearmL")!.toGlobal({ x: cfg.wristLOffset[0], y: cfg.wristLOffset[1] }), wR = conts.get("forearmR")!.toGlobal({ x: cfg.wristROffset[0], y: cfg.wristROffset[1] });
           bonesG.moveTo(sh("upperArmL").x, sh("upperArmL").y).lineTo(sh("forearmL").x, sh("forearmL").y).lineTo(wL.x, wL.y);
           bonesG.moveTo(sh("upperArmR").x, sh("upperArmR").y).lineTo(sh("forearmR").x, sh("forearmR").y).lineTo(wR.x, wR.y);
-          const neck = upper.toGlobal({ x: 0, y: -268 }), headTop = upper.toGlobal({ x: 0, y: -382 });
+          const neck = upper.toGlobal({ x: 0, y: cfg.neckYLocal }), headTop = upper.toGlobal({ x: 0, y: cfg.headTopYLocal });
           bonesG.moveTo(hipC.x, hipC.y).lineTo(neck.x, neck.y).lineTo(headTop.x, headTop.y);
           bonesG.stroke({ width: 3, color: 0x3aa0ff, alpha: 0.9 });
           for (const p of [hipC, pHipL, pKL, pAL, pHipR, pKR, pAR, sh("upperArmL"), sh("forearmL"), wL, sh("upperArmR"), sh("forearmR"), wR, neck, headTop])
@@ -745,7 +714,7 @@ export function SpriteRigPage() {
                 <tr key={r.file} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ padding: "3px 6px", color: "var(--text-dim)" }}>{i + 1}</td>
                   <td style={{ padding: "3px 6px" }}>
-                    <img src={`${DIR}/${r.file.replace(".png", "_thumb.png")}`} alt={r.jp} style={{ width: 40, height: 40, objectFit: "contain", background: "#dfe4ea", borderRadius: "3px", display: "block" }} />
+                    <img src={`${cfg.dir}/${r.file.replace(".png", "_thumb.png")}`} alt={r.jp} style={{ width: 40, height: 40, objectFit: "contain", background: "#dfe4ea", borderRadius: "3px", display: "block" }} />
                   </td>
                   <td style={{ padding: "3px 6px" }}>{r.jp}</td>
                   <td style={{ padding: "3px 6px", color: r.bone.startsWith("—") ? "var(--text-dim)" : "var(--accent)" }}>{r.bone}</td>
@@ -755,6 +724,29 @@ export function SpriteRigPage() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+// 外側ラッパ: キャラ選択 + 子に key={char} を付与して切替時に rig をリマウント
+export function SpriteRigPage() {
+  const [char, setChar] = useState<CharKey>("sakura");
+  return (
+    <div style={{ height: "100%", overflow: "auto" }}>
+      <div style={{ padding: "10px 16px 0", display: "flex", gap: "8px", background: "var(--bg-app)" }}>
+        <span style={{ fontSize: "12px", color: "var(--text-dim)", alignSelf: "center" }}>キャラ:</span>
+        {(Object.keys(CHARS) as CharKey[]).map((k) => (
+          <button
+            key={k}
+            className="ui-btn"
+            style={{ fontWeight: char === k ? 700 : 400, background: char === k ? "var(--accent)" : undefined, color: char === k ? "#fff" : undefined }}
+            onClick={() => setChar(k)}
+          >
+            {CHARS[k].label}
+          </button>
+        ))}
+      </div>
+      <CharRig key={char} cfg={CHARS[char]} />
     </div>
   );
 }
