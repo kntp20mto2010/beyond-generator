@@ -66,7 +66,6 @@ const smooth = (e0: number, e1: number, x: number) => {
 
 // 2x3 アフィン(列ベクトル: x'=a x + c y + tx)
 interface Aff { a: number; b: number; c: number; d: number; tx: number; ty: number }
-const IDENT: Aff = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
 function rotAbout(px: number, py: number, th: number): Aff {
   const c = Math.cos(th), s = Math.sin(th);
   return { a: c, b: s, c: -s, d: c, tx: px - (c * px - s * py), ty: py - (s * px + c * py) };
@@ -92,21 +91,51 @@ const HIP_R: [number, number] = [646, 545];
 // クリップ(walk-girl)が既に最終角度なので脚は等倍。値はチューニング用に残す。
 const LEG_AMP = 1.0;
 
+// 接地IK(その場トレッドミル): 支持脚の足首を地面へ固定し、接地中は一定速度で
+// 後方へ流す → 足が滑らない(Spine流の grounded walk)。遊脚はFK。
+const L1L = Math.hypot(KNEE_L[0] - HIP_L[0], KNEE_L[1] - HIP_L[1]);
+const L2L = Math.hypot(ANKLE_L[0] - KNEE_L[0], ANKLE_L[1] - KNEE_L[1]);
+const L1R = Math.hypot(KNEE_R[0] - HIP_R[0], KNEE_R[1] - HIP_R[1]);
+const L2R = Math.hypot(ANKLE_R[0] - KNEE_R[0], ANKLE_R[1] - KNEE_R[1]);
+const REST_TH_L = Math.atan2(KNEE_L[1] - HIP_L[1], KNEE_L[0] - HIP_L[0]);
+const REST_SH_L = Math.atan2(ANKLE_L[1] - KNEE_L[1], ANKLE_L[0] - KNEE_L[0]);
+const REST_TH_R = Math.atan2(KNEE_R[1] - HIP_R[1], KNEE_R[0] - HIP_R[0]);
+const REST_SH_R = Math.atan2(ANKLE_R[1] - KNEE_R[1], ANKLE_R[0] - KNEE_R[0]);
+const GROUND_Y = 1070; // 足を接地させる画像Y(rest足首1085より少し上=膝に余裕)
+const STEP = 170;      // 接地中に足が後退する水平距離(画像px)= 仮想ストライド
+const LIFT = 78;       // 遊脚中の足の持ち上げ高さ(画像px)→ 膝の畳み量を決める
+
+// 2ボーンIK: 股(hx,hy)→目標足首(tx,ty)。bend=膝の向き(+1で前/画像左へ膨らむ)。
+// 戻り値は world 角 [太腿角, 脛角](rest空間)。
+function legIK(hx: number, hy: number, tx: number, ty: number, L1: number, L2: number, bend: number): [number, number] {
+  const dx = tx - hx, dy = ty - hy;
+  let d = Math.hypot(dx, dy);
+  d = Math.max(Math.abs(L1 - L2) + 1, Math.min(L1 + L2 - 1, d));
+  const a = Math.atan2(dy, dx);
+  const cosH = Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
+  const th = a + bend * Math.acos(cosH);
+  const kx = hx + L1 * Math.cos(th), ky = hy + L1 * Math.sin(th);
+  return [th, Math.atan2(ty - ky, tx - kx)];
+}
+
 export function SpriteRigPage() {
   const hostRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(true);
   const signRef = useRef(1);
   const bonesRef = useRef(false);
   const meshRef = useRef(true);
+  const ikRef = useRef(true);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
   const [meshMode, setMeshMode] = useState(true);
+  const [ikMode, setIkMode] = useState(true);
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
   bonesRef.current = showBones;
   meshRef.current = meshMode;
+  ikRef.current = ikMode;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -263,17 +292,50 @@ export function SpriteRigPage() {
         const frame = sampleClip(walk, tt % walk.duration);
         const rot = frame.pose.rotations ?? {};
         const sg = signRef.current;
-        // 脚ボーンの world アフィン(rest空間)。画像左脚=clip L で駆動 →
-        // 膝の曲げが遊脚期に同期し、支持脚は伸びる(後ろ歩きに見える不整合を解消)。
-        const thL = deg2rad(sg * LEG_AMP * (rot["thighL"] ?? 0));
-        const shL = deg2rad(sg * LEG_AMP * (rot["shinL"] ?? 0));
-        const thR = deg2rad(sg * LEG_AMP * (rot["thighR"] ?? 0));
-        const shR = deg2rad(sg * LEG_AMP * (rot["shinR"] ?? 0));
-        const WthighL = rotAbout(HIP_L[0], HIP_L[1], thL);
+        const ikOn = ikRef.current;
+        // 腰の上下動は root全体ではなく「股」を画像空間で上下させる(足は接地で固定)。
+        const bobImg = (frame.pose.rootOffset?.[1] ?? 0) * bobK;
+        const transBob: Aff = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: bobImg };
+
+        // 各脚の位相(右は半周オフセット)と接地ウェイト(stance中核=1, 遊脚=0)。
+        const phaseL = ((tt % 1) + 1) % 1;
+        const phaseR = (phaseL + 0.5) % 1;
+        // 足の床フラット度(脛追従→床水平)。踵接地〜爪先離れで1へ。
+        const plantW = (p: number) => (p >= 0.5 ? 0 : smooth(0.02, 0.2, p) * (1 - smooth(0.34, 0.5, p)));
+        const smoother = (x: number) => x * x * x * (x * (x * 6 - 15) + 10);
+        // 足首の目標軌道(画像空間)。接地中=床を等速で後退、遊脚中=後→前へ弧を描いて持ち上げ。
+        const footPath = (phase: number, hipX: number): [number, number] => {
+          if (phase < 0.5) {
+            const sp = phase / 0.5; // 0(踵接地)→1(爪先離れ)
+            return [hipX - STEP / 2 + STEP * sp, GROUND_Y]; // 前→後へ等速(トレッドミル)
+          }
+          const sw = (phase - 0.5) / 0.5; // 0→1(遊脚)
+          const xBack = hipX + STEP / 2, xFront = hipX - STEP / 2;
+          return [xBack + (xFront - xBack) * smoother(sw), GROUND_Y - LIFT * Math.sin(Math.PI * sw)];
+        };
+        // 1脚: ON時は全周フル2ボーンIK(接地→遊脚弧)。膝の畳みは足の持ち上げ量から自然に出る。
+        const solveLeg = (
+          phase: number, hip: [number, number], L1: number, L2: number,
+          restTh: number, restSh: number, fkTh: number, fkSh: number,
+        ): { th: number; sh: number; w: number } => {
+          if (!ikOn) return { th: fkTh, sh: fkSh, w: 0 };
+          const [tx, ty] = footPath(phase, hip[0]);
+          const [thW, shW] = legIK(hip[0], hip[1] + bobImg, tx, ty, L1, L2, 1);
+          return { th: thW - restTh, sh: shW - restSh - (thW - restTh), w: plantW(phase) };
+        };
+        const fkThL = deg2rad(sg * LEG_AMP * (rot["thighL"] ?? 0));
+        const fkShL = deg2rad(sg * LEG_AMP * (rot["shinL"] ?? 0));
+        const fkThR = deg2rad(sg * LEG_AMP * (rot["thighR"] ?? 0));
+        const fkShR = deg2rad(sg * LEG_AMP * (rot["shinR"] ?? 0));
+        const legL = solveLeg(phaseL, HIP_L, L1L, L2L, REST_TH_L, REST_SH_L, fkThL, fkShL);
+        const legR = solveLeg(phaseR, HIP_R, L1R, L2R, REST_TH_R, REST_SH_R, fkThR, fkShR);
+        const thL = legL.th, shL = legL.sh, thR = legR.th, shR = legR.sh;
+        // pelvis(骨盤)も bob で上下 → 上は腰に追従、下(足)は接地で固定、膝が吸収。
+        const WthighL = mul(transBob, rotAbout(HIP_L[0], HIP_L[1], thL));
         const WshinL = mul(WthighL, rotAbout(KNEE_L[0], KNEE_L[1], shL));
-        const WthighR = rotAbout(HIP_R[0], HIP_R[1], thR);
+        const WthighR = mul(transBob, rotAbout(HIP_R[0], HIP_R[1], thR));
         const WshinR = mul(WthighR, rotAbout(KNEE_R[0], KNEE_R[1], shR));
-        const bones = [IDENT, WthighL, WshinL, WthighR, WshinR];
+        const bones = [transBob, WthighL, WshinL, WthighR, WshinR];
 
         const useMesh = meshRef.current;
         legMesh.visible = useMesh;
@@ -295,24 +357,30 @@ export function SpriteRigPage() {
           for (const { cont, bone, amp } of cutPieces) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
         }
 
-        // 足を脛末端へ(メッシュ/剛体共通: shinのworldで)。足首ピッチ(踵接地/爪先離れ)を重ねる。
+        // 足を脛末端へ(脛のworldで位置)。接地中(w)は脛追従をやめて床に水平、
+        // 足首ピッチ(踵接地/爪先離れ)を重ねる。遊脚は脛に追従。
         const rotAny = rot as Record<string, number>;
-        const placeFoot = (foot: Container, Wsh: Aff, ankle: [number, number], ankleDeg: number) => {
+        const placeFoot = (foot: Container, Wsh: Aff, ankle: [number, number], ankleDeg: number, w: number) => {
           foot.position.set(ax(Wsh, ankle[0], ankle[1]) - HIP[0], ay(Wsh, ankle[0], ankle[1]) - HIP[1]);
-          foot.rotation = Math.atan2(Wsh.b, Wsh.a) + deg2rad(sg * ankleDeg);
+          foot.rotation = (1 - w) * Math.atan2(Wsh.b, Wsh.a) + deg2rad(sg * ankleDeg);
         };
-        placeFoot(footL, WshinL, ANKLE_L, rotAny["ankleL"] ?? 0);
-        placeFoot(footR, WshinR, ANKLE_R, rotAny["ankleR"] ?? 0);
+        placeFoot(footL, WshinL, ANKLE_L, rotAny["ankleL"] ?? 0, legL.w);
+        placeFoot(footR, WshinR, ANKLE_R, rotAny["ankleR"] ?? 0, legR.w);
 
         // 腕(剛体)
         for (const { cont, bone, amp } of armDriven) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
         // 上体の前傾(クリップの torso が負=前傾を表す)。沈みで屈み蹴り上げで起きる。
+        // 上半身・腕・後ろ髪・剛体脚は腰の上下動(bobImg)で一緒に上下(足は接地で固定)。
         const lean = deg2rad(rot["torso"] ?? 0);
         upper.rotation = lean;
+        upper.position.y = bobImg;
         backArm.rotation = lean;
+        backArm.position.y = bobImg;
+        legCutout.position.y = bobImg;
 
         // 後ろ髪: 頭の前傾に追従(hairLean)+ 毛先がバネ減衰で遅れて揺れる(hairSway)。
         hairLeanCont.rotation = lean;
+        hairLeanCont.position.y = bobImg;
         const bob = frame.pose.rootOffset?.[1] ?? 0;
         const bobVel = dt > 0 ? (bob - prevBob) / dt : 0;
         prevBob = bob;
@@ -321,15 +389,15 @@ export function SpriteRigPage() {
         hairVel += ((hairTarget - hairAng) * 80 - hairVel * 10) * dt; // バネ(低めの減衰=遅れて揺れる)
         hairAng += hairVel * dt;
         hairSwayCont.rotation = hairAng;
-        root.position.set(hipCanvas[0], hipCanvas[1] + (frame.pose.rootOffset?.[1] ?? 0) * bobK * S);
+        root.position.set(hipCanvas[0], hipCanvas[1]); // bobは各パーツ側で適用(足は接地固定)
 
         bonesG.visible = bonesRef.current;
         if (bonesRef.current) {
           bonesG.clear();
           const g = (M: Aff, x: number, y: number) => root.toGlobal({ x: ax(M, x, y) - HIP[0], y: ay(M, x, y) - HIP[1] });
-          const hipC = root.toGlobal({ x: 0, y: 0 });
-          const pHipL = g(IDENT, HIP_L[0], HIP_L[1]), pKL = g(WthighL, KNEE_L[0], KNEE_L[1]), pAL = g(WshinL, ANKLE_L[0], ANKLE_L[1]);
-          const pHipR = g(IDENT, HIP_R[0], HIP_R[1]), pKR = g(WthighR, KNEE_R[0], KNEE_R[1]), pAR = g(WshinR, ANKLE_R[0], ANKLE_R[1]);
+          const hipC = g(transBob, HIP[0], HIP[1]);
+          const pHipL = g(transBob, HIP_L[0], HIP_L[1]), pKL = g(WthighL, KNEE_L[0], KNEE_L[1]), pAL = g(WshinL, ANKLE_L[0], ANKLE_L[1]);
+          const pHipR = g(transBob, HIP_R[0], HIP_R[1]), pKR = g(WthighR, KNEE_R[0], KNEE_R[1]), pAR = g(WshinR, ANKLE_R[0], ANKLE_R[1]);
           bonesG.moveTo(hipC.x, hipC.y).lineTo(pHipL.x, pHipL.y).lineTo(pKL.x, pKL.y).lineTo(pAL.x, pAL.y);
           bonesG.moveTo(hipC.x, hipC.y).lineTo(pHipR.x, pHipR.y).lineTo(pKR.x, pKR.y).lineTo(pAR.x, pAR.y);
           const sh = (k: string) => conts.get(k)!.toGlobal({ x: 0, y: 0 });
@@ -360,6 +428,7 @@ export function SpriteRigPage() {
       <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
         <button className="ui-btn" onClick={() => setPlaying((p) => !p)}>{playing ? "⏹ 停止" : "▶ 歩く"}</button>
         <button className="ui-btn" onClick={() => setMeshMode((m) => !m)}>脚: {meshMode ? "メッシュ変形" : "剛体カットアウト"}</button>
+        <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK(地面固定)" : "FK(従来)"}</button>
         <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
         <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
       </div>
