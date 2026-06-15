@@ -338,18 +338,22 @@ export function SpriteRigPage() {
 
       setStatus("");
 
-      // 舞台用: facing 反転は scale.x + 足のz順のみ。チビ前向き体型は鏡反転で
-      // 前/奥の関係が自動的に正しくなるが、足sprite(footL/R)は addChild順固定なので
-      // 近側の足が反対側に来たとき重なり順が逆転する。隣接2要素として入れ替える。
+      // 舞台用: facing 反転は scale.x + 隣接2要素のz順swap。チビ前向き体型は鏡反転で
+      // 前/奥が自動補正されるが、固定 addChild順の独立スプライト(足靴と剛体カットアウト
+      // 脚)は近側が反対側に飛ぶと重なり順が逆転するので入れ替える。
+      // (ミックス/単一メッシュの脚は1つの連続メッシュなのでz順は不要)
+      const swapZ = (parent: typeof root, top: typeof footL, other: typeof footL) => {
+        if (top.parent !== parent || other.parent !== parent) return;
+        const ti = parent.getChildIndex(top), oi = parent.getChildIndex(other);
+        if (ti < oi) parent.setChildIndex(top, oi);
+      };
       applyFacingRef.current = (newFacing: "left" | "right") => {
         const facingLeft = newFacing === "left";
         root.scale.x = facingLeft ? S : -S;
-        const topFoot = facingLeft ? footR : footL;
-        const otherFoot = facingLeft ? footL : footR;
-        if (topFoot.parent === root && otherFoot.parent === root) {
-          const top = root.getChildIndex(topFoot), oth = root.getChildIndex(otherFoot);
-          if (top < oth) root.setChildIndex(topFoot, oth);
-        }
+        // 足靴: 左向きは footR(画像右=近側) を上、右向きは footL(画像右=近側) を上
+        swapZ(root, facingLeft ? footR : footL, facingLeft ? footL : footR);
+        // 剛体カットアウト脚: tL/tR は legCutout の中。左向きは tR、右向きは tL を上に
+        swapZ(legCutout, facingLeft ? tR : tL, facingLeft ? tL : tR);
       };
 
       const walk = CLIP_WALK_GIRL;
