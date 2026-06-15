@@ -210,6 +210,9 @@ export function SpriteRigPage() {
       // 1.5) 右腕(画像左)= 後ろ髪のすぐ前・他すべて(脚/体/頭)の背面
       const backArm = new Container(); root.addChild(backArm);
       buildArm("upperArmL", backArm); buildArm("forearmL", backArm);
+      // 1.6) 奥靴コンテナ(footL=texture-L=奥側 をここに入れる)。
+      //      奥脚のすぐ前(=奥脚のトラウザ裾が奥靴の上端を隠す)。
+      const shoeBack = new Container(); root.addChild(shoeBack);
 
       // 2) 下半身メッシュ(ズボン全体を骨盤+両脚にスキニング)
       const COLS = 11, ROWS = 16;
@@ -331,8 +334,11 @@ export function SpriteRigPage() {
       // 細いストリップ(主に底のmerged領域)は捨てる。
       const FOOT_L: Frame = [523, 875, 78, 119]; // 左靴のみ(x523-600)
       const FOOT_R: Frame = [606, 880, 72, 114]; // 右靴のみ(x606-677)
-      const footL = new Container(); const fls = new Sprite(sub("footwear.png", FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); root.addChild(footL);
-      const footR = new Container(); const frs = new Sprite(sub("footwear.png", FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); root.addChild(footR);
+      // footL は texture-L = 奥側 → shoeBack へ。footR は texture-R = 手前側 → shoeFront へ。
+      // 鏡反転で前/奥が自動的に正しい canvas 側に飛ぶ(legBack/legFront と同じ規約)。
+      const shoeFront = new Container(); // upper の後で root に追加(z位置=手前脚の直前)
+      const footL = new Container(); const fls = new Sprite(sub("footwear.png", FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); shoeBack.addChild(footL);
+      const footR = new Container(); const frs = new Sprite(sub("footwear.png", FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); shoeFront.addChild(footR);
 
       // 3) 上半身(左腕=体の前 + 前面レイヤー)
       const upper = new Container();
@@ -340,7 +346,9 @@ export function SpriteRigPage() {
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
       for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
 
-      // 4) 手前脚レイヤー: upper の後(=体の前面)。脚は y>437 なので頭/顔(y<227)とは
+      // 4) 手前靴レイヤー(upper の後・手前脚の前)。手前脚のトラウザ裾が手前靴の上端を覆う。
+      root.addChild(shoeFront);
+      // 5) 手前脚レイヤー: upper/shoeFront の後(=体の前面)。脚は y>437 なので頭/顔(y<227)とは
       //    重ならず、topwear のごく下端(~5px)にだけ少しかぶる程度の depth が出る。
       //    upper のlean/bobは継承させたくないので root の最後尾に。
       root.addChild(legFront);
