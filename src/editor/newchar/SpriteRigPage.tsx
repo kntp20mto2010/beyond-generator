@@ -133,8 +133,26 @@ export function SpriteRigPage() {
       const sub = (file: string, f: Frame) => new Texture({ source: texByFile.get(file)!.source, frame: new Rectangle(f[0], f[1], f[2], f[3]) });
       const placed = (l: Layer) => { const s = new Sprite(sub(l.file, l.frame)); s.position.set(l.frame[0] - HIP[0], l.frame[1] - HIP[1]); return s; };
 
-      // 1) 後ろ髪
+      // 腕インフラ(剛体カットアウト。host=描画する親コンテナ)
+      const conts = new Map<string, Container>();
+      const armDriven: { cont: Container; bone: BoneId; amp: number }[] = [];
+      const armPivots = new Map<string, [number, number]>([["upper", HIP]]);
+      for (const p of ARMS) armPivots.set(p.key, p.pivot);
+      const buildArm = (key: string, host: Container) => {
+        const p = ARMS.find((q) => q.key === key)!;
+        const parentCont = p.parent === "upper" ? host : conts.get(p.parent)!;
+        const pp = armPivots.get(p.parent)!;
+        const cont = new Container(); cont.position.set(p.pivot[0] - pp[0], p.pivot[1] - pp[1]);
+        const s = new Sprite(sub(p.file, p.frame)); s.position.set(p.frame[0] - p.pivot[0], p.frame[1] - p.pivot[1]);
+        cont.addChild(s); parentCont.addChild(cont); conts.set(p.key, cont);
+        if (p.bone) armDriven.push({ cont, bone: p.bone, amp: p.amp ?? 1 });
+      };
+
+      // 1) 後ろ髪(最奥)
       for (const l of BACK_LAYERS) root.addChild(placed(l));
+      // 1.5) 右腕(画像左)= 後ろ髪のすぐ前・他すべて(脚/体/頭)の背面
+      const backArm = new Container(); root.addChild(backArm);
+      buildArm("upperArmL", backArm); buildArm("forearmL", backArm);
 
       // 2) 下半身メッシュ(ズボン全体を骨盤+両脚にスキニング)
       const COLS = 11, ROWS = 16;
@@ -201,26 +219,11 @@ export function SpriteRigPage() {
       const footL = new Container(); const fls = new Sprite(sub("footwear.png", FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); root.addChild(footL);
       const footR = new Container(); const frs = new Sprite(sub("footwear.png", FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); root.addChild(footR);
 
-      // 3) 上半身(腕=剛体 + 前面レイヤー)
+      // 3) 上半身(左腕=体の前 + 前面レイヤー)
       const upper = new Container();
       root.addChild(upper);
-      const conts = new Map<string, Container>();
-      const armDriven: { cont: Container; bone: BoneId; amp: number }[] = [];
-      const pivots = new Map<string, [number, number]>([["upper", HIP]]);
-      for (const p of ARMS) pivots.set(p.key, p.pivot);
-      const buildArm = (key: string) => {
-        const p = ARMS.find((q) => q.key === key)!;
-        const parentCont = p.parent === "upper" ? upper : conts.get(p.parent)!;
-        const pp = pivots.get(p.parent)!;
-        const cont = new Container(); cont.position.set(p.pivot[0] - pp[0], p.pivot[1] - pp[1]);
-        const s = new Sprite(sub(p.file, p.frame)); s.position.set(p.frame[0] - p.pivot[0], p.frame[1] - p.pivot[1]);
-        cont.addChild(s); parentCont.addChild(cont); conts.set(p.key, cont);
-        if (p.bone) armDriven.push({ cont, bone: p.bone, amp: p.amp ?? 1 });
-      };
-      // 画像左の腕(=キャラの右腕)は体(上着)の後ろ。画像右の腕(=キャラの左腕)は上着の前。
-      buildArm("upperArmL"); buildArm("forearmL"); // 後ろ
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
-      buildArm("upperArmR"); buildArm("forearmR"); // 上着の前
+      buildArm("upperArmR", upper); buildArm("forearmR", upper); // 左腕(画像右)= 上着の前
       for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
 
       const bonesG = new Graphics();
