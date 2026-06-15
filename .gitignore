@@ -6,3 +6,6 @@ exports/
 
 # エージェント間キュー(履歴に残すかは運用で判断 — docs/spec/10参照)
 .agent-tasks/
+
+# 新キャラタブのスナップ出力(Codex レビュー用の一時画像、commit 対象外)
+tmp/

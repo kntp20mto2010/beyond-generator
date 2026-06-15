@@ -131,6 +131,16 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const poseRef = useRef<PoseKey>("walk-girl");
   const exprRef = useRef<ExprKey>("normal");
   const applyFacingRef = useRef<((f: "left" | "right") => void) | null>(null);
+  // フレーム表示 + スクラブ + スナップ用。
+  // scrubRef.current=秒指定で playback override(null=自動再生)。tRef は表示用に毎フレーム更新。
+  const appRef = useRef<Application | null>(null);
+  const tRef = useRef(0);
+  const clipDurRef = useRef(1);
+  // ratio (0..1) で保持。秒換算は ticker 内で curDur を掛けて行う(ポーズ切替で
+  // duration が変わっても「50%」は常に「50%」のまま追従する)。null = 自動再生。
+  const scrubRef = useRef<number | null>(null);
+  const snapRef = useRef<(name?: string) => Promise<string | null>>(async () => null);
+  const frameDisplayRef = useRef<HTMLSpanElement>(null);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
@@ -143,6 +153,8 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const [facing, setFacing] = useState<"left" | "right">("left");
   const [pose, setPose] = useState<PoseKey>("walk-girl");
   const [expression, setExpression] = useState<ExprKey>("normal");
+  const [scrubPct, setScrubPct] = useState<string>("");
+  const [snapStatus, setSnapStatus] = useState<string>("");
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
@@ -157,6 +169,16 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   poseRef.current = pose;
   exprRef.current = expression;
   const LEG_LABEL = { mesh: "単一メッシュ", mix: "ミックス(剛体+継ぎ目/左右分離)", cutout: "剛体カットアウト" } as const;
+
+  // scrubPct(0..100) → scrubRef.current(ratio 0..1)。空文字=自動再生。
+  useEffect(() => {
+    if (scrubPct === "") {
+      scrubRef.current = null;
+    } else {
+      const p = parseFloat(scrubPct);
+      if (!isNaN(p)) scrubRef.current = p / 100;
+    }
+  }, [scrubPct]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -468,12 +490,55 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       // blinkCooldown は次のまばたきまでの秒(2.5–5.5s)。
       let blinkCooldown = 2.5 + Math.random() * 3;
       let blinkPhase = -1;
+      let frameDispCount = 0; // DOM フレーム表示の更新カウンタ(~100ms 毎)
       const eyeHoldRef = { current: null as number | null }; // DEV: scale.y を固定して目検証
 
-      // DEV: 位相を固定してキーポーズ単体を検証するためのスクラブフック
-      const scrubRef = { current: null as number | null };
+      // app と snap を ref に bind(JSX ボタンと DEV フックから参照)。
+      appRef.current = app;
+      snapRef.current = async (name) => {
+        const a = appRef.current;
+        if (!a) return null;
+        // プレビュー iframe が非表示だと rAF がスロットルされて scrub/pose の変更が
+        // ticker に反映されないまま snap が走る → 古い canvas を撮ってしまう。
+        // 明示的に ticker を 1 回回してから extract する。
+        try { a.ticker.update(performance.now()); } catch { /* noop */ }
+        // Pixi の実画素 canvas(DPR=2 で 960x1320) → 480x660 にダウンサンプル PNG
+        const src = a.renderer.extract.canvas(a.stage) as HTMLCanvasElement;
+        const TW = 480, TH = 660;
+        const dst = document.createElement("canvas");
+        dst.width = TW; dst.height = TH;
+        const ctx = dst.getContext("2d");
+        if (!ctx) return null;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(src, 0, 0, src.width, src.height, 0, 0, TW, TH);
+        const dataUrl = dst.toDataURL("image/png");
+        const dur = clipDurRef.current || 1;
+        const phase = ((tRef.current % dur) / dur) * 100;
+        const charId = cfg.dir.split("/").pop() || "char";
+        const fullName = `${charId}-${poseRef.current}-${name || "snap"}-p${phase.toFixed(0)}`;
+        try {
+          const r = await fetch("/__pose-snapshot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: fullName, dataUrl }),
+          });
+          const j = await r.json() as { path?: string; bytes?: number };
+          return j.path ?? null;
+        } catch (e) { console.error("snap failed", e); return null; }
+      };
+
+      // DEV: 位相固定/スナップ/まばたきの検証フック
       if (import.meta.env.DEV) {
-        (globalThis as unknown as { __rigScrub?: (v: number | null) => void }).__rigScrub = (v) => { scrubRef.current = v; };
+        // __rigFrame(0.5) = 50% of current pose. null/未指定 = 自動再生に戻す。
+        (globalThis as unknown as { __rigFrame?: (phase01: number | null) => void }).__rigFrame = (p) => {
+          scrubRef.current = p == null ? null : Math.max(0, Math.min(1, p));
+        };
+        // 旧 __rigScrub(秒指定)は __rigFrame に統合。互換のため ratio に変換して受ける。
+        (globalThis as unknown as { __rigScrub?: (v: number | null) => void }).__rigScrub = (v) => {
+          scrubRef.current = v == null ? null : Math.max(0, Math.min(1, v / clipDurRef.current));
+        };
+        (globalThis as unknown as { __rigSnap?: (name?: string) => Promise<string | null> }).__rigSnap = (name) => snapRef.current(name);
         (globalThis as unknown as { __rigApp?: Application }).__rigApp = app;
         (globalThis as unknown as { __rigEye?: () => number }).__rigEye = () => eyeCont.scale.y;
         (globalThis as unknown as { __rigBlinkNow?: () => void }).__rigBlinkNow = () => { blinkPhase = 0; };
@@ -484,9 +549,21 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       app.ticker.add(() => {
         const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
         if (scrubRef.current == null && playingRef.current) t += dt;
-        const tt = scrubRef.current ?? t;
         const clip = POSES[poseRef.current].clip;
-        const frame = clip ? sampleClip(clip, tt % clip.duration) : EMPTY_FRAME;
+        const curDur = clip?.duration ?? 1;
+        // scrubRef は ratio(0..1)。null=自動。秒換算は curDur を掛ける(ポーズが
+        // 切り替わっても%指定はそのまま追従する)。
+        const tt = scrubRef.current != null ? scrubRef.current * curDur : t;
+        const frame = clip ? sampleClip(clip, tt % curDur) : EMPTY_FRAME;
+        clipDurRef.current = curDur;
+        tRef.current = tt;
+        frameDispCount++;
+        if (frameDispCount % 6 === 0 && frameDisplayRef.current) {
+          const inDur = tt % curDur;
+          const pct = curDur > 0 ? (inDur / curDur) * 100 : 0;
+          frameDisplayRef.current.textContent =
+            `${inDur.toFixed(2)}s / ${curDur.toFixed(2)}s (${pct.toFixed(0)}%)`;
+        }
         const rot = frame.pose.rotations ?? {};
         const sg = signRef.current;
         const ikOn = ikRef.current;
@@ -800,6 +877,24 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
             options={(Object.keys(POSES) as PoseKey[]).map((k) => ({ value: k, label: POSES[k].label }))} />
           <ToolSelect label="表情" value={expression} onChange={(v) => setExpression(v as ExprKey)}
             options={(Object.keys(EXPRS) as ExprKey[]).map((k) => ({ value: k, label: EXPRS[k].label }))} />
+          <span style={{ fontSize: "11px", color: "var(--text-dim)", fontFamily: "monospace", minWidth: "170px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+            📍 <span ref={frameDisplayRef}>0.00s / 0.00s (0%)</span>
+          </span>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
+            <span style={{ color: "var(--text-dim)" }}>スクラブ%:</span>
+            <input className="ui-btn" type="number" step={1} min={0} max={100}
+              style={{ width: "62px" }}
+              placeholder="auto"
+              value={scrubPct}
+              onChange={(e) => setScrubPct(e.target.value)} />
+          </label>
+          <button className="ui-btn" onClick={async () => {
+            setSnapStatus("保存中…");
+            const p = await snapRef.current("manual");
+            setSnapStatus(p ? `→ ${p}` : "保存失敗");
+            setTimeout(() => setSnapStatus(""), 4000);
+          }}>📸 スナップ</button>
+          {snapStatus && <span style={{ fontSize: "11px", color: "var(--text-dim)", fontFamily: "monospace" }}>{snapStatus}</span>}
         </ToolSection>
         <ToolSection title="リグ">
           <button className="ui-btn" onClick={() => setLegMode((m) => (m === "mesh" ? "mix" : m === "mix" ? "cutout" : "mesh"))}>脚: {LEG_LABEL[legMode]}</button>
