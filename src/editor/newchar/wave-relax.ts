@@ -1,12 +1,12 @@
 import type { ClipDoc } from "../../core/schema/clip.js";
 
 // 「ゆったり手を振る」(どうぶつの森的なスローライフ感)。
-// 既存 CLIP_WAVE は upperArmL を上げて 0.9s で速すぎる。リョウタ/サクラは左向きなので
-// カメラ側=texture-R の upperArmR を 2.4s 周期で上前方へ。
-//
-// 肩キャップの「付け根浮遊」問題は腕メッシュ側で構造解決済み(rest/upperArm/forearm
-// の 3 ボーン skinning で上端を身体に貼り付け、その下から回転に渡す)。
-// なのでクリップ側は素直に upperArm を +150° で上げて OK。
+// 設計メモ:
+//  ・upperArm pivot を armpit に下げて回転中心は実関節。
+//  ・side-view chibi で「前方に振る」と顔と被る → 腕を真上に上げる方向にする。
+//    upperArmR=+170°(ほぼ垂直、5° だけ前傾)。
+//  ・forearmR=±20° 振り(基準 0)で手首を左右にスイング。肘は伸ばし気味。
+//    周期は 2 サイクル/2.4s ≒ 0.83Hz、sineInOut でゆったり。
 export const CLIP_WAVE_RELAX: ClipDoc = {
   formatVersion: 1,
   id: "wave-relax",
@@ -16,14 +16,14 @@ export const CLIP_WAVE_RELAX: ClipDoc = {
   virtualVelocity: 0,
   tracks: {
     bones: {
-      upperArmR: { rot: [[0, 150]] },
+      upperArmR: { rot: [[0, 180]] },
       forearmR: {
         rot: [
-          [0, -20, "sineInOut"],
-          [0.6, 20, "sineInOut"],
-          [1.2, -20, "sineInOut"],
-          [1.8, 20, "sineInOut"],
-          [2.4, -20],
+          [0, -15, "sineInOut"],
+          [0.6, 15, "sineInOut"],
+          [1.2, -15, "sineInOut"],
+          [1.8, 15, "sineInOut"],
+          [2.4, -15],
         ],
       },
       head: { rot: [[0, 5]] },

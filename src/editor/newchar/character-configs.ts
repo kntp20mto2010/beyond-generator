@@ -98,9 +98,11 @@ export const SAKURA_CFG: CharConfig = {
     { jp: "前髪", file: "front_hair.png", frame: [547, 129, 155, 181] },
   ],
   arms: [
-    { key: "upperArmL", file: "handwear.png", frame: [534, 332, 76, 161], pivot: [572, 340], parent: "upper", bone: "upperArmL", amp: 1.0 },
+    // upperArm pivot は肩キャップ天井ではなく armpit(脇=実画素の内側輪郭が最も body 寄りの y、
+    // 内側に 5px だけ寄せた点)に。これで腕を上げても回転中心が肩関節になり浮遊感が消える。
+    { key: "upperArmL", file: "handwear.png", frame: [534, 332, 76, 161], pivot: [604, 375], parent: "upper", bone: "upperArmL", amp: 1.0 },
     { key: "forearmL", file: "handwear.png", frame: [517, 493, 77, 162], pivot: [555, 500], parent: "upperArmL", bone: "forearmL", amp: 1.0 },
-    { key: "upperArmR", file: "handwear.png", frame: [663, 323, 76, 171], pivot: [701, 332], parent: "upper", bone: "upperArmR", amp: 1.0 },
+    { key: "upperArmR", file: "handwear.png", frame: [663, 323, 76, 171], pivot: [668, 383], parent: "upper", bone: "upperArmR", amp: 1.0 },
     { key: "forearmR", file: "handwear.png", frame: [666, 495, 81, 173], pivot: [706, 502], parent: "upperArmR", bone: "forearmR", amp: 1.0 },
   ],
   thighLFrame: [548, 480, 65, 230],
@@ -164,11 +166,11 @@ export const RYOUTA_CFG: CharConfig = {
     { jp: "眉", file: "eyebrow.png", frame: [552, 129, 99, 11] },
     { jp: "前髪", file: "front_hair.png", frame: [536, 43, 177, 136] },
   ],
-  // 腕は handwear 内の bbox を半分にして上腕/前腕に分割
+  // upperArm pivot は armpit(実画素計測値)へ。肩キャップではなく実関節を中心に回す。
   arms: [
-    { key: "upperArmL", file: "handwear.png", frame: [487, 284, 116, 205], pivot: [545, 292], parent: "upper", bone: "upperArmL", amp: 1.0 },
+    { key: "upperArmL", file: "handwear.png", frame: [487, 284, 116, 205], pivot: [597, 330], parent: "upper", bone: "upperArmL", amp: 1.0 },
     { key: "forearmL", file: "handwear.png", frame: [487, 489, 116, 205], pivot: [527, 495], parent: "upperArmL", bone: "forearmL", amp: 1.0 },
-    { key: "upperArmR", file: "handwear.png", frame: [691, 285, 94, 209], pivot: [738, 292], parent: "upper", bone: "upperArmR", amp: 1.0 },
+    { key: "upperArmR", file: "handwear.png", frame: [691, 285, 94, 209], pivot: [696, 334], parent: "upper", bone: "upperArmR", amp: 1.0 },
     { key: "forearmR", file: "handwear.png", frame: [691, 494, 94, 209], pivot: [738, 500], parent: "upperArmR", bone: "forearmR", amp: 1.0 },
   ],
   thighLFrame: [531, 551, 104, 299],
