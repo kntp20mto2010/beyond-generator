@@ -88,8 +88,10 @@ const ANKLE_R: [number, number] = [662, 1085];
 const HIP_L: [number, number] = [598, 545];
 const HIP_R: [number, number] = [646, 545];
 
-// クリップ(walk-girl)が既に最終角度なので脚は等倍。値はチューニング用に残す。
-const LEG_AMP = 1.0;
+// FKの脚振り。太腿(振り幅)を小さめにして遊脚が支持脚に「振り被る」のを抑える。
+// 膝の曲げ(shin)は保って歩きの表情は残す。IKモードはこの値を使わない。
+const FK_THIGH_AMP = 0.6; // 太腿の前後振り(小さい=脚が重ならない)
+const FK_SHIN_AMP = 0.9;  // 膝の曲げ量(維持)
 
 // 接地IK(その場トレッドミル): 支持脚の足首を地面へ固定し、接地中は一定速度で
 // 後方へ流す → 足が滑らない(Spine流の grounded walk)。遊脚はFK。
@@ -250,7 +252,7 @@ export function SpriteRigPage() {
       legCutout.visible = false;
       root.addChild(legCutout);
       const cutPieces: { cont: Container; bone: BoneId; pivot: [number, number]; amp: number }[] = [];
-      const buildCut = (frame: Frame, pivot: [number, number], parentCont: Container, parentPivot: [number, number], bone: BoneId | null, amp = LEG_AMP) => {
+      const buildCut = (frame: Frame, pivot: [number, number], parentCont: Container, parentPivot: [number, number], bone: BoneId | null, amp: number) => {
         const cont = new Container();
         cont.position.set(pivot[0] - parentPivot[0], pivot[1] - parentPivot[1]);
         const s = new Sprite(sub("legwear.png", frame)); s.position.set(frame[0] - pivot[0], frame[1] - pivot[1]);
@@ -258,10 +260,10 @@ export function SpriteRigPage() {
         if (bone) cutPieces.push({ cont, bone, pivot, amp });
         return cont;
       };
-      const tL = buildCut([522, 528, 112, 262], HIP_L, legCutout, HIP, "thighL");
-      buildCut([536, 786, 116, 305], KNEE_L, tL, HIP_L, "shinL");
-      const tR = buildCut([610, 528, 112, 262], HIP_R, legCutout, HIP, "thighR");
-      buildCut([612, 786, 112, 305], KNEE_R, tR, HIP_R, "shinR");
+      const tL = buildCut([522, 528, 112, 262], HIP_L, legCutout, HIP, "thighL", FK_THIGH_AMP);
+      buildCut([536, 786, 116, 305], KNEE_L, tL, HIP_L, "shinL", FK_SHIN_AMP);
+      const tR = buildCut([610, 528, 112, 262], HIP_R, legCutout, HIP, "thighR", FK_THIGH_AMP);
+      buildCut([612, 786, 112, 305], KNEE_R, tR, HIP_R, "shinR", FK_SHIN_AMP);
 
       // 足(footwear・脛末端に追従)。2足は x=605 で完全分離 → 左右フレームを重ねず分割
       const FOOT_L: Frame = [504, 1072, 103, 126]; // 左靴のみ(x504-607)
@@ -330,10 +332,10 @@ export function SpriteRigPage() {
           const [thW, shW] = legIK(hip[0], hip[1] + bobImg, tx, ty, L1, L2, 1);
           return { th: thW - restTh, sh: shW - restSh - (thW - restTh), w: plantW(phase) };
         };
-        const fkThL = deg2rad(sg * LEG_AMP * (rot["thighL"] ?? 0));
-        const fkShL = deg2rad(sg * LEG_AMP * (rot["shinL"] ?? 0));
-        const fkThR = deg2rad(sg * LEG_AMP * (rot["thighR"] ?? 0));
-        const fkShR = deg2rad(sg * LEG_AMP * (rot["shinR"] ?? 0));
+        const fkThL = deg2rad(sg * FK_THIGH_AMP * (rot["thighL"] ?? 0));
+        const fkShL = deg2rad(sg * FK_SHIN_AMP * (rot["shinL"] ?? 0));
+        const fkThR = deg2rad(sg * FK_THIGH_AMP * (rot["thighR"] ?? 0));
+        const fkShR = deg2rad(sg * FK_SHIN_AMP * (rot["shinR"] ?? 0));
         const legL = solveLeg(phaseL, HIP_L, L1L, L2L, REST_TH_L, REST_SH_L, fkThL, fkShL);
         const legR = solveLeg(phaseR, HIP_R, L1R, L2R, REST_TH_R, REST_SH_R, fkThR, fkShR);
         const thL = legL.th, shL = legL.sh, thR = legR.th, shR = legR.sh;
