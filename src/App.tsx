@@ -5,6 +5,7 @@ import { ScenePage } from "./editor/scene/ScenePage.js";
 import { CharacterEditorPage } from "./editor/character/CharacterEditorPage.js";
 import { ContactSheetPage } from "./editor/character/ContactSheetPage.js";
 import { ClipSheetPage } from "./editor/character/ClipSheetPage.js";
+import { SpriteRigPage } from "./editor/newchar/SpriteRigPage.js";
 import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
@@ -14,7 +15,7 @@ if (import.meta.env.DEV) {
   (globalThis as unknown as { __byondStore?: unknown }).__byondStore = store;
 }
 
-type Tab = "scene" | "character";
+type Tab = "scene" | "character" | "newchar";
 
 // ハッシュルートは初回判定のみ(リアクティブルーティング不要)
 const IS_CONTACT_SHEET = location.hash === "#contact-sheet";
@@ -47,11 +48,19 @@ function App() {
         >
           シーン編集
         </button>
+        <button
+          className={`app-tab${tab === "newchar" ? " app-tab--active" : ""}`}
+          onClick={() => setTab("newchar")}
+        >
+          新キャラクター
+        </button>
       </nav>
       {tab === "character" ? (
         <CharacterEditorPage fs={fs} />
-      ) : (
+      ) : tab === "scene" ? (
         <ScenePage store={store} />
+      ) : (
+        <SpriteRigPage />
       )}
     </div>
   );
