@@ -104,6 +104,7 @@ const REST_SH_R = Math.atan2(ANKLE_R[1] - KNEE_R[1], ANKLE_R[0] - KNEE_R[0]);
 const GROUND_Y = 1070; // 足を接地させる画像Y(rest足首1085より少し上=膝に余裕)
 const STEP = 170;      // 接地中に足が後退する水平距離(画像px)= 仮想ストライド
 const LIFT = 78;       // 遊脚中の足の持ち上げ高さ(画像px)→ 膝の畳み量を決める
+const BULGE_K = 1.1;   // 関節バルジ: 曲げ量に応じて膝帯を太らせる係数
 
 // 2ボーンIK: 股(hx,hy)→目標足首(tx,ty)。bend=膝の向き(+1で前/画像左へ膨らむ)。
 // 戻り値は world 角 [太腿角, 脛角](rest空間)。
@@ -126,12 +127,14 @@ export function SpriteRigPage() {
   const meshRef = useRef(true);
   const ikRef = useRef(true);
   const skinRef = useRef(true);
+  const bulgeRef = useRef(true);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
   const [meshMode, setMeshMode] = useState(true);
   const [ikMode, setIkMode] = useState(true);
   const [skinMode, setSkinMode] = useState(true);
+  const [bulgeMode, setBulgeMode] = useState(true);
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
@@ -139,6 +142,7 @@ export function SpriteRigPage() {
   meshRef.current = meshMode;
   ikRef.current = ikMode;
   skinRef.current = skinMode;
+  bulgeRef.current = bulgeMode;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -365,9 +369,24 @@ export function SpriteRigPage() {
             bUy[b] = (-bC * M.tx + aC * M.ty) / den;
           }
           const pd = posBuf.data as Float32Array;
+          // 関節バルジ: 曲げるほど膝帯を太らせる(細るのではなく膨らむ)。スキニング前に
+          // rest頂点のxを脚中心から外側へ拡大。膝帯度=太腿×脛の重み拮抗(4wt·ws)、
+          // 曲げ量=膝屈曲|shin|。両スキン方式に適用。
+          const bulgeOn = bulgeRef.current;
+          const absShL = Math.abs(shL), absShR = Math.abs(shR);
+          const bulgeX = (v: number, rx: number): number => {
+            if (!bulgeOn) return rx;
+            const kneeL = 4 * W[v * 5 + 1]! * W[v * 5 + 2]!, kneeR = 4 * W[v * 5 + 3]! * W[v * 5 + 4]!;
+            const band = kneeL + kneeR;
+            if (band < 1e-4) return rx;
+            const bend = (kneeL * absShL + kneeR * absShR) / band; // 該当脚の屈曲量(rad)
+            const cX = (kneeL * KNEE_L[0] + kneeR * KNEE_R[0]) / band; // 脚中心x
+            const spread = Math.sqrt(band); // 膝帯を少し広げて滑らかに膨らます
+            return cX + (rx - cX) * (1 + BULGE_K * spread * bend);
+          };
           if (skinRef.current) {
             for (let v = 0; v < nV; v++) {
-              const rx = rest[v * 2]!, ry = rest[v * 2 + 1]!;
+              const rx = bulgeX(v, rest[v * 2]!), ry = rest[v * 2 + 1]!;
               let th = 0, ux = 0, uy = 0;
               for (let b = 0; b < 5; b++) {
                 const w = W[v * 5 + b]!; if (w === 0) continue;
@@ -384,7 +403,7 @@ export function SpriteRigPage() {
           } else {
             // 比較用: 従来のLBS(行列のまま線形ブレンド → 関節でつぶれる candy-wrapper)
             for (let v = 0; v < nV; v++) {
-              const rx = rest[v * 2]!, ry = rest[v * 2 + 1]!;
+              const rx = bulgeX(v, rest[v * 2]!), ry = rest[v * 2 + 1]!;
               let dx = 0, dy = 0;
               for (let b = 0; b < 5; b++) {
                 const w = W[v * 5 + b]!; if (w === 0) continue;
@@ -472,6 +491,7 @@ export function SpriteRigPage() {
         <button className="ui-btn" onClick={() => setMeshMode((m) => !m)}>脚: {meshMode ? "メッシュ変形" : "剛体カットアウト"}</button>
         <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK(地面固定)" : "FK(従来)"}</button>
         <button className="ui-btn" onClick={() => setSkinMode((m) => !m)}>スキン: {skinMode ? "対数ブレンド(自然)" : "LBS(線形=つぶれ)"}</button>
+        <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "膨らむ(バルジ)" : "通常"}</button>
         <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
         <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
       </div>
