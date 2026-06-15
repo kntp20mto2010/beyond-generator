@@ -133,7 +133,10 @@ export const SAKURA_CFG: CharConfig = {
 export const RYOUTA_CFG: CharConfig = {
   dir: "/assets/characters/ryouta",
   label: "リョウタ(男子)",
-  hip: [635, 580],
+  // hip は「ボーン表示」で脚2つが合流する点。hipL/hipR の中点(x=637)を上に少し上げた所。
+  // hipCanvas は canvas 上の HIP 描画位置で、`position = frame - HIP` の式から
+  // HIP を変えると見た目位置が逆向きにズレるため、hipCanvas で打ち消す。
+  hip: [637, 575],
   hairPivot: [628, 70],
   hipL: [612, 595],
   hipR: [662, 595],
@@ -141,7 +144,7 @@ export const RYOUTA_CFG: CharConfig = {
   kneeR: [670, 850],
   ankleL: [572, 1115],
   ankleR: [678, 1115],
-  hipCanvas: [240, 296],
+  hipCanvas: [238, 291],
   bobK: 1.4,
   groundY: 1100, step: 140, lift: 70,
   backLayers: [{ jp: "後ろ髪", file: "back_hair.png", frame: [520, 22, 216, 212] }],

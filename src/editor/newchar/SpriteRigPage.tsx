@@ -714,7 +714,19 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
                 <tr key={r.file} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ padding: "3px 6px", color: "var(--text-dim)" }}>{i + 1}</td>
                   <td style={{ padding: "3px 6px" }}>
-                    <img src={`${cfg.dir}/${r.file.replace(".png", "_thumb.png")}`} alt={r.jp} style={{ width: 40, height: 40, objectFit: "contain", background: "#dfe4ea", borderRadius: "3px", display: "block" }} />
+                    <img
+                      src={`${cfg.dir}/${r.file.replace(".png", "_thumb.png")}`}
+                      alt={r.jp}
+                      onError={(e) => {
+                        // _thumb.png が無いキャラは本体 PNG をフォールバック(40px縮小なので帯域コストは軽微)
+                        const img = e.currentTarget;
+                        if (!img.dataset.fallback) {
+                          img.dataset.fallback = "1";
+                          img.src = `${cfg.dir}/${r.file}`;
+                        }
+                      }}
+                      style={{ width: 40, height: 40, objectFit: "contain", background: "#dfe4ea", borderRadius: "3px", display: "block" }}
+                    />
                   </td>
                   <td style={{ padding: "3px 6px" }}>{r.jp}</td>
                   <td style={{ padding: "3px 6px", color: r.bone.startsWith("—") ? "var(--text-dim)" : "var(--accent)" }}>{r.bone}</td>
