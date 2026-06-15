@@ -32,11 +32,12 @@ const FRONT_LAYERS: Layer[] = [
 
 // 腕(剛体)
 interface Piece { key: string; file: string; frame: Frame; pivot: [number, number]; parent: string; bone: BoneId | null; amp?: number }
+// 腕は左右一致トラックで駆動(画像左腕=clip L)。amp大きめで前進感のある振りに。
 const ARMS: Piece[] = [
-  { key: "upperArmL", file: "handwear.png", frame: [503, 266, 96, 206], pivot: [583, 282], parent: "upper", bone: "upperArmR", amp: 0.8 },
-  { key: "forearmL", file: "handwear.png", frame: [503, 452, 86, 206], pivot: [561, 458], parent: "upperArmL", bone: "forearmR", amp: 0.8 },
-  { key: "upperArmR", file: "handwear.png", frame: [686, 266, 94, 208], pivot: [716, 284], parent: "upper", bone: "upperArmL", amp: 0.8 },
-  { key: "forearmR", file: "handwear.png", frame: [686, 454, 92, 204], pivot: [716, 466], parent: "upperArmR", bone: "forearmL", amp: 0.8 },
+  { key: "upperArmL", file: "handwear.png", frame: [503, 266, 96, 206], pivot: [583, 282], parent: "upper", bone: "upperArmL", amp: 1.0 },
+  { key: "forearmL", file: "handwear.png", frame: [503, 452, 86, 206], pivot: [561, 458], parent: "upperArmL", bone: "forearmL", amp: 1.0 },
+  { key: "upperArmR", file: "handwear.png", frame: [686, 266, 94, 208], pivot: [716, 284], parent: "upper", bone: "upperArmR", amp: 1.0 },
+  { key: "forearmR", file: "handwear.png", frame: [686, 454, 92, 204], pivot: [716, 466], parent: "upperArmR", bone: "forearmR", amp: 1.0 },
 ];
 
 const TABLE: { jp: string; file: string; bone: string }[] = [
@@ -88,14 +89,18 @@ const ANKLE_R: [number, number] = [662, 1085];
 const HIP_L: [number, number] = [598, 545];
 const HIP_R: [number, number] = [646, 545];
 
+// 歩きの「自信」パラメータ。振り幅が小さいと遠慮した歩き(後ろ歩きに見える一因)。
+const LEG_AMP = 0.9; // 脚の振り幅(1=クリップ等倍 thigh±25°)
+const LEAN_DEG = -6; // 上体の前傾(左向き=画像左へ倒す)。歩行は前に倒れて受け止める動作
+
 export function SpriteRigPage() {
   const hostRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(true);
-  const signRef = useRef(-1);
+  const signRef = useRef(1);
   const bonesRef = useRef(false);
   const meshRef = useRef(true);
   const [playing, setPlaying] = useState(true);
-  const [sign, setSign] = useState(-1);
+  const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
   const [meshMode, setMeshMode] = useState(true);
   const [status, setStatus] = useState("読込中…");
@@ -200,7 +205,7 @@ export function SpriteRigPage() {
       legCutout.visible = false;
       root.addChild(legCutout);
       const cutPieces: { cont: Container; bone: BoneId; pivot: [number, number]; amp: number }[] = [];
-      const buildCut = (frame: Frame, pivot: [number, number], parentCont: Container, parentPivot: [number, number], bone: BoneId | null, amp = 0.5) => {
+      const buildCut = (frame: Frame, pivot: [number, number], parentCont: Container, parentPivot: [number, number], bone: BoneId | null, amp = LEG_AMP) => {
         const cont = new Container();
         cont.position.set(pivot[0] - parentPivot[0], pivot[1] - parentPivot[1]);
         const s = new Sprite(sub("legwear.png", frame)); s.position.set(frame[0] - pivot[0], frame[1] - pivot[1]);
@@ -208,10 +213,10 @@ export function SpriteRigPage() {
         if (bone) cutPieces.push({ cont, bone, pivot, amp });
         return cont;
       };
-      const tL = buildCut([522, 528, 112, 262], HIP_L, legCutout, HIP, "thighR");
-      buildCut([536, 786, 116, 305], KNEE_L, tL, HIP_L, "shinR");
-      const tR = buildCut([610, 528, 112, 262], HIP_R, legCutout, HIP, "thighL");
-      buildCut([612, 786, 112, 305], KNEE_R, tR, HIP_R, "shinL");
+      const tL = buildCut([522, 528, 112, 262], HIP_L, legCutout, HIP, "thighL");
+      buildCut([536, 786, 116, 305], KNEE_L, tL, HIP_L, "shinL");
+      const tR = buildCut([610, 528, 112, 262], HIP_R, legCutout, HIP, "thighR");
+      buildCut([612, 786, 112, 305], KNEE_R, tR, HIP_R, "shinR");
 
       // 足(footwear・脛末端に追従)。2足は x=605 で完全分離 → 左右フレームを重ねず分割
       const FOOT_L: Frame = [504, 1072, 103, 126]; // 左靴のみ(x504-607)
@@ -240,11 +245,12 @@ export function SpriteRigPage() {
         const frame = sampleClip(walk, t % walk.duration);
         const rot = frame.pose.rotations ?? {};
         const sg = signRef.current;
-        // 脚ボーンの world アフィン(rest空間)
-        const thL = deg2rad(sg * 0.5 * (rot["thighR"] ?? 0));
-        const shL = deg2rad(sg * 0.5 * (rot["shinR"] ?? 0));
-        const thR = deg2rad(sg * 0.5 * (rot["thighL"] ?? 0));
-        const shR = deg2rad(sg * 0.5 * (rot["shinL"] ?? 0));
+        // 脚ボーンの world アフィン(rest空間)。画像左脚=clip L で駆動 →
+        // 膝の曲げが遊脚期に同期し、支持脚は伸びる(後ろ歩きに見える不整合を解消)。
+        const thL = deg2rad(sg * LEG_AMP * (rot["thighL"] ?? 0));
+        const shL = deg2rad(sg * LEG_AMP * (rot["shinL"] ?? 0));
+        const thR = deg2rad(sg * LEG_AMP * (rot["thighR"] ?? 0));
+        const shR = deg2rad(sg * LEG_AMP * (rot["shinR"] ?? 0));
         const WthighL = rotAbout(HIP_L[0], HIP_L[1], thL);
         const WshinL = mul(WthighL, rotAbout(KNEE_L[0], KNEE_L[1], shL));
         const WthighR = rotAbout(HIP_R[0], HIP_R[1], thR);
@@ -281,7 +287,10 @@ export function SpriteRigPage() {
 
         // 腕(剛体)
         for (const { cont, bone, amp } of armDriven) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
-        upper.rotation = deg2rad(rot["torso"] ?? 0);
+        // 上体は前傾(後傾だと後ろ歩きに見える)。胴の微小スウェイを前傾に重ねる。
+        const lean = deg2rad(LEAN_DEG + 0.5 * (rot["torso"] ?? 0));
+        upper.rotation = lean;
+        backArm.rotation = lean;
         root.position.set(hipCanvas[0], hipCanvas[1] + (frame.pose.rootOffset?.[1] ?? 0) * bobK * S);
 
         bonesG.visible = bonesRef.current;
