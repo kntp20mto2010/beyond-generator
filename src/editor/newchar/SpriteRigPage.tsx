@@ -130,6 +130,8 @@ export function SpriteRigPage() {
   const ikRef = useRef(true);
   const skinRef = useRef(true);
   const bulgeRef = useRef(true);
+  const facingRef = useRef<"left" | "right">("left");
+  const applyFacingRef = useRef<((f: "left" | "right") => void) | null>(null);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
@@ -137,6 +139,7 @@ export function SpriteRigPage() {
   const [ikMode, setIkMode] = useState(true);
   const [skinMode, setSkinMode] = useState(true);
   const [bulgeMode, setBulgeMode] = useState(true);
+  const [facing, setFacing] = useState<"left" | "right">("left");
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
@@ -145,6 +148,7 @@ export function SpriteRigPage() {
   ikRef.current = ikMode;
   skinRef.current = skinMode;
   bulgeRef.current = bulgeMode;
+  facingRef.current = facing;
   const LEG_LABEL = { mesh: "単一メッシュ", mix: "ミックス(剛体+継ぎ目/左右分離)", cutout: "剛体カットアウト" } as const;
 
   useEffect(() => {
@@ -333,6 +337,41 @@ export function SpriteRigPage() {
       app.stage.addChild(bonesG);
 
       setStatus("");
+
+      // 舞台用: facing 状態が変わったとき root.scale.x の反転 + 腕コンテナ入れ替え + 脚z順入れ替え + tint入れ替え
+      // を1関数にまとめる。scale.x 反転だけでは奥/手前関係が逆転するため(レビュー指摘)。
+      let appliedFacing: "left" | "right" = "left";
+      applyFacingRef.current = (newFacing: "left" | "right") => {
+        if (newFacing === appliedFacing) return;
+        appliedFacing = newFacing;
+        const facingLeft = newFacing === "left";
+        // 1) 幾何反転
+        root.scale.x = facingLeft ? S : -S;
+        // 2) 腕コンテナ入れ替え:
+        //    左向き: upperArmL/forearmL = backArm(後ろ腕), upperArmR/forearmR = upper(前腕)
+        //    右向き: 反転。texture-L腕は前へ、texture-R腕は後ろへ
+        const armL = conts.get("upperArmL"), armR = conts.get("upperArmR");
+        if (armL && armR) {
+          const armLTarget = facingLeft ? backArm : upper;
+          const armRTarget = facingLeft ? upper : backArm;
+          if (armL.parent && armL.parent !== armLTarget) { armL.parent.removeChild(armL); armLTarget.addChild(armL); }
+          if (armR.parent && armR.parent !== armRTarget) { armR.parent.removeChild(armR); armRTarget.addChild(armR); }
+        }
+        // 3) 脚 z順入れ替え: 奥側を先(後ろ)に、手前側を後(前)に。
+        const legBack = facingLeft ? legMixR.mesh : legMixL.mesh;
+        const legFront = facingLeft ? legMixL.mesh : legMixR.mesh;
+        if (legBack.parent === root && legFront.parent === root) {
+          const backIdx = root.getChildIndex(legBack), frontIdx = root.getChildIndex(legFront);
+          if (backIdx > frontIdx) {
+            root.setChildIndex(legBack, frontIdx);
+            root.setChildIndex(legFront, backIdx);
+          }
+        }
+        // 4) tint: 奥側だけ暗く
+        legMixR.mesh.tint = facingLeft ? 0xc9c9c9 : 0xffffff;
+        legMixL.mesh.tint = facingLeft ? 0xffffff : 0xc9c9c9;
+      };
+
       const walk = CLIP_WALK_GIRL;
       let t = 0;
       const bobK = 1185 / 658;
@@ -517,6 +556,11 @@ export function SpriteRigPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 舞台の向きが変わったら、scale.x反転 + 腕コンテナ入れ替え + 脚z順入れ替え + tint入れ替えを一括適用。
+  useEffect(() => {
+    applyFacingRef.current?.(facing);
+  }, [facing]);
+
   return (
     <div style={{ height: "100%", overflow: "auto", padding: "16px", background: "var(--bg-app)", color: "var(--text)" }}>
       <div style={{ fontWeight: 700, marginBottom: "4px" }}>新キャラクター(See-through レイヤー + メッシュ/ボーン 歩行テスト)</div>
@@ -533,6 +577,7 @@ export function SpriteRigPage() {
         <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "膨らむ(バルジ)" : "通常"}</button>
         <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
         <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
+        <button className="ui-btn" onClick={() => setFacing((f) => f === "left" ? "right" : "left")}>舞台: {facing === "left" ? "← 左向き" : "右向き →"}</button>
       </div>
 
       <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" }}>
