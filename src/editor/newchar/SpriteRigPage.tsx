@@ -336,13 +336,17 @@ export function SpriteRigPage() {
       const upper = new Container();
       root.addChild(upper);
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
-      buildArm("upperArmR", upper); buildArm("forearmR", upper); // 左腕(画像右)= 上着の前
       for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
 
       // 4) 手前脚レイヤー: upper の後(=体の前面)。脚は y>437 なので頭/顔(y<227)とは
       //    重ならず、topwear のごく下端(~5px)にだけ少しかぶる程度の depth が出る。
       //    upper のlean/bobは継承させたくないので root の最後尾に。
       root.addChild(legFront);
+      // 5) 手前腕レイヤー: 手前脚の更に前。lean/bobは upper と同じ挙動なので
+      //    独立した frontArmCont を立てて、ticker で同じ rotation/position を適用。
+      const frontArmCont = new Container();
+      root.addChild(frontArmCont);
+      buildArm("upperArmR", frontArmCont); buildArm("forearmR", frontArmCont);
 
       const bonesG = new Graphics();
       app.stage.addChild(bonesG);
@@ -499,6 +503,8 @@ export function SpriteRigPage() {
         upper.position.y = bobImg;
         backArm.rotation = lean;
         backArm.position.y = bobImg;
+        frontArmCont.rotation = lean;
+        frontArmCont.position.y = bobImg;
         legCutout.position.y = bobImg;
 
         // 後ろ髪: 頭の前傾に追従(hairLean)+ 毛先がバネ減衰で遅れて揺れる(hairSway)。
