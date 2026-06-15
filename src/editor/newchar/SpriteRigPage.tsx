@@ -297,9 +297,9 @@ export function SpriteRigPage() {
       // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
       const legMixR = buildLegMesh(620, 720, 7);
       const legMixL = buildLegMesh(520, 620, 7);
-      // 舞台演出として均一照明にしたいので奥脚の暗化は無し(均一)。
-      root.addChild(legMixR.mesh);
-      root.addChild(legMixL.mesh);
+      legMixR.mesh.tint = 0xc9c9c9;                    // far脚を少し暗く(奥行き)
+      root.addChild(legMixR.mesh);                     // far を先(奥)
+      root.addChild(legMixL.mesh);                     // near を後(手前)
       legMixR.mesh.visible = false; legMixL.mesh.visible = false;
 
       // 剛体カットアウト版の脚(比較トグル用)
@@ -338,18 +338,11 @@ export function SpriteRigPage() {
 
       setStatus("");
 
-      // 舞台用: facing 反転は scale.x + 足のz順のみ。チビ前向き体型は鏡反転で
-      // 前/奥の関係が自動的に正しくなるが、足sprite(footL/R)は addChild順固定なので
-      // 近側の足が反対側に来たとき重なり順が逆転する。隣接2要素として入れ替える。
+      // 舞台用: facing 反転は scale.x のみ。チビ前向き体型は texture-L が見た目の右半身、
+      // texture-R が見た目の左半身を担うため、鏡反転だけで前/奥の関係も z順も tint も
+      // 自動的に正しく入れ替わる(texture-Rの「奥側」のtintは鏡で奥側に飛ぶ)。
       applyFacingRef.current = (newFacing: "left" | "right") => {
-        const facingLeft = newFacing === "left";
-        root.scale.x = facingLeft ? S : -S;
-        const topFoot = facingLeft ? footR : footL;
-        const otherFoot = facingLeft ? footL : footR;
-        if (topFoot.parent === root && otherFoot.parent === root) {
-          const top = root.getChildIndex(topFoot), oth = root.getChildIndex(otherFoot);
-          if (top < oth) root.setChildIndex(topFoot, oth);
-        }
+        root.scale.x = newFacing === "left" ? S : -S;
       };
 
       const walk = CLIP_WALK_GIRL;
