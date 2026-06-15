@@ -297,14 +297,15 @@ export function SpriteRigPage() {
       // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
       const legMixR = buildLegMesh(620, 720, 7);
       const legMixL = buildLegMesh(520, 620, 7);
-      // 腕(backArm/upper) と同じ構造で脚の depth を出す:
-      //  ・legBack: 奥脚を入れる。backArm と同じく root の早い位置(=体の裏)
-      //  ・legFront: 近脚を入れる。upper の最後(=体の前)に追加 → 上半身レイヤーの後ろなので
-      //    頭/顔の手前には来ず、トラウザのトップが topwear に少しだけかぶる程度の depth が出る
-      const legBack = new Container(); root.addChild(legBack);   // ↓この後 backArm が来る順
-      const legFront = new Container();                          // upper の最後に後で追加
-      legBack.addChild(legMixR.mesh);
-      legFront.addChild(legMixL.mesh);
+      // 腕(backArm/upper) と同じ構造で脚の depth を出す。腕の規約と合わせて
+      // texture-R(画像左向きでは画像右に見えるもの)が「前」、texture-L が「後」:
+      //  ・legBack(深い z): legMixL(texture-L)
+      //  ・legFront(浅い z): legMixR(texture-R)
+      // 鏡反転で「画像右の前要素」が反対側に飛ぶので左右で違う半身が上に。
+      const legBack = new Container(); root.addChild(legBack);
+      const legFront = new Container();                          // upper の後で追加
+      legBack.addChild(legMixL.mesh);
+      legFront.addChild(legMixR.mesh);
       legMixR.mesh.visible = false; legMixL.mesh.visible = false;
 
       // 剛体カットアウト版の脚(比較トグル用)
