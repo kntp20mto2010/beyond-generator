@@ -258,15 +258,21 @@ export function SpriteRigPage() {
         const rows = ROWS, n = cols * rows;
         const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
         const WA = new Float32Array(n * 5);
+        const isLeftMesh = xLo < 619; // legMixL=520, legMixR=620
         let k = 0;
         for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
           const x = xLo + (xHi - xLo) * (c / (cols - 1));
           const y = gy0 + (gy1 - gy0) * (r / (rows - 1));
           rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
-          // 単一メッシュと同じ重み構造: 上=骨盤(static), 膝でthigh→shin, 中心帯で左右脚をブレンド。
           const wP = 1 - smooth(500, 620, y);
           const kT = smooth(720, 840, y);
-          const sL = 1 - smooth(590, 650, x);
+          // sL は y で振る舞いを変える:
+          //  ・上半身(股付近): 左右脚をブレンド → midline の継ぎ目が出ない
+          //  ・膝より下: 各メッシュは自分側の脚に振り切る → 足首が引かれて細くならない
+          const sL_upper = 1 - smooth(590, 650, x);  // 緩やか
+          const sL_lower = isLeftMesh ? 1 : 0;       // 自分側に固定
+          const lowerY = smooth(700, 820, y);        // 0=股, 1=膝より下
+          const sL = sL_upper * (1 - lowerY) + sL_lower * lowerY;
           const rest5 = 1 - wP;
           WA[k * 5] = wP;
           WA[k * 5 + 1] = rest5 * sL * (1 - kT);       // thighL
