@@ -484,9 +484,9 @@ export function SpriteRigPage() {
         const bob = frame.pose.rootOffset?.[1] ?? 0;
         const bobVel = dt > 0 ? (bob - prevBob) / dt : 0;
         prevBob = bob;
-        // 目標角: 上体の傾きと逆へ毛先が流れる + 上下動の慣性(クランプ ~±9°)
-        const hairTarget = -lean * 0.6 + Math.max(-0.16, Math.min(0.16, bobVel * 0.004));
-        hairVel += ((hairTarget - hairAng) * 80 - hairVel * 10) * dt; // バネ(低めの減衰=遅れて揺れる)
+        // 目標角: 上体の傾きと逆へ毛先が流れる + 上下動の慣性(控えめに)
+        const hairTarget = -lean * 0.3 + Math.max(-0.07, Math.min(0.07, bobVel * 0.0018));
+        hairVel += ((hairTarget - hairAng) * 80 - hairVel * 16) * dt; // バネ(減衰強めで揺れを抑制)
         hairAng += hairVel * dt;
         hairSwayCont.rotation = hairAng;
         root.position.set(hipCanvas[0], hipCanvas[1]); // bobは各パーツ側で適用(足は接地固定)
