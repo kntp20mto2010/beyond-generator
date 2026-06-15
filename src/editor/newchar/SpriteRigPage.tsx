@@ -297,9 +297,9 @@ export function SpriteRigPage() {
       // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
       const legMixR = buildLegMesh(620, 720, 7);
       const legMixL = buildLegMesh(520, 620, 7);
-      legMixR.mesh.tint = 0xc9c9c9;                    // far脚を少し暗く(奥行き)
-      root.addChild(legMixR.mesh);                     // far を先(奥)
-      root.addChild(legMixL.mesh);                     // near を後(手前)
+      // 舞台演出として均一照明にしたいので奥脚の暗化は無し。z順は鏡反転で自動補正される。
+      root.addChild(legMixR.mesh);
+      root.addChild(legMixL.mesh);
       legMixR.mesh.visible = false; legMixL.mesh.visible = false;
 
       // 剛体カットアウト版の脚(比較トグル用)
