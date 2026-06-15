@@ -104,7 +104,7 @@ const REST_SH_R = Math.atan2(ANKLE_R[1] - KNEE_R[1], ANKLE_R[0] - KNEE_R[0]);
 const GROUND_Y = 1070; // 足を接地させる画像Y(rest足首1085より少し上=膝に余裕)
 const STEP = 170;      // 接地中に足が後退する水平距離(画像px)= 仮想ストライド
 const LIFT = 78;       // 遊脚中の足の持ち上げ高さ(画像px)→ 膝の畳み量を決める
-const BULGE_K = 1.1;   // 関節バルジ: 曲げ量に応じて膝帯を太らせる係数
+const BULGE_K = 0.9;   // 関節バルジ: 曲げ量に応じて脚を太らせる係数(膝でピーク)
 
 // 2ボーンIK: 股(hx,hy)→目標足首(tx,ty)。bend=膝の向き(+1で前/画像左へ膨らむ)。
 // 戻り値は world 角 [太腿角, 脛角](rest空間)。
@@ -369,20 +369,24 @@ export function SpriteRigPage() {
             bUy[b] = (-bC * M.tx + aC * M.ty) / den;
           }
           const pd = posBuf.data as Float32Array;
-          // 関節バルジ: 曲げるほど膝帯を太らせる(細るのではなく膨らむ)。スキニング前に
-          // rest頂点のxを脚中心から外側へ拡大。膝帯度=太腿×脛の重み拮抗(4wt·ws)、
-          // 曲げ量=膝屈曲|shin|。両スキン方式に適用。
+          // 関節バルジ: 曲げると脚を紡錘形に太らせる(細るのではなく膨らむ)。スキニング前に
+          // rest頂点xを脚中心から外側へ拡大。縦プロファイル= 股下→膝で増加・膝→足首で減少
+          // (膝が最高潮)。曲げ量= 膝屈曲|shin|。膝だけでなく太腿/脛も滑らかに膨らむ。両方式対応。
           const bulgeOn = bulgeRef.current;
           const absShL = Math.abs(shL), absShR = Math.abs(shR);
+          const CROTCH_Y = 560, KNEE_Y = KNEE_L[1], ANK_Y = ANKLE_L[1]; // 縦プロファイルの節
           const bulgeX = (v: number, rx: number): number => {
             if (!bulgeOn) return rx;
-            const kneeL = 4 * W[v * 5 + 1]! * W[v * 5 + 2]!, kneeR = 4 * W[v * 5 + 3]! * W[v * 5 + 4]!;
-            const band = kneeL + kneeR;
-            if (band < 1e-4) return rx;
-            const bend = (kneeL * absShL + kneeR * absShR) / band; // 該当脚の屈曲量(rad)
-            const cX = (kneeL * KNEE_L[0] + kneeR * KNEE_R[0]) / band; // 脚中心x
-            const spread = Math.sqrt(band); // 膝帯を少し広げて滑らかに膨らます
-            return cX + (rx - cX) * (1 + BULGE_K * spread * bend);
+            const lw = W[v * 5 + 1]! + W[v * 5 + 2]!, rw = W[v * 5 + 3]! + W[v * 5 + 4]!;
+            const legW = lw + rw;
+            if (legW < 1e-4) return rx; // 脚でない(骨盤帯)
+            const ry = rest[v * 2 + 1]!;
+            // 紡錘プロファイル: 股下(0)→膝(1)→足首(0)を smoothstep で滑らかに
+            const prof = ry <= KNEE_Y ? smooth(CROTCH_Y, KNEE_Y, ry) : 1 - smooth(KNEE_Y, ANK_Y, ry);
+            if (prof <= 0) return rx;
+            const bend = (lw * absShL + rw * absShR) / legW; // 該当脚の屈曲量(rad)
+            const cX = (lw * 590 + rw * 654) / legW;          // 脚中心x(左590/右654)
+            return cX + (rx - cX) * (1 + BULGE_K * prof * bend);
           };
           if (skinRef.current) {
             for (let v = 0; v < nV; v++) {
