@@ -141,6 +141,9 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const scrubRef = useRef<number | null>(null);
   const snapRef = useRef<(name?: string) => Promise<string | null>>(async () => null);
   const frameDisplayRef = useRef<HTMLSpanElement>(null);
+  // pivot エディタ用。hovered/dragging は armKey("upperArmL" 等)を保持。
+  const editStateRefOuter = useRef<{ hovered: string | null; dragging: string | null }>({ hovered: null, dragging: null });
+  const pointerCleanupRef = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
@@ -155,6 +158,7 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const [expression, setExpression] = useState<ExprKey>("normal");
   const [scrubPct, setScrubPct] = useState<string>("");
   const [snapStatus, setSnapStatus] = useState<string>("");
+  const [saveStatus, setSaveStatus] = useState<string>("");
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
@@ -546,6 +550,78 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           (v) => { eyeHoldRef.current = v; };
       }
 
+      // ───────────────────────────────────────────────────────────────────────
+      // インタラクティブ pivot エディタ: 🦴 ボーン ON のとき、腕の付け根/肘 dot を
+      // ホバー → ドラッグで動かせる。texture 座標は parent 容器の toLocal で逆算。
+      // 結果は cfg.arms[i].pivot を in-place mutate するだけ。container.position と
+      // sprite.position は ticker 側で毎フレーム再設定するので即座に追従する。
+      // 「💾 軸保存」で /__rig-save に POST して character-configs.ts に書き戻し。
+      const editStateRef = editStateRefOuter; // 既に component scope で持っている
+      const HIT_R = 14;
+      const screenPosOf = (armKey: string) => {
+        const c = conts.get(armKey);
+        return c ? c.toGlobal({ x: 0, y: 0 }) : null;
+      };
+      const findArmAt = (mx: number, my: number): string | null => {
+        for (const p of ARMS) {
+          const s = screenPosOf(p.key);
+          if (!s) continue;
+          const dx = s.x - mx, dy = s.y - my;
+          if (dx * dx + dy * dy <= HIT_R * HIT_R) return p.key;
+        }
+        return null;
+      };
+      const onPM = (e: PointerEvent) => {
+        if (!bonesRef.current) return;
+        const rect = host.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        if (editStateRef.current.dragging) {
+          const armConf = ARMS.find((a) => a.key === editStateRef.current.dragging);
+          if (!armConf) return;
+          const parent = armConf.parent === "upper" ? upper : conts.get(armConf.parent);
+          if (!parent) return;
+          const parentLocal = parent.toLocal({ x: mx, y: my });
+          const pp = armPivots.get(armConf.parent);
+          if (!pp) return;
+          armConf.pivot[0] = parentLocal.x + pp[0];
+          armConf.pivot[1] = parentLocal.y + pp[1];
+          e.preventDefault();
+        } else {
+          const hit = findArmAt(mx, my);
+          editStateRef.current.hovered = hit;
+          host.style.cursor = hit ? "grab" : "";
+        }
+      };
+      const onPD = (e: PointerEvent) => {
+        if (!bonesRef.current) return;
+        const rect = host.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const hit = findArmAt(mx, my);
+        if (hit) {
+          editStateRef.current.dragging = hit;
+          host.setPointerCapture?.(e.pointerId);
+          host.style.cursor = "grabbing";
+          e.preventDefault();
+        }
+      };
+      const onPU = (e: PointerEvent) => {
+        if (editStateRef.current.dragging) {
+          editStateRef.current.dragging = null;
+          try { host.releasePointerCapture?.(e.pointerId); } catch { /* noop */ }
+          host.style.cursor = editStateRef.current.hovered ? "grab" : "";
+        }
+      };
+      host.addEventListener("pointermove", onPM);
+      host.addEventListener("pointerdown", onPD);
+      host.addEventListener("pointerup", onPU);
+      host.addEventListener("pointercancel", onPU);
+      pointerCleanupRef.current = () => {
+        host.removeEventListener("pointermove", onPM);
+        host.removeEventListener("pointerdown", onPD);
+        host.removeEventListener("pointerup", onPU);
+        host.removeEventListener("pointercancel", onPU);
+      };
+
       app.ticker.add(() => {
         const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
         if (scrubRef.current == null && playingRef.current) t += dt;
@@ -682,6 +758,15 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         placeFoot(footR, WshinR, ANKLE_R, rotAny["ankleR"] ?? 0, legR.w);
 
         // 腕(剛体)
+        // pivot 編集に追従するため container.position と sprite.position を毎フレーム再設定。
+        for (const p of ARMS) {
+          const cont = conts.get(p.key);
+          const pp = armPivots.get(p.parent);
+          if (!cont || !pp) continue;
+          cont.position.set(p.pivot[0] - pp[0], p.pivot[1] - pp[1]);
+          const spr = cont.children[0];
+          if (spr) spr.position.set(p.frame[0] - p.pivot[0], p.frame[1] - p.pivot[1]);
+        }
         for (const { cont, bone, amp } of armDriven) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
         // 腕ミックス: cutout↔mix トグル。mix時は cutout sprite を隠して mesh を log-blendスキニング。
         const armMixOn = armModeRef.current === "mix";
@@ -838,11 +923,26 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           bonesG.stroke({ width: 3, color: 0x3aa0ff, alpha: 0.9 });
           for (const p of [hipC, pHipL, pKL, pAL, pHipR, pKR, pAR, sh("upperArmL"), sh("forearmL"), wL, sh("upperArmR"), sh("forearmR"), wR, neck, headTop])
             bonesG.circle(p.x, p.y, 5).fill({ color: 0xff5a3a });
+          // 編集対象(腕 pivot)を黄色リングで強調。ドラッグ中はさらに太く。
+          for (const p of ARMS) {
+            const c = conts.get(p.key);
+            if (!c) continue;
+            const isDrag = editStateRefOuter.current.dragging === p.key;
+            const isHover = editStateRefOuter.current.hovered === p.key;
+            if (!isDrag && !isHover) continue;
+            const sp = c.toGlobal({ x: 0, y: 0 });
+            bonesG.circle(sp.x, sp.y, isDrag ? 13 : 10).stroke({ width: isDrag ? 3 : 2, color: 0xffd400, alpha: 0.95 });
+          }
         }
       });
     })();
 
-    return () => { disposed = true; if (app.renderer) app.destroy(true, { children: true }); };
+    return () => {
+      disposed = true;
+      pointerCleanupRef.current?.();
+      pointerCleanupRef.current = null;
+      if (app.renderer) app.destroy(true, { children: true });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -907,6 +1007,22 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>🦴 ボーン{showBones ? "OFF" : "ON"}</button>
           <button className="ui-btn" onClick={() => setWireMode((w) => !w)}>🔲 メッシュ{wireMode ? "OFF" : "ON"}</button>
           <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚振り反転({sign > 0 ? "+" : "−"})</button>
+          <button className="ui-btn" onClick={async () => {
+            setSaveStatus("保存中…");
+            const arms = cfg.arms.map((a) => ({ key: a.key, pivot: [a.pivot[0], a.pivot[1]] as [number, number] }));
+            const charId = cfg.dir.split("/").pop() || "";
+            try {
+              const r = await fetch("/__rig-save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ char: charId, arms }),
+              });
+              const j = await r.json() as { ok?: boolean; replaced?: number };
+              setSaveStatus(j.ok ? `${j.replaced} 件保存` : "保存失敗");
+            } catch { setSaveStatus("通信失敗"); }
+            setTimeout(() => setSaveStatus(""), 4000);
+          }}>💾 軸保存</button>
+          {saveStatus && <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>{saveStatus}</span>}
         </ToolSection>
         <ToolSection title="舞台">
           <button className="ui-btn" onClick={() => setFacing((f) => f === "left" ? "right" : "left")}>{facing === "left" ? "← 左向き" : "右向き →"}</button>

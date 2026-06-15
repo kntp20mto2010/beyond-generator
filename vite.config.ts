@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 
 // 新キャラタブのスナップ機能専用 middleware。
 // POST /__pose-snapshot { name, dataUrl } → tmp/pose-snapshots/<ts>-<name>.png に保存し
@@ -44,7 +44,60 @@ function poseSnapshotPlugin(): Plugin {
   };
 }
 
+// CharConfig の指定キャラの腕 pivot を character-configs.ts に書き戻す。
+// arms: [{ key, pivot: [x, y] }] を受け取り、SAKURA_CFG/RYOUTA_CFG のブロック内で
+// `key: "<KEY>"` を含む {…} の `pivot: [a, b]` 数値だけを置換。
+function rigSavePlugin(): Plugin {
+  return {
+    name: "rig-save",
+    configureServer(server) {
+      server.middlewares.use("/__rig-save", async (req, res) => {
+        if (req.method !== "POST") { res.statusCode = 405; res.end("POST only"); return; }
+        try {
+          let body = "";
+          for await (const chunk of req) body += chunk as string;
+          const { char, arms } = JSON.parse(body) as {
+            char?: string;
+            arms?: { key: string; pivot: [number, number] }[];
+          };
+          const CONST_BY_CHAR: Record<string, string> = { sakura: "SAKURA_CFG", ryouta: "RYOUTA_CFG" };
+          const constName = CONST_BY_CHAR[char ?? ""];
+          if (!constName || !Array.isArray(arms)) {
+            res.statusCode = 400; res.end("bad payload"); return;
+          }
+          const path = "src/editor/newchar/character-configs.ts";
+          const orig = await readFile(path, "utf8");
+          const startRe = new RegExp(`export const ${constName}: CharConfig = \\{`);
+          const m = startRe.exec(orig);
+          if (!m) { res.statusCode = 500; res.end("const not found"); return; }
+          const blockStart = m.index;
+          const closeOffset = orig.slice(blockStart).indexOf("\n};");
+          if (closeOffset < 0) { res.statusCode = 500; res.end("block close not found"); return; }
+          const blockEnd = blockStart + closeOffset;
+          let block = orig.slice(blockStart, blockEnd);
+          let n = 0;
+          for (const a of arms) {
+            const [px, py] = a.pivot;
+            // { key: "<KEY>", ... pivot: [a, b], ... } の数値だけを置換。
+            // arms 配列の各要素は 1 行で書かれている前提(現状の整形に一致)。
+            const pat = new RegExp(`(\\{[^}]*key:\\s*"${a.key}"[^}]*pivot:\\s*\\[)\\s*\\d+\\s*,\\s*\\d+\\s*(\\])`);
+            const next = block.replace(pat, `$1${Math.round(px)}, ${Math.round(py)}$2`);
+            if (next !== block) { n++; block = next; }
+          }
+          const newOrig = orig.slice(0, blockStart) + block + orig.slice(blockEnd);
+          await writeFile(path, newOrig);
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ ok: true, char, replaced: n }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(String((e as Error)?.message ?? e));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), poseSnapshotPlugin()],
+  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin()],
   server: { port: 5273, strictPort: true },
 });
