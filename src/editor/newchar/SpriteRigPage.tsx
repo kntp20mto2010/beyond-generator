@@ -297,9 +297,14 @@ export function SpriteRigPage() {
       // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
       const legMixR = buildLegMesh(620, 720, 7);
       const legMixL = buildLegMesh(520, 620, 7);
-      // 舞台演出として均一照明にしたいので奥脚の暗化は無し。z順は鏡反転で自動補正される。
-      root.addChild(legMixR.mesh);
-      root.addChild(legMixL.mesh);
+      // 腕(backArm/upper) と同じ構造で脚の depth を出す:
+      //  ・legBack: 奥脚を入れる。backArm と同じく root の早い位置(=体の裏)
+      //  ・legFront: 近脚を入れる。upper の最後(=体の前)に追加 → 上半身レイヤーの後ろなので
+      //    頭/顔の手前には来ず、トラウザのトップが topwear に少しだけかぶる程度の depth が出る
+      const legBack = new Container(); root.addChild(legBack);   // ↓この後 backArm が来る順
+      const legFront = new Container();                          // upper の最後に後で追加
+      legBack.addChild(legMixR.mesh);
+      legFront.addChild(legMixL.mesh);
       legMixR.mesh.visible = false; legMixL.mesh.visible = false;
 
       // 剛体カットアウト版の脚(比較トグル用)
@@ -332,6 +337,11 @@ export function SpriteRigPage() {
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
       buildArm("upperArmR", upper); buildArm("forearmR", upper); // 左腕(画像右)= 上着の前
       for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
+
+      // 4) 手前脚レイヤー: upper の後(=体の前面)。脚は y>437 なので頭/顔(y<227)とは
+      //    重ならず、topwear のごく下端(~5px)にだけ少しかぶる程度の depth が出る。
+      //    upper のlean/bobは継承させたくないので root の最後尾に。
+      root.addChild(legFront);
 
       const bonesG = new Graphics();
       app.stage.addChild(bonesG);
