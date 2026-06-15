@@ -41,7 +41,7 @@ const ARMS: Piece[] = [
 ];
 
 const TABLE: { jp: string; file: string; bone: string }[] = [
-  { jp: "後ろ髪", file: "back_hair.png", bone: "—(静止)" },
+  { jp: "後ろ髪", file: "back_hair.png", bone: "頭に追従+毛先揺れ(バネ)" },
   { jp: "靴", file: "footwear.png", bone: "足L/R(脛に追従)" },
   { jp: "ズボン", file: "legwear.png", bone: "メッシュ(骨盤+太腿/脛L/Rにスキニング)" },
   { jp: "腕(袖)", file: "handwear.png", bone: "上腕L/R・前腕L/R(剛体)" },
@@ -152,8 +152,18 @@ export function SpriteRigPage() {
         if (p.bone) armDriven.push({ cont, bone: p.bone, amp: p.amp ?? 1 });
       };
 
-      // 1) 後ろ髪(最奥)
-      for (const l of BACK_LAYERS) root.addChild(placed(l));
+      // 1) 後ろ髪(最奥)。頭の前傾に追従(股中心の hairLean)しつつ、毛先が遅れて
+      //    揺れる(生え際中心の hairSway をバネ減衰で遅延 = フォロースルー)。
+      const bh = BACK_LAYERS[0]!;
+      const HAIR_PIVOT: [number, number] = [646, 95]; // 髪の生え際(頭頂後ろ)
+      const hairLeanCont = new Container();
+      root.addChild(hairLeanCont);
+      const hairSwayCont = new Container();
+      hairSwayCont.position.set(HAIR_PIVOT[0] - HIP[0], HAIR_PIVOT[1] - HIP[1]);
+      hairLeanCont.addChild(hairSwayCont);
+      const bhSprite = new Sprite(sub(bh.file, bh.frame));
+      bhSprite.position.set(bh.frame[0] - HAIR_PIVOT[0], bh.frame[1] - HAIR_PIVOT[1]);
+      hairSwayCont.addChild(bhSprite);
       // 1.5) 右腕(画像左)= 後ろ髪のすぐ前・他すべて(脚/体/頭)の背面
       const backArm = new Container(); root.addChild(backArm);
       buildArm("upperArmL", backArm); buildArm("forearmL", backArm);
@@ -237,6 +247,8 @@ export function SpriteRigPage() {
       const walk = CLIP_WALK_GIRL;
       let t = 0;
       const bobK = 1185 / 658;
+      // 後ろ髪フォロースルー用のバネ状態
+      let hairAng = 0, hairVel = 0, prevBob = 0;
 
       // DEV: 位相を固定してキーポーズ単体を検証するためのスクラブフック
       const scrubRef = { current: null as number | null };
@@ -298,6 +310,17 @@ export function SpriteRigPage() {
         const lean = deg2rad(rot["torso"] ?? 0);
         upper.rotation = lean;
         backArm.rotation = lean;
+
+        // 後ろ髪: 頭の前傾に追従(hairLean)+ 毛先がバネ減衰で遅れて揺れる(hairSway)。
+        hairLeanCont.rotation = lean;
+        const bob = frame.pose.rootOffset?.[1] ?? 0;
+        const bobVel = dt > 0 ? (bob - prevBob) / dt : 0;
+        prevBob = bob;
+        // 目標角: 上体の傾きと逆へ毛先が流れる + 上下動の慣性(クランプ ~±9°)
+        const hairTarget = -lean * 0.6 + Math.max(-0.16, Math.min(0.16, bobVel * 0.004));
+        hairVel += ((hairTarget - hairAng) * 80 - hairVel * 10) * dt; // バネ(低めの減衰=遅れて揺れる)
+        hairAng += hairVel * dt;
+        hairSwayCont.rotation = hairAng;
         root.position.set(hipCanvas[0], hipCanvas[1] + (frame.pose.rootOffset?.[1] ?? 0) * bobK * S);
 
         bonesG.visible = bonesRef.current;
