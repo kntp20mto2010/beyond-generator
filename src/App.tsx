@@ -21,8 +21,28 @@ type Tab = "scene" | "character" | "newchar";
 const IS_CONTACT_SHEET = location.hash === "#contact-sheet";
 const IS_CLIP_SHEET = location.hash === "#clip-sheet";
 
+// アクティブタブはリロードで保持(localStorage)
+const TAB_KEY = "byond.activeTab";
+function loadTab(): Tab {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    if (v === "scene" || v === "character" || v === "newchar") return v;
+  } catch {
+    /* localStorage 不可環境は既定へ */
+  }
+  return "character";
+}
+
 function App() {
-  const [tab, setTab] = useState<Tab>("character");
+  const [tab, setTabState] = useState<Tab>(loadTab);
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {
+      /* 保存不可でも遷移は続行 */
+    }
+  };
   const fs = useUiStore((s) => s.fs);
 
   if (IS_CONTACT_SHEET) {
