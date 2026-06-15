@@ -123,10 +123,10 @@ export function SpriteRigPage() {
       catch { setStatus("画像の読込に失敗"); return; }
       if (disposed) return;
 
-      const S = 0.42;
+      const S = 0.40;
       const root = new Container();
       root.scale.set(S);
-      const hipCanvas: [number, number] = [240, 224];
+      const hipCanvas: [number, number] = [240, 212];
       root.position.set(hipCanvas[0], hipCanvas[1]);
       app.stage.addChild(root);
 
@@ -195,9 +195,11 @@ export function SpriteRigPage() {
       const tR = buildCut([610, 528, 112, 262], HIP_R, legCutout, HIP, "thighL");
       buildCut([612, 786, 112, 305], KNEE_R, tR, HIP_R, "shinL");
 
-      // 足(footwear・脛末端に追従)
-      const footL = new Container(); const fls = new Sprite(sub("footwear.png", [503, 1073, 142, 138])); fls.position.set(503 - ANKLE_L[0], 1073 - ANKLE_L[1]); footL.addChild(fls); root.addChild(footL);
-      const footR = new Container(); const frs = new Sprite(sub("footwear.png", [598, 1073, 112, 138])); frs.position.set(598 - ANKLE_R[0], 1073 - ANKLE_R[1]); footR.addChild(frs); root.addChild(footR);
+      // 足(footwear・脛末端に追従)。2足は x=605 で完全分離 → 左右フレームを重ねず分割
+      const FOOT_L: Frame = [504, 1072, 103, 126]; // 左靴のみ(x504-607)
+      const FOOT_R: Frame = [607, 1074, 102, 138]; // 右靴のみ(x607-709)
+      const footL = new Container(); const fls = new Sprite(sub("footwear.png", FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); root.addChild(footL);
+      const footR = new Container(); const frs = new Sprite(sub("footwear.png", FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); root.addChild(footR);
 
       // 3) 上半身(腕=剛体 + 前面レイヤー)
       const upper = new Container();
