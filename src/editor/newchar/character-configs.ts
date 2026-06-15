@@ -178,9 +178,10 @@ export const RYOUTA_CFG: CharConfig = {
   footLFile: "footwear_L.png", footRFile: "footwear_R.png",
   footLFrame: [478, 1085, 128, 97],
   footRFrame: [606, 1097, 107, 112],
-  // meshGy0=608: 上着の塗り下端=605 の3px下まで下げ、ミックスの legMixR が
-  //  上着裾の上に被って見える 54px の帯を解消する(上のメッシュ帯は上着で隠れる領域)。
-  meshGx0: 531, meshGx1: 704, meshGy0: 608, meshGy1: 1122,
+  // メッシュは waistband 上端 551 から ankle 下端 1122 まで。両脚 mesh は legBack に
+  // 置く運用なので、上着の下端より上の領域は jacket に隠されて見えない。ズボン上部の
+  // 続きが上着の裏で常に保たれるので、上下身が分離して見えない。
+  meshGx0: 531, meshGx1: 704, meshGy0: 551, meshGy1: 1122,
   midline: 612,
   wPRange: [620, 680],
   kTRange: [820, 880],

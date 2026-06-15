@@ -275,15 +275,13 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       // 右半分(奥/far) と 左半分(手前/near)。midline=620 で接続、共有重みなので継ぎ目なし。
       const legMixR = buildLegMesh(cfg.midline, gx1, 7);
       const legMixL = buildLegMesh(gx0, cfg.midline, 7);
-      // 腕(backArm/upper) と同じ構造で脚の depth を出す。腕の規約と合わせて
-      // texture-R(画像左向きでは画像右に見えるもの)が「前」、texture-L が「後」:
-      //  ・legBack(深い z): legMixL(texture-L)
-      //  ・legFront(浅い z): legMixR(texture-R)
-      // 鏡反転で「画像右の前要素」が反対側に飛ぶので左右で違う半身が上に。
+      // 両脚とも upper(上着)より奥に置く。手前/奥の depth swap をすると、
+      // 上着の裾より上にあるズボン上部(ウエスト〜股上)が片側だけ前面に出てしまい
+      // 「上半身と下半身が分離した」見え方になる。脚の前後 depth はカットアウト時の
+      // FK で十分なので、メッシュは両方とも legBack に置く。
       const legBack = new Container(); root.addChild(legBack);
-      const legFront = new Container();                          // upper の後で追加
       legBack.addChild(legMixL.mesh);
-      legFront.addChild(legMixR.mesh);
+      legBack.addChild(legMixR.mesh);
       legMixR.mesh.visible = false; legMixL.mesh.visible = false;
 
       // 剛体カットアウト版の脚(比較トグル用)
@@ -317,13 +315,9 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
       for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
 
-      // 4) 手前靴レイヤー(upper の後・手前脚の前)。手前脚のトラウザ裾が手前靴の上端を覆う。
+      // 4) 手前靴レイヤー(upper の後)。
       root.addChild(shoeFront);
-      // 5) 手前脚レイヤー: upper/shoeFront の後(=体の前面)。脚は y>437 なので頭/顔(y<227)とは
-      //    重ならず、topwear のごく下端(~5px)にだけ少しかぶる程度の depth が出る。
-      //    upper のlean/bobは継承させたくないので root の最後尾に。
-      root.addChild(legFront);
-      // 5) 手前腕レイヤー: 手前脚の更に前。lean/bobは upper と同じ挙動なので
+      // 5) 手前腕レイヤー: lean/bobは upper と同じ挙動なので
       //    独立した frontArmCont を立てて、ticker で同じ rotation/position を適用。
       const frontArmCont = new Container();
       root.addChild(frontArmCont);
