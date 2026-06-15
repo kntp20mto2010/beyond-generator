@@ -126,21 +126,23 @@ export function SpriteRigPage() {
   const playingRef = useRef(true);
   const signRef = useRef(1);
   const bonesRef = useRef(false);
-  const legModeRef = useRef<"mesh" | "mix" | "cutout">("mesh");
-  const ikRef = useRef(true);
+  const legModeRef = useRef<"mesh" | "mix" | "cutout">("mix");
+  const ikRef = useRef(false);
   const skinRef = useRef(true);
   const bulgeRef = useRef(true);
-  const armModeRef = useRef<"cutout" | "mix">("cutout");
+  const armModeRef = useRef<"cutout" | "mix">("mix");
+  const wireRef = useRef(false);
   const facingRef = useRef<"left" | "right">("left");
   const applyFacingRef = useRef<((f: "left" | "right") => void) | null>(null);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
   const [showBones, setShowBones] = useState(false);
-  const [legMode, setLegMode] = useState<"mesh" | "mix" | "cutout">("mesh");
-  const [ikMode, setIkMode] = useState(true);
+  const [legMode, setLegMode] = useState<"mesh" | "mix" | "cutout">("mix");
+  const [ikMode, setIkMode] = useState(false);
   const [skinMode, setSkinMode] = useState(true);
   const [bulgeMode, setBulgeMode] = useState(true);
-  const [armMode, setArmMode] = useState<"cutout" | "mix">("cutout");
+  const [armMode, setArmMode] = useState<"cutout" | "mix">("mix");
+  const [wireMode, setWireMode] = useState(false);
   const [facing, setFacing] = useState<"left" | "right">("left");
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
@@ -151,6 +153,7 @@ export function SpriteRigPage() {
   skinRef.current = skinMode;
   bulgeRef.current = bulgeMode;
   armModeRef.current = armMode;
+  wireRef.current = wireMode;
   facingRef.current = facing;
   const LEG_LABEL = { mesh: "単一メッシュ", mix: "ミックス(剛体+継ぎ目/左右分離)", cutout: "剛体カットアウト" } as const;
 
@@ -401,6 +404,8 @@ export function SpriteRigPage() {
 
       const bonesG = new Graphics();
       app.stage.addChild(bonesG);
+      const wireG = new Graphics();
+      app.stage.addChild(wireG);
 
       setStatus("");
 
@@ -612,6 +617,55 @@ export function SpriteRigPage() {
         hairSwayCont.rotation = hairAng;
         root.position.set(hipCanvas[0], hipCanvas[1]); // bobは各パーツ側で適用(足は接地固定)
 
+        wireG.visible = wireRef.current;
+        if (wireRef.current) {
+          wireG.clear();
+          // 各メッシュの三角ワイヤフレーム+頂点ドットを描画。
+          // mesh.worldTransform で頂点を画面座標へ。
+          const drawMeshWire = (mesh: Mesh, color: number) => {
+            if (!mesh.visible) return;
+            const pos = (mesh.geometry.getBuffer("aPosition").data as Float32Array);
+            const idx = mesh.geometry.getIndex().data as Uint16Array | Uint32Array;
+            const wt = mesh.worldTransform;
+            const tx = (x: number, y: number) => ({ x: wt.a * x + wt.c * y + wt.tx, y: wt.b * x + wt.d * y + wt.ty });
+            // 三角辺
+            for (let i = 0; i < idx.length; i += 3) {
+              const i0 = idx[i]!, i1 = idx[i + 1]!, i2 = idx[i + 2]!;
+              const p0 = tx(pos[i0 * 2]!, pos[i0 * 2 + 1]!);
+              const p1 = tx(pos[i1 * 2]!, pos[i1 * 2 + 1]!);
+              const p2 = tx(pos[i2 * 2]!, pos[i2 * 2 + 1]!);
+              wireG.moveTo(p0.x, p0.y).lineTo(p1.x, p1.y).lineTo(p2.x, p2.y).lineTo(p0.x, p0.y);
+            }
+            wireG.stroke({ width: 1, color, alpha: 0.7 });
+            // 頂点ドット
+            for (let v = 0; v < pos.length / 2; v++) {
+              const p = tx(pos[v * 2]!, pos[v * 2 + 1]!);
+              wireG.circle(p.x, p.y, 1.5).fill({ color, alpha: 0.9 });
+            }
+          };
+          // 脚メッシュ(可視のものだけ)
+          drawMeshWire(legMesh, 0x00cc66);
+          drawMeshWire(legMixL.mesh, 0x00aaff);
+          drawMeshWire(legMixR.mesh, 0xff6600);
+          // 腕メッシュ
+          drawMeshWire(armMeshL.mesh, 0x00aaff);
+          drawMeshWire(armMeshR.mesh, 0xff6600);
+          // 剛体スプライト(cutout)のフレーム境界も枠線で見せる(レイアウト確認用)。
+          const drawSpriteFrame = (cont: Container, color: number) => {
+            if (!cont.visible) return;
+            const b = cont.getBounds();
+            wireG.rect(b.x, b.y, b.width, b.height).stroke({ width: 1, color, alpha: 0.5 });
+          };
+          drawSpriteFrame(footL, 0x6644ff);
+          drawSpriteFrame(footR, 0x6644ff);
+          if (legModeRef.current === "cutout") drawSpriteFrame(legCutout, 0x44dd44);
+          if (armModeRef.current === "cutout") {
+            for (const k of ["upperArmL", "forearmL", "upperArmR", "forearmR"]) {
+              const c = conts.get(k); if (c) drawSpriteFrame(c, 0xcc00cc);
+            }
+          }
+        }
+
         bonesG.visible = bonesRef.current;
         if (bonesRef.current) {
           bonesG.clear();
@@ -670,6 +724,7 @@ export function SpriteRigPage() {
         <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "膨らむ(バルジ)" : "通常"}</button>
         <button className="ui-btn" onClick={() => setArmMode((m) => m === "cutout" ? "mix" : "cutout")}>腕: {armMode === "cutout" ? "剛体カットアウト" : "ミックス(剛体+肘継ぎ目)"}</button>
         <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
+        <button className="ui-btn" onClick={() => setWireMode((w) => !w)}>{wireMode ? "🔲 メッシュ非表示" : "🔲 メッシュ可視化"}</button>
         <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
         <button className="ui-btn" onClick={() => setFacing((f) => f === "left" ? "right" : "left")}>舞台: {facing === "left" ? "← 左向き" : "右向き →"}</button>
       </div>
