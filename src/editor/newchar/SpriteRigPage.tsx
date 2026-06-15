@@ -313,7 +313,27 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       const upper = new Container();
       root.addChild(upper);
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
-      for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
+      // 目: まばたき用に 白目/瞳/睫毛 を 1 つの container にまとめ、白目の視覚中心を
+      // pivot にして scale.y を絞ると目の中央から閉じる。z 順を保つため、最初に出てきた
+      // 目レイヤーの位置で eyeCont を upper に挿入する。
+      const EYE_FILES = new Set(["eyewhite.png", "irides.png", "eyelash.png"]);
+      const eyeWhite = FRONT_LAYERS.find((l) => l.file === "eyewhite.png");
+      const eyeCont = new Container();
+      if (eyeWhite) {
+        const ex = eyeWhite.frame[0] + eyeWhite.frame[2] / 2 - HIP[0];
+        const ey = eyeWhite.frame[1] + eyeWhite.frame[3] / 2 - HIP[1];
+        eyeCont.pivot.set(ex, ey);
+        eyeCont.position.set(ex, ey);
+      }
+      let eyeAttached = false;
+      for (const l of FRONT_LAYERS.slice(1)) {
+        if (EYE_FILES.has(l.file)) {
+          if (!eyeAttached) { upper.addChild(eyeCont); eyeAttached = true; }
+          eyeCont.addChild(placed(l));
+        } else {
+          upper.addChild(placed(l));
+        }
+      }
 
       // 4) 手前靴レイヤー(upper の後)。
       root.addChild(shoeFront);
@@ -384,11 +404,20 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       const bobK = cfg.bobK;
       // 後ろ髪フォロースルー用のバネ状態
       let hairAng = 0, hairVel = 0, prevBob = 0;
+      // まばたき状態: blinkPhase = -1 はアイドル、[0,1] はまばたき進行(150ms)。
+      // blinkCooldown は次のまばたきまでの秒(2.5–5.5s)。
+      let blinkCooldown = 2.5 + Math.random() * 3;
+      let blinkPhase = -1;
+      const eyeHoldRef = { current: null as number | null }; // DEV: scale.y を固定して目検証
 
       // DEV: 位相を固定してキーポーズ単体を検証するためのスクラブフック
       const scrubRef = { current: null as number | null };
       if (import.meta.env.DEV) {
         (globalThis as unknown as { __rigScrub?: (v: number | null) => void }).__rigScrub = (v) => { scrubRef.current = v; };
+        (globalThis as unknown as { __rigEye?: () => number }).__rigEye = () => eyeCont.scale.y;
+        (globalThis as unknown as { __rigBlinkNow?: () => void }).__rigBlinkNow = () => { blinkPhase = 0; };
+        (globalThis as unknown as { __rigEyeHold?: (v: number | null) => void }).__rigEyeHold =
+          (v) => { eyeHoldRef.current = v; };
       }
 
       app.ticker.add(() => {
@@ -578,6 +607,23 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         hairVel += ((hairTarget - hairAng) * 80 - hairVel * 16) * dt; // バネ(減衰強めで揺れを抑制)
         hairAng += hairVel * dt;
         hairSwayCont.rotation = hairAng;
+
+        // まばたき: 閉じる(0–0.33) → 閉じたまま(0.33–0.55) → 開く(0.55–1)。
+        if (blinkPhase < 0) {
+          blinkCooldown -= dt;
+          if (blinkCooldown <= 0) blinkPhase = 0;
+        } else {
+          blinkPhase += dt / 0.15;
+          if (blinkPhase >= 1) { blinkPhase = -1; blinkCooldown = 2.5 + Math.random() * 3; }
+        }
+        let sY = 1;
+        if (blinkPhase >= 0) {
+          if (blinkPhase < 0.33) sY = 1 - (blinkPhase / 0.33) * 0.9;
+          else if (blinkPhase < 0.55) sY = 0.1;
+          else sY = 0.1 + ((blinkPhase - 0.55) / 0.45) * 0.9;
+        }
+        eyeCont.scale.y = eyeHoldRef.current ?? sY;
+
         root.position.set(hipCanvas[0], hipCanvas[1]); // bobは各パーツ側で適用(足は接地固定)
 
         wireG.visible = wireRef.current;
