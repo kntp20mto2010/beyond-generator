@@ -283,13 +283,14 @@ export function SpriteRigPage() {
           for (const { cont, bone, amp } of cutPieces) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
         }
 
-        // 足を脛末端へ(メッシュ/剛体共通: shinのworldで)
-        const placeFoot = (foot: Container, Wsh: Aff, ankle: [number, number]) => {
+        // 足を脛末端へ(メッシュ/剛体共通: shinのworldで)。足首ピッチ(踵接地/爪先離れ)を重ねる。
+        const rotAny = rot as Record<string, number>;
+        const placeFoot = (foot: Container, Wsh: Aff, ankle: [number, number], ankleDeg: number) => {
           foot.position.set(ax(Wsh, ankle[0], ankle[1]) - HIP[0], ay(Wsh, ankle[0], ankle[1]) - HIP[1]);
-          foot.rotation = Math.atan2(Wsh.b, Wsh.a);
+          foot.rotation = Math.atan2(Wsh.b, Wsh.a) + deg2rad(sg * ankleDeg);
         };
-        placeFoot(footL, WshinL, ANKLE_L);
-        placeFoot(footR, WshinR, ANKLE_R);
+        placeFoot(footL, WshinL, ANKLE_L, rotAny["ankleL"] ?? 0);
+        placeFoot(footR, WshinR, ANKLE_R, rotAny["ankleR"] ?? 0);
 
         // 腕(剛体)
         for (const { cont, bone, amp } of armDriven) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
