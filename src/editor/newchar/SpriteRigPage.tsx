@@ -208,15 +208,20 @@ export function SpriteRigPage() {
       const armDriven: { cont: Container; bone: BoneId; amp: number }[] = [];
       const pivots = new Map<string, [number, number]>([["upper", HIP]]);
       for (const p of ARMS) pivots.set(p.key, p.pivot);
-      for (const p of ARMS) {
+      const buildArm = (key: string) => {
+        const p = ARMS.find((q) => q.key === key)!;
         const parentCont = p.parent === "upper" ? upper : conts.get(p.parent)!;
         const pp = pivots.get(p.parent)!;
         const cont = new Container(); cont.position.set(p.pivot[0] - pp[0], p.pivot[1] - pp[1]);
         const s = new Sprite(sub(p.file, p.frame)); s.position.set(p.frame[0] - p.pivot[0], p.frame[1] - p.pivot[1]);
         cont.addChild(s); parentCont.addChild(cont); conts.set(p.key, cont);
         if (p.bone) armDriven.push({ cont, bone: p.bone, amp: p.amp ?? 1 });
-      }
-      for (const l of FRONT_LAYERS) upper.addChild(placed(l));
+      };
+      // 画像左の腕(=キャラの右腕)は体(上着)の後ろ。画像右の腕(=キャラの左腕)は上着の前。
+      buildArm("upperArmL"); buildArm("forearmL"); // 後ろ
+      upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
+      buildArm("upperArmR"); buildArm("forearmR"); // 上着の前
+      for (const l of FRONT_LAYERS.slice(1)) upper.addChild(placed(l)); // 首・頭・顔…
 
       const bonesG = new Graphics();
       app.stage.addChild(bonesG);
