@@ -393,24 +393,32 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       root.addChild(frontArmCont);
       buildArm("upperArmR", frontArmCont); buildArm("forearmR", frontArmCont);
 
-      // 6) 腕ミックス用メッシュ(剛体+肘継ぎ目)。左右別メッシュ。bboxはhandwear texture内の
-      //    各腕領域。重みは smoothstep で肘前後37pxバンド(~3行)、上下は剛体binary。
-      //    upperArm/forearm の bone matrix を log-blend スキニング。
+      // 6) 腕ミックス用メッシュ(rest+剛体+肘継ぎ目)。左右別メッシュ。bbox は handwear texture 内の
+      //    各腕領域。重みは 3 ボーン smoothstep:
+      //      wT(rest=身体側, 無回転) → 上端 SHOULDER_BAND 幅で 1→0
+      //      wF(forearm)            → 肘前後 37px バンドで 0→1
+      //      wU(upperArm)           → 残り(1 - wT - wF)
+      //    肩キャップ領域(肩ピボットより上の数pxを含む上端帯)を身体に貼り付けたまま、
+      //    その下から upperArm の回転に滑らかに渡せる → どのポーズで腕を回しても
+      //    肩は body 側にとどまる(「付け根が浮遊」しない)。
+      const SHOULDER_BAND = 30; // px(rest→upperArm 遷移帯。実画素で配筋約 1 行分)
       type ArmMeshData = { rest: Float32Array; W: Float32Array; posBuf: ReturnType<MeshGeometry["getBuffer"]>; mesh: Mesh; nV: number; upperKey: BoneId; foreKey: BoneId; uppPivot: [number, number]; forPivot: [number, number] };
       const buildArmMesh = (bbox: [number, number, number, number], elbowY: number, upperKey: BoneId, foreKey: BoneId, uppPivot: [number, number], forPivot: [number, number]): ArmMeshData => {
         const [xLo, yLo, xHi, yHi] = bbox;
         const cols = 5, rows = 14, n = cols * rows;
         const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
-        const WA = new Float32Array(n * 2); // 2 bones only(upperArm, forearm)
+        const WA = new Float32Array(n * 3); // 3 bones(rest/upperArm/forearm)
         let k = 0;
         for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
           const x = xLo + (xHi - xLo) * (c / (cols - 1));
           const y = yLo + (yHi - yLo) * (r / (rows - 1));
           rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
-          // 肘前後 37px バンドで forearm 重みを smoothstep
-          const wF = smooth(elbowY - 18.5, elbowY + 18.5, y);
-          WA[k * 2] = 1 - wF; // upperArm
-          WA[k * 2 + 1] = wF; // forearm
+          const wT = 1 - smooth(yLo, yLo + SHOULDER_BAND, y);  // rest(肩帯)
+          const wF = smooth(elbowY - 18.5, elbowY + 18.5, y);  // forearm(肘前後)
+          const wU = Math.max(0, 1 - wT - wF);                  // upperArm(残り)
+          WA[k * 3] = wT;
+          WA[k * 3 + 1] = wU;
+          WA[k * 3 + 2] = wF;
           k++;
         }
         const ix: number[] = [];
@@ -466,6 +474,7 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       const scrubRef = { current: null as number | null };
       if (import.meta.env.DEV) {
         (globalThis as unknown as { __rigScrub?: (v: number | null) => void }).__rigScrub = (v) => { scrubRef.current = v; };
+        (globalThis as unknown as { __rigApp?: Application }).__rigApp = app;
         (globalThis as unknown as { __rigEye?: () => number }).__rigEye = () => eyeCont.scale.y;
         (globalThis as unknown as { __rigBlinkNow?: () => void }).__rigBlinkNow = () => { blinkPhase = 0; };
         (globalThis as unknown as { __rigEyeHold?: (v: number | null) => void }).__rigEyeHold =
@@ -607,12 +616,15 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           const skinArm = (a: typeof armMeshL) => {
             const uA = deg2rad(sg * 1.0 * (rot[a.upperKey] ?? 0));
             const fA = deg2rad(sg * 1.0 * (rot[a.foreKey] ?? 0));
+            // Wrest = 恒等(身体側=肩キャップを body 線に貼り付ける)。
+            // Wupp = 肩 pivot 周りの upperArm 回転。Wfor = それに重ねた forearm 回転。
+            const Wrest: Aff = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
             const Wupp = rotAbout(a.uppPivot[0], a.uppPivot[1], uA);
             const Wfor = mul(Wupp, rotAbout(a.forPivot[0], a.forPivot[1], fA));
-            // log-blend(2ボーン): θ*=Σwθ, u*=Σwu, t*=A(θ*)·u*, p'=R(θ*)p+t*
-            const bones = [Wupp, Wfor];
+            // log-blend(3ボーン): θ*=Σwθ, u*=Σwu, t*=A(θ*)·u*, p'=R(θ*)p+t*
+            const bones = [Wrest, Wupp, Wfor];
             const bTh: number[] = [], bUx: number[] = [], bUy: number[] = [];
-            for (let b = 0; b < 2; b++) {
+            for (let b = 0; b < 3; b++) {
               const M = bones[b]!;
               const th = Math.atan2(M.b, M.a);
               let aC: number, bC: number;
@@ -625,7 +637,7 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
             for (let v = 0; v < a.nV; v++) {
               const rx = a.rest[v * 2]!, ry = a.rest[v * 2 + 1]!;
               let th = 0, ux = 0, uy = 0;
-              for (let b = 0; b < 2; b++) { const w = a.W[v * 2 + b]!; if (w === 0) continue; th += w * bTh[b]!; ux += w * bUx[b]!; uy += w * bUy[b]!; }
+              for (let b = 0; b < 3; b++) { const w = a.W[v * 3 + b]!; if (w === 0) continue; th += w * bTh[b]!; ux += w * bUx[b]!; uy += w * bUy[b]!; }
               let aC: number, bC: number;
               if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; } else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
               const tx = aC * ux - bC * uy, ty = bC * ux + aC * uy, c = Math.cos(th), s = Math.sin(th);

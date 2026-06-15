@@ -1,11 +1,12 @@
 import type { ClipDoc } from "../../core/schema/clip.js";
 
 // 「ゆったり手を振る」(どうぶつの森的なスローライフ感)。
-// 既存の CLIP_WAVE(0.9s, upperArmL)は左向きキャラだと「後ろ腕を上げる」になり
-// 方向が違う(カメラ側=手前=texture-R に上げたい)。さらにテンポも倍以上ゆっくり。
+// 既存 CLIP_WAVE は upperArmL を上げて 0.9s で速すぎる。リョウタ/サクラは左向きなので
+// カメラ側=texture-R の upperArmR を 2.4s 周期で上前方へ。
 //
-// upperArmR を上前方へ +150°(rest=真下から CCW 150°)、頭は +5° で軽く受け側へ。
-// forearmR は ±20° を 2 サイクル(2.4s)= ~0.83Hz でゆったり往復(sineInOut)。
+// 肩キャップの「付け根浮遊」問題は腕メッシュ側で構造解決済み(rest/upperArm/forearm
+// の 3 ボーン skinning で上端を身体に貼り付け、その下から回転に渡す)。
+// なのでクリップ側は素直に upperArm を +150° で上げて OK。
 export const CLIP_WAVE_RELAX: ClipDoc = {
   formatVersion: 1,
   id: "wave-relax",
