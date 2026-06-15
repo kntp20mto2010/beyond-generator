@@ -106,7 +106,7 @@ const REST_SH_R = Math.atan2(ANKLE_R[1] - KNEE_R[1], ANKLE_R[0] - KNEE_R[0]);
 const GROUND_Y = 1070; // 足を接地させる画像Y(rest足首1085より少し上=膝に余裕)
 const STEP = 170;      // 接地中に足が後退する水平距離(画像px)= 仮想ストライド
 const LIFT = 78;       // 遊脚中の足の持ち上げ高さ(画像px)→ 膝の畳み量を決める
-const BULGE_K = 1.3;   // 関節バルジ: 曲げ量に応じて脚を太らせる係数(膝でピーク)
+const BULGE_K = 0.9;   // 関節バルジ: 曲げ量に応じて脚を太らせる係数(膝でピーク)
 
 // 2ボーンIK: 股(hx,hy)→目標足首(tx,ty)。bend=膝の向き(+1で前/画像左へ膨らむ)。
 // 戻り値は world 角 [太腿角, 脛角](rest空間)。
@@ -414,13 +414,12 @@ export function SpriteRigPage() {
               if (bulgeOn) {
                 const lw = WA[v * 5 + 1]! + WA[v * 5 + 2]!, rw = WA[v * 5 + 3]! + WA[v * 5 + 4]!, legW = lw + rw;
                 if (legW >= 1e-4) {
-                  // 紡錘プロファイル(膝で最大)+ ベースライン → 端も最低 50% は膨張、
-                  // 細くなる箇所が出ない。底上げにより太腿の上・足首手前も保つ。
-                  const sp = ry <= KNEE_Y ? smooth(CROTCH_Y, KNEE_Y, ry) : 1 - smooth(KNEE_Y, ANK_Y, ry);
-                  const prof = 0.5 + 0.5 * sp;
-                  const bend = (lw * absSh[1]! + rw * absSh[3]!) / legW;
-                  const cX = (lw * 590 + rw * 654) / legW;
-                  rx = cX + (rx - cX) * (1 + BULGE_K * prof * bend);
+                  const prof = ry <= KNEE_Y ? smooth(CROTCH_Y, KNEE_Y, ry) : 1 - smooth(KNEE_Y, ANK_Y, ry);
+                  if (prof > 0) {
+                    const bend = (lw * absSh[1]! + rw * absSh[3]!) / legW;
+                    const cX = (lw * 590 + rw * 654) / legW;
+                    rx = cX + (rx - cX) * (1 + BULGE_K * prof * bend);
+                  }
                 }
               }
               if (useLog) {
