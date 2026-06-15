@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Application, Assets, Container, Graphics, Mesh, MeshGeometry, Rectangle, Sprite, Texture } from "pixi.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 import { sampleClip } from "../../runtime/clip-player.js";
 import { CLIP_WALK_GIRL } from "./walk-girl.js";
+import { CLIP_IDLE } from "../../presets/clips/idle.js";
+import { CLIP_WAVE } from "../../presets/clips/wave.js";
+import { CLIP_POINT } from "../../presets/clips/point.js";
+import type { ClipDoc } from "../../core/schema/clip.js";
 import type { BoneId } from "../../runtime/skeleton.js";
 
 // See-through(SIGGRAPH 2026)出力を深度z順で個別レイヤー描画。
@@ -30,6 +34,24 @@ const TABLE: { jp: string; file: string; bone: string }[] = [
   { jp: "眉", file: "eyebrow.png", bone: "—(静止)" },
   { jp: "前髪", file: "front_hair.png", bone: "—(静止)" },
 ];
+
+// ポーズ・表情のプリセット辞書(toolbar の <select> から参照)
+type PoseKey = "walk-girl" | "idle" | "wave" | "point" | "tpose";
+const POSES: Record<PoseKey, { label: string; clip: ClipDoc | null }> = {
+  "walk-girl": { label: "歩く", clip: CLIP_WALK_GIRL },
+  idle: { label: "待機", clip: CLIP_IDLE },
+  wave: { label: "手を振る", clip: CLIP_WAVE },
+  point: { label: "指差し", clip: CLIP_POINT },
+  tpose: { label: "棒立ち", clip: null },
+};
+type ExprKey = "normal" | "smile" | "surprise" | "worry";
+// eyeScale: null = 自動まばたきに任せる。値 = scale.y を固定(まばたきはスキップ)。
+const EXPRS: Record<ExprKey, { label: string; eyeScale: number | null }> = {
+  normal: { label: "普通", eyeScale: null },
+  smile: { label: "笑顔", eyeScale: 0.5 },
+  surprise: { label: "驚き", eyeScale: 1.2 },
+  worry: { label: "困り", eyeScale: 0.8 },
+};
 
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 const smooth = (e0: number, e1: number, x: number) => {
@@ -72,6 +94,28 @@ function legIK(hx: number, hy: number, tx: number, ty: number, L1: number, L2: n
   return [th, Math.atan2(ty - ky, tx - kx)];
 }
 
+// Toolbar セクション。タイトル + ボタン群を 1 ブロックに。
+function ToolSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      <div style={{ fontSize: "10px", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.6px", fontWeight: 600 }}>{title}</div>
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>{children}</div>
+    </div>
+  );
+}
+
+// Toolbar 用ラベル付き <select>。className は ui-btn 流用で見た目を揃える。
+function ToolSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <label style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
+      <span style={{ color: "var(--text-dim)" }}>{label}:</span>
+      <select className="ui-btn" value={value} onChange={(e) => onChange(e.target.value)} style={{ paddingRight: "20px" }}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function CharRig({ cfg }: { cfg: CharConfig }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(true);
@@ -84,6 +128,8 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const armModeRef = useRef<"cutout" | "mix">("mix");
   const wireRef = useRef(false);
   const facingRef = useRef<"left" | "right">("left");
+  const poseRef = useRef<PoseKey>("walk-girl");
+  const exprRef = useRef<ExprKey>("normal");
   const applyFacingRef = useRef<((f: "left" | "right") => void) | null>(null);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
@@ -95,6 +141,8 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const [armMode, setArmMode] = useState<"cutout" | "mix">("mix");
   const [wireMode, setWireMode] = useState(false);
   const [facing, setFacing] = useState<"left" | "right">("left");
+  const [pose, setPose] = useState<PoseKey>("walk-girl");
+  const [expression, setExpression] = useState<ExprKey>("normal");
   const [status, setStatus] = useState("読込中…");
   playingRef.current = playing;
   signRef.current = sign;
@@ -106,6 +154,8 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   armModeRef.current = armMode;
   wireRef.current = wireMode;
   facingRef.current = facing;
+  poseRef.current = pose;
+  exprRef.current = expression;
   const LEG_LABEL = { mesh: "単一メッシュ", mix: "ミックス(剛体+継ぎ目/左右分離)", cutout: "剛体カットアウト" } as const;
 
   useEffect(() => {
@@ -399,9 +449,11 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         root.scale.x = newFacing === "left" ? S : -S;
       };
 
-      const walk = CLIP_WALK_GIRL;
+      // 既定クリップは walk-girl。ポーズ切替時は poseRef.current で参照先を差し替える。
       let t = 0;
       const bobK = cfg.bobK;
+      // クリップ無しポーズ(棒立ち)の空フレーム
+      const EMPTY_FRAME = { pose: { rotations: {} as Record<string, number>, rootOffset: [0, 0] as [number, number] } };
       // 後ろ髪フォロースルー用のバネ状態
       let hairAng = 0, hairVel = 0, prevBob = 0;
       // まばたき状態: blinkPhase = -1 はアイドル、[0,1] はまばたき進行(150ms)。
@@ -424,7 +476,8 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
         if (scrubRef.current == null && playingRef.current) t += dt;
         const tt = scrubRef.current ?? t;
-        const frame = sampleClip(walk, tt % walk.duration);
+        const clip = POSES[poseRef.current].clip;
+        const frame = clip ? sampleClip(clip, tt % clip.duration) : EMPTY_FRAME;
         const rot = frame.pose.rotations ?? {};
         const sg = signRef.current;
         const ikOn = ikRef.current;
@@ -622,7 +675,10 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           else if (blinkPhase < 0.55) sY = 0.1;
           else sY = 0.1 + ((blinkPhase - 0.55) / 0.45) * 0.9;
         }
-        eyeCont.scale.y = eyeHoldRef.current ?? sY;
+        // 表情で目の開閉が指定されていればそれを優先(まばたきはスキップ)、
+        // 普通(eyeScale=null) の時のみ自動まばたき値 sY を使う。DEV hold は最強優先。
+        const exprScale = EXPRS[exprRef.current].eyeScale;
+        eyeCont.scale.y = eyeHoldRef.current ?? exprScale ?? sY;
 
         root.position.set(hipCanvas[0], hipCanvas[1]); // bobは各パーツ側で適用(足は接地固定)
 
@@ -725,17 +781,29 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         「メッシュ/剛体」で切替比較できる。腕は剛体カットアウト。
         {status && <span style={{ color: "var(--warn)" }}> — {status}</span>}
       </div>
-      <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
-        <button className="ui-btn" onClick={() => setPlaying((p) => !p)}>{playing ? "⏹ 停止" : "▶ 歩く"}</button>
-        <button className="ui-btn" onClick={() => setLegMode((m) => (m === "mesh" ? "mix" : m === "mix" ? "cutout" : "mesh"))}>脚: {LEG_LABEL[legMode]}</button>
-        <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK(地面固定)" : "FK(従来)"}</button>
-        <button className="ui-btn" onClick={() => setSkinMode((m) => !m)}>スキン: {skinMode ? "対数ブレンド(自然)" : "LBS(線形=つぶれ)"}</button>
-        <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "膨らむ(バルジ)" : "通常"}</button>
-        <button className="ui-btn" onClick={() => setArmMode((m) => m === "cutout" ? "mix" : "cutout")}>腕: {armMode === "cutout" ? "剛体カットアウト" : "ミックス(剛体+肘継ぎ目)"}</button>
-        <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>{showBones ? "🦴 ボーン非表示" : "🦴 ボーン表示"}</button>
-        <button className="ui-btn" onClick={() => setWireMode((w) => !w)}>{wireMode ? "🔲 メッシュ非表示" : "🔲 メッシュ可視化"}</button>
-        <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚の振り反転(現在 {sign > 0 ? "+" : "−"})</button>
-        <button className="ui-btn" onClick={() => setFacing((f) => f === "left" ? "right" : "left")}>舞台: {facing === "left" ? "← 左向き" : "右向き →"}</button>
+      <div style={{ display: "flex", gap: "18px", marginBottom: "12px", flexWrap: "wrap", alignItems: "flex-start" }}>
+        <ToolSection title="演出">
+          <button className="ui-btn" onClick={() => setPlaying((p) => !p)}>{playing ? "⏹ 停止" : "▶ 再生"}</button>
+          <ToolSelect label="ポーズ" value={pose} onChange={(v) => setPose(v as PoseKey)}
+            options={(Object.keys(POSES) as PoseKey[]).map((k) => ({ value: k, label: POSES[k].label }))} />
+          <ToolSelect label="表情" value={expression} onChange={(v) => setExpression(v as ExprKey)}
+            options={(Object.keys(EXPRS) as ExprKey[]).map((k) => ({ value: k, label: EXPRS[k].label }))} />
+        </ToolSection>
+        <ToolSection title="リグ">
+          <button className="ui-btn" onClick={() => setLegMode((m) => (m === "mesh" ? "mix" : m === "mix" ? "cutout" : "mesh"))}>脚: {LEG_LABEL[legMode]}</button>
+          <button className="ui-btn" onClick={() => setArmMode((m) => m === "cutout" ? "mix" : "cutout")}>腕: {armMode === "cutout" ? "剛体" : "ミックス"}</button>
+          <button className="ui-btn" onClick={() => setIkMode((m) => !m)}>接地: {ikMode ? "IK" : "FK"}</button>
+          <button className="ui-btn" onClick={() => setSkinMode((m) => !m)}>スキン: {skinMode ? "対数" : "LBS"}</button>
+          <button className="ui-btn" onClick={() => setBulgeMode((m) => !m)}>関節: {bulgeMode ? "バルジ" : "通常"}</button>
+        </ToolSection>
+        <ToolSection title="デバッグ">
+          <button className="ui-btn" onClick={() => setShowBones((b) => !b)}>🦴 ボーン{showBones ? "OFF" : "ON"}</button>
+          <button className="ui-btn" onClick={() => setWireMode((w) => !w)}>🔲 メッシュ{wireMode ? "OFF" : "ON"}</button>
+          <button className="ui-btn" onClick={() => setSign((s) => -s)}>脚振り反転({sign > 0 ? "+" : "−"})</button>
+        </ToolSection>
+        <ToolSection title="舞台">
+          <button className="ui-btn" onClick={() => setFacing((f) => f === "left" ? "right" : "left")}>{facing === "left" ? "← 左向き" : "右向き →"}</button>
+        </ToolSection>
       </div>
 
       <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" }}>
