@@ -38,7 +38,9 @@ export interface CharConfig {
   shinLFrame: Frame;
   thighRFrame: Frame;
   shinRFrame: Frame;
-  // 靴
+  // 靴(connected components で抽出した per-shoe PNG)
+  footLFile: string; // 通常 "footwear_L.png"
+  footRFile: string; // 通常 "footwear_R.png"
   footLFrame: Frame;
   footRFrame: Frame;
   // 脚メッシュ
@@ -105,8 +107,9 @@ export const SAKURA_CFG: CharConfig = {
   shinLFrame: [553, 705, 50, 187],
   thighRFrame: [613, 480, 67, 228],
   shinRFrame: [629, 705, 47, 187],
-  footLFrame: [523, 875, 78, 119],
-  footRFrame: [606, 880, 72, 114],
+  footLFile: "footwear_L.png", footRFile: "footwear_R.png",
+  footLFrame: [523, 875, 83, 105],
+  footRFrame: [601, 880, 78, 115],
   meshGx0: 548, meshGx1: 680, meshGy0: 480, meshGy1: 890,
   midline: 614,
   wPRange: [530, 600],
@@ -130,15 +133,15 @@ export const SAKURA_CFG: CharConfig = {
 export const RYOUTA_CFG: CharConfig = {
   dir: "/assets/characters/ryouta",
   label: "リョウタ(男子)",
-  hip: [635, 640],
+  hip: [635, 580],
   hairPivot: [628, 70],
-  hipL: [612, 670],
-  hipR: [662, 670],
+  hipL: [612, 595],
+  hipR: [662, 595],
   kneeL: [570, 850],
   kneeR: [670, 850],
   ankleL: [572, 1115],
   ankleR: [678, 1115],
-  hipCanvas: [240, 320],
+  hipCanvas: [240, 296],
   bobK: 1.4,
   groundY: 1100, step: 140, lift: 70,
   backLayers: [{ jp: "後ろ髪", file: "back_hair.png", frame: [520, 22, 216, 212] }],
@@ -166,8 +169,9 @@ export const RYOUTA_CFG: CharConfig = {
   shinLFrame: [548, 850, 70, 271],
   thighRFrame: [635, 551, 70, 299],
   shinRFrame: [635, 850, 70, 271],
-  footLFrame: [478, 1085, 117, 123],
-  footRFrame: [595, 1085, 117, 123],
+  footLFile: "footwear_L.png", footRFile: "footwear_R.png",
+  footLFrame: [478, 1085, 128, 97],
+  footRFrame: [606, 1097, 107, 112],
   meshGx0: 531, meshGx1: 704, meshGy0: 551, meshGy1: 1121,
   midline: 635,
   wPRange: [620, 690],
@@ -181,8 +185,8 @@ export const RYOUTA_CFG: CharConfig = {
   armRBbox: [691, 285, 784, 703],
   elbowYL: 487,
   elbowYR: 494,
-  neckYLocal: -451,
-  headTopYLocal: -568,
+  neckYLocal: -391,
+  headTopYLocal: -508,
   wristLOffset: [-30, 200],
   wristROffset: [-10, 205],
 };

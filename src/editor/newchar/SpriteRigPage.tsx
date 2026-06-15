@@ -140,7 +140,7 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       if (disposed) { app.destroy(true); return; }
       host.appendChild(app.canvas);
 
-      const files = [...new Set([...BACK_LAYERS, ...FRONT_LAYERS].map((l) => l.file).concat(ARMS.map((p) => p.file), ["legwear.png", "footwear.png"]))];
+      const files = [...new Set([...BACK_LAYERS, ...FRONT_LAYERS].map((l) => l.file).concat(ARMS.map((p) => p.file), ["legwear.png", cfg.footLFile, cfg.footRFile]))];
       const texByFile = new Map<string, Texture>();
       try { await Promise.all(files.map(async (f) => texByFile.set(f, await Assets.load(`${DIR}/${f}`)))); }
       catch { setStatus("画像の読込に失敗"); return; }
@@ -308,8 +308,8 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       // footL は texture-L = 奥側 → shoeBack へ。footR は texture-R = 手前側 → shoeFront へ。
       // 鏡反転で前/奥が自動的に正しい canvas 側に飛ぶ(legBack/legFront と同じ規約)。
       const shoeFront = new Container(); // upper の後で root に追加(z位置=手前脚の直前)
-      const footL = new Container(); const fls = new Sprite(sub("footwear.png", FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); shoeBack.addChild(footL);
-      const footR = new Container(); const frs = new Sprite(sub("footwear.png", FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); shoeFront.addChild(footR);
+      const footL = new Container(); const fls = new Sprite(sub(cfg.footLFile, FOOT_L)); fls.position.set(FOOT_L[0] - ANKLE_L[0], FOOT_L[1] - ANKLE_L[1]); footL.addChild(fls); shoeBack.addChild(footL);
+      const footR = new Container(); const frs = new Sprite(sub(cfg.footRFile, FOOT_R)); frs.position.set(FOOT_R[0] - ANKLE_R[0], FOOT_R[1] - ANKLE_R[1]); footR.addChild(frs); shoeFront.addChild(footR);
 
       // 3) 上半身(左腕=体の前 + 前面レイヤー)
       const upper = new Container();
