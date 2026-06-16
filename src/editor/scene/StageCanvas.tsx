@@ -419,7 +419,8 @@ export function StageCanvas(props: Props) {
             const w = Math.max(1, Math.min(16, Math.round(startCells.w * ratio)));
             const h = Math.max(1, Math.min(9, Math.round(startCells.h * ratio)));
             const cells = { w, h };
-            setObjectSize(p().store, scene.id, id, cells, objectScaleForCells(el.src, cells));
+            const [snx] = snapObjectXY(el.transform.x, el.transform.y, w);
+            setObjectSize(p().store, scene.id, id, cells, objectScaleForCells(el.src, cells), snx);
             return;
           }
           const next = Math.min(5, Math.max(0.1, startScale * ratio));

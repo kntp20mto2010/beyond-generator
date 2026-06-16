@@ -45,6 +45,7 @@ import {
 } from "../../core/commands-project.js";
 import { audioLabel, listAudioOptions } from "./audio-options.js";
 import { getObjectSeat, objectLabel, objectScaleForCells } from "./objects-catalog.js";
+import { snapObjectXY } from "./grid.js";
 import { spriteClipLabel } from "../newchar/sprite-clips.js";
 import { Section } from "../ui/Section.js";
 import { SegmentedButtons } from "../ui/SegmentedButtons.js";
@@ -179,7 +180,8 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
               onChange={(e) => {
                 const w = Math.max(1, Math.round(Number(e.target.value)));
                 const cells = { w, h: element.cells.h };
-                setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells));
+                const [sx] = snapObjectXY(tf.x, tf.y, w);
+                setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells), sx);
               }}
             />
             <span style={{ color: "var(--text-dim)" }}>×</span>

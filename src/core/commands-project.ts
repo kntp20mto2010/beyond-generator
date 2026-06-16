@@ -274,12 +274,15 @@ export function setObjectSize(
   elementId: string,
   cells: { w: number; h: number },
   scale: number,
+  snappedX?: number,
 ): void {
   store.dispatch("サイズ変更", (d) => {
     const el = findElement(d, sceneId, elementId);
     if (el && el.kind === "object") {
       el.cells = { w: cells.w, h: cells.h };
       el.transform.scale = scale;
+      // 幅の偶奇が変わると中心の吸着位相も変わる(端を列線に乗せ続ける)
+      if (snappedX !== undefined) el.transform.x = snappedX;
     }
   });
 }
