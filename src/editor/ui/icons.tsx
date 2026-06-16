@@ -54,6 +54,17 @@ export function IconFolder() {
   );
 }
 
+export function IconScript() {
+  return (
+    <svg {...PROPS}>
+      <path d="M4 1.5 L11 1.5 L13 3.5 L13 14.5 L4 14.5 Z" />
+      <polyline points="6,5 11,5" />
+      <polyline points="6,8 11,8" />
+      <polyline points="6,11 9,11" />
+    </svg>
+  );
+}
+
 export function IconSave() {
   return (
     <svg {...PROPS}>

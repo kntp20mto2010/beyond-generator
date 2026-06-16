@@ -824,3 +824,40 @@ body {
   outline: none;
   border-color: var(--accent);
 }
+
+/* 台本ピッカー(ツールバーの「台本」メニュー項目) */
+.script-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.script-item:hover {
+  background: var(--accent-soft);
+}
+.script-item__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.script-item__current {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--bg-app);
+  background: var(--accent);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+.script-item__sub {
+  font-size: 11px;
+  color: var(--text-dim);
+}

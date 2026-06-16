@@ -54,7 +54,9 @@ import { VIEW_W, VIEW_H } from "./stage-coords.js";
 import type { CameraState } from "../../runtime/scene-eval.js";
 import { ExportDialog } from "./ExportDialog.js";
 import { exportMp4, isExportCancelled, type ExportProgress, type ExportSettings } from "../../export/mp4-exporter.js";
-import { IconFolder, IconSave, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid, IconCamera, IconExport } from "../ui/icons.js";
+import { IconFolder, IconSave, IconScript, IconUndo, IconRedo, IconPlay, IconPlayAll, IconStop, IconGrid, IconCamera, IconExport } from "../ui/icons.js";
+import { Popover } from "../ui/Popover.js";
+import { BUILTIN_SCRIPTS, type BuiltinScript } from "./builtin-scripts.js";
 
 interface Props {
   store: DocStore<ProjectDoc>;
@@ -114,6 +116,9 @@ export function ScenePage({ store }: Props) {
     { clientX: number; clientY: number; elementId: string | null; stageX: number; stageY: number } | null
   >(null);
   const stageApiRef = useRef<StageApi | null>(null);
+  // 台本ピッカー(内蔵テンプレートの読込メニュー)
+  const [scriptMenuOpen, setScriptMenuOpen] = useState(false);
+  const scriptAnchor = useRef<HTMLButtonElement | null>(null);
 
   // 選択シーンの自動補正
   const sceneId =
@@ -746,6 +751,26 @@ export function ScenePage({ store }: Props) {
   ]);
 
   // === ファイル ===
+  // 内蔵台本を読み込む(メモリ上の store を差し替えるだけ。ファイルは触らない)。
+  async function loadBuiltinScript(s: BuiltinScript) {
+    setScriptMenuOpen(false);
+    if (isDirty && !window.confirm(`未保存の変更があります。「${s.title}」を読み込むと失われます。よろしいですか?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(s.path);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      store.reset(parseProject(await res.text()));
+      setSavedRevision(store.revision);
+      setSelectedSceneId(store.doc.scenes[0]?.id ?? null);
+      setSelectedId(null);
+      setTime(0);
+      bumpSeek();
+    } catch (err) {
+      alert(`台本の読込に失敗しました: ${String(err)}`);
+    }
+  }
+
   async function handleOpenFolder() {
     if (!ensureFsSupport()) return;
     const adapter: FileSystemAdapter = new FsAccessAdapter();
@@ -818,6 +843,35 @@ export function ScenePage({ store }: Props) {
         <button className="ui-btn" onClick={handleSave}>
           <IconSave /> 保存
         </button>
+        <button
+          ref={scriptAnchor}
+          className={`ui-btn${scriptMenuOpen ? " ui-btn--active" : ""}`}
+          onClick={() => setScriptMenuOpen((o) => !o)}
+          title="内蔵台本を読み込む"
+        >
+          <IconScript /> 台本 ▾
+        </button>
+        <Popover anchorEl={scriptAnchor.current} open={scriptMenuOpen} onClose={() => setScriptMenuOpen(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: "240px" }}>
+            <div style={{ fontSize: "11px", color: "var(--text-dim)", padding: "2px 8px 4px" }}>台本を選ぶ</div>
+            {BUILTIN_SCRIPTS.map((s) => {
+              const current = doc.title === s.title;
+              return (
+                <button
+                  key={s.id}
+                  className="script-item"
+                  onClick={() => loadBuiltinScript(s)}
+                >
+                  <span className="script-item__title">
+                    {s.title}
+                    {current && <span className="script-item__current">読込中</span>}
+                  </span>
+                  <span className="script-item__sub">{s.subtitle}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Popover>
         <input
           className="ui-input"
           value={doc.title}
