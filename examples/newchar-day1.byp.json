@@ -2,27 +2,63 @@
   "formatVersion": 1,
   "id": "01KZAA0000000000000000NCD1",
   "title": "ふたりの登校時間 第1話",
-  "stage": { "w": 1920, "h": 1080, "fps": 30 },
+  "stage": {
+    "w": 1920,
+    "h": 1080,
+    "fps": 30
+  },
   "bgm": [],
   "scenes": [
     {
       "id": "01KZAA0000000000000001SCN1",
       "duration": 5,
       "durationMode": "manual",
-      "background": { "image": "assets/generated/bg-school-001.png" },
+      "background": {
+        "image": "assets/generated/bg-school-001.png"
+      },
       "camera": [],
-      "transition": { "type": "cut", "dur": 0.5 },
+      "transition": {
+        "type": "cut",
+        "dur": 0.5
+      },
       "elements": [
         {
           "locked": false,
           "kind": "character",
           "ref": "builtin:sakura",
-          "transform": { "x": 320, "y": 700, "scale": 0.9, "flipX": false },
+          "transform": {
+            "x": 320,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": false
+          },
           "z": 0,
-          "enter": { "type": "slideL", "delay": 0, "dur": 0.5 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
-          "actions": [{ "t": 0.3, "clip": "walk-girl", "speed": 1, "moveTo": { "x": 900 } }],
-          "expressions": [{ "t": 0, "preset": "worry" }],
+          "enter": {
+            "type": "slideL",
+            "delay": 0,
+            "dur": 0.5
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
+          "actions": [
+            {
+              "t": 0.3,
+              "clip": "walk-girl",
+              "speed": 1,
+              "moveTo": {
+                "x": 900
+              }
+            }
+          ],
+          "expressions": [
+            {
+              "t": 0,
+              "preset": "worry"
+            }
+          ],
           "talks": [],
           "id": "01KZAA0000000000000001CHR1"
         },
@@ -38,11 +74,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": 60, "y": 170 },
-          "transform": { "x": 880, "y": 260, "scale": 1, "flipX": false },
+          "tail": {
+            "x": 60,
+            "y": 170
+          },
+          "transform": {
+            "x": 880,
+            "y": 260,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 2.7, "dur": 0.35 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "pop",
+            "delay": 2.7,
+            "dur": 0.35
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "id": "01KZAA0000000000000001BAL1"
         }
       ],
@@ -52,23 +104,56 @@
       "id": "01KZAA0000000000000002SCN2",
       "duration": 6.5,
       "durationMode": "manual",
-      "background": { "image": "assets/generated/bg-school-001.png" },
+      "background": {
+        "image": "assets/generated/bg-school-001.png"
+      },
       "camera": [],
-      "transition": { "type": "cut", "dur": 0.5 },
+      "transition": {
+        "type": "cut",
+        "dur": 0.5
+      },
       "elements": [
         {
           "locked": false,
           "kind": "character",
           "ref": "builtin:sakura",
-          "transform": { "x": 900, "y": 700, "scale": 0.9, "flipX": false },
+          "transform": {
+            "x": 900,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": false
+          },
           "z": 0,
-          "enter": { "type": "cut", "delay": 0, "dur": 0.4 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
-          "actions": [{ "t": 3.4, "clip": "talk", "speed": 1 }],
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
+          "actions": [
+            {
+              "t": 3.4,
+              "clip": "talk",
+              "speed": 1
+            }
+          ],
           "expressions": [
-            { "t": 0, "preset": "normal" },
-            { "t": 1.4, "preset": "surprise" },
-            { "t": 3.3, "preset": "smile" }
+            {
+              "t": 0,
+              "preset": "normal"
+            },
+            {
+              "t": 1.4,
+              "preset": "surprise"
+            },
+            {
+              "t": 3.3,
+              "preset": "smile"
+            }
           ],
           "talks": [],
           "id": "01KZAA0000000000000002CHR1"
@@ -77,15 +162,44 @@
           "locked": false,
           "kind": "character",
           "ref": "builtin:ryouta",
-          "transform": { "x": 1780, "y": 700, "scale": 0.9, "flipX": false },
+          "transform": {
+            "x": 1780,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": false
+          },
           "z": 1,
-          "enter": { "type": "cut", "delay": 0.2, "dur": 0.3 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "cut",
+            "delay": 0.2,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "actions": [
-            { "t": 0.3, "clip": "walk-girl", "speed": 1, "moveTo": { "x": 1280 } },
-            { "t": 1.8, "clip": "talk", "speed": 1 }
+            {
+              "t": 0.3,
+              "clip": "walk-girl",
+              "speed": 1,
+              "moveTo": {
+                "x": 1280
+              }
+            },
+            {
+              "t": 1.8,
+              "clip": "talk",
+              "speed": 1
+            }
           ],
-          "expressions": [{ "t": 0, "preset": "smile" }],
+          "expressions": [
+            {
+              "t": 0,
+              "preset": "smile"
+            }
+          ],
           "talks": [],
           "id": "01KZAA0000000000000002CHR2"
         },
@@ -101,11 +215,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": 80, "y": 175 },
-          "transform": { "x": 1180, "y": 250, "scale": 1, "flipX": false },
+          "tail": {
+            "x": 80,
+            "y": 175
+          },
+          "transform": {
+            "x": 1180,
+            "y": 250,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 1.8, "dur": 0.3 },
-          "exit": { "type": "fade", "at": 3.2, "dur": 0.25 },
+          "enter": {
+            "type": "pop",
+            "delay": 1.8,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "fade",
+            "at": 3.2,
+            "dur": 0.25
+          },
           "id": "01KZAA0000000000000002BAL1"
         },
         {
@@ -120,11 +250,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": -80, "y": 175 },
-          "transform": { "x": 1000, "y": 250, "scale": 1, "flipX": false },
+          "tail": {
+            "x": -80,
+            "y": 175
+          },
+          "transform": {
+            "x": 1000,
+            "y": 250,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 3.5, "dur": 0.3 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "pop",
+            "delay": 3.5,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "id": "01KZAA0000000000000002BAL2"
         }
       ],
@@ -134,22 +280,52 @@
       "id": "01KZAA0000000000000003SCN3",
       "duration": 6,
       "durationMode": "manual",
-      "background": { "image": "assets/backgrounds/bg-classroom-001.svg" },
+      "background": {
+        "image": "assets/backgrounds/bg-classroom-001.svg"
+      },
       "camera": [],
-      "transition": { "type": "wipe", "dur": 0.6 },
+      "transition": {
+        "type": "wipe",
+        "dur": 0.6
+      },
       "elements": [
         {
           "locked": false,
           "kind": "character",
           "ref": "builtin:ryouta",
-          "transform": { "x": 680, "y": 700, "scale": 0.9, "flipX": false },
+          "transform": {
+            "x": 680,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": false
+          },
           "z": 0,
-          "enter": { "type": "cut", "delay": 0, "dur": 0.4 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
-          "actions": [{ "t": 2.9, "clip": "talk", "speed": 1 }],
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
+          "actions": [
+            {
+              "t": 2.9,
+              "clip": "talk",
+              "speed": 1
+            }
+          ],
           "expressions": [
-            { "t": 0, "preset": "normal" },
-            { "t": 2.8, "preset": "smile" }
+            {
+              "t": 0,
+              "preset": "normal"
+            },
+            {
+              "t": 2.8,
+              "preset": "smile"
+            }
           ],
           "talks": [],
           "id": "01KZAA0000000000000003CHR1"
@@ -158,17 +334,44 @@
           "locked": false,
           "kind": "character",
           "ref": "builtin:sakura",
-          "transform": { "x": 1240, "y": 700, "scale": 0.9, "flipX": true },
+          "transform": {
+            "x": 1240,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": true
+          },
           "z": 1,
-          "enter": { "type": "cut", "delay": 0, "dur": 0.4 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "actions": [
-            { "t": 0.5, "clip": "talk", "speed": 1 },
-            { "t": 2.6, "clip": "idle", "speed": 1 }
+            {
+              "t": 0.5,
+              "clip": "talk",
+              "speed": 1
+            },
+            {
+              "t": 2.6,
+              "clip": "idle",
+              "speed": 1
+            }
           ],
           "expressions": [
-            { "t": 0, "preset": "smile" },
-            { "t": 3, "preset": "surprise" }
+            {
+              "t": 0,
+              "preset": "smile"
+            },
+            {
+              "t": 3,
+              "preset": "surprise"
+            }
           ],
           "talks": [],
           "id": "01KZAA0000000000000003CHR2"
@@ -185,11 +388,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": 90, "y": 175 },
-          "transform": { "x": 1110, "y": 250, "scale": 1, "flipX": false },
+          "tail": {
+            "x": 90,
+            "y": 175
+          },
+          "transform": {
+            "x": 1110,
+            "y": 250,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 0.5, "dur": 0.3 },
-          "exit": { "type": "fade", "at": 2.6, "dur": 0.25 },
+          "enter": {
+            "type": "pop",
+            "delay": 0.5,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "fade",
+            "at": 2.6,
+            "dur": 0.25
+          },
           "id": "01KZAA0000000000000003BAL1"
         },
         {
@@ -204,11 +423,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": -90, "y": 178 },
-          "transform": { "x": 830, "y": 250, "scale": 1, "flipX": false },
+          "tail": {
+            "x": -90,
+            "y": 178
+          },
+          "transform": {
+            "x": 830,
+            "y": 250,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 2.9, "dur": 0.3 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "pop",
+            "delay": 2.9,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "id": "01KZAA0000000000000003BAL2"
         }
       ],
@@ -218,20 +453,49 @@
       "id": "01KZAA0000000000000004SCN4",
       "duration": 5,
       "durationMode": "manual",
-      "background": { "image": "assets/backgrounds/bg-classroom-001.svg" },
+      "background": {
+        "image": "assets/backgrounds/bg-classroom-001.svg"
+      },
       "camera": [],
-      "transition": { "type": "cut", "dur": 0.4 },
+      "transition": {
+        "type": "cut",
+        "dur": 0.4
+      },
       "elements": [
         {
           "locked": false,
           "kind": "character",
           "ref": "builtin:ryouta",
-          "transform": { "x": 680, "y": 700, "scale": 0.9, "flipX": false },
+          "transform": {
+            "x": 680,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": false
+          },
           "z": 0,
-          "enter": { "type": "cut", "delay": 0, "dur": 0.4 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
-          "actions": [{ "t": 0.6, "clip": "wave", "speed": 1 }],
-          "expressions": [{ "t": 0, "preset": "smile" }],
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
+          "actions": [
+            {
+              "t": 0.6,
+              "clip": "wave",
+              "speed": 1
+            }
+          ],
+          "expressions": [
+            {
+              "t": 0,
+              "preset": "smile"
+            }
+          ],
           "talks": [],
           "id": "01KZAA0000000000000004CHR1"
         },
@@ -239,12 +503,36 @@
           "locked": false,
           "kind": "character",
           "ref": "builtin:sakura",
-          "transform": { "x": 1240, "y": 700, "scale": 0.9, "flipX": true },
+          "transform": {
+            "x": 1240,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": true
+          },
           "z": 1,
-          "enter": { "type": "cut", "delay": 0, "dur": 0.4 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
-          "actions": [{ "t": 0.4, "clip": "wave", "speed": 1 }],
-          "expressions": [{ "t": 0, "preset": "smile" }],
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
+          "actions": [
+            {
+              "t": 0.4,
+              "clip": "wave",
+              "speed": 1
+            }
+          ],
+          "expressions": [
+            {
+              "t": 0,
+              "preset": "smile"
+            }
+          ],
           "talks": [],
           "id": "01KZAA0000000000000004CHR2"
         },
@@ -260,11 +548,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": 80, "y": 180 },
-          "transform": { "x": 1130, "y": 240, "scale": 1, "flipX": false },
+          "tail": {
+            "x": 80,
+            "y": 180
+          },
+          "transform": {
+            "x": 1130,
+            "y": 240,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 0.6, "dur": 0.3 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "pop",
+            "delay": 0.6,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "id": "01KZAA0000000000000004BAL1"
         },
         {
@@ -279,11 +583,27 @@
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
-          "tail": { "x": -70, "y": 168 },
-          "transform": { "x": 830, "y": 270, "scale": 1, "flipX": false },
+          "tail": {
+            "x": -70,
+            "y": 168
+          },
+          "transform": {
+            "x": 830,
+            "y": 270,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 200,
-          "enter": { "type": "pop", "delay": 1.6, "dur": 0.3 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "pop",
+            "delay": 1.6,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "id": "01KZAA0000000000000004BAL2"
         },
         {
@@ -294,14 +614,161 @@
           "color": "#2E2A33",
           "strokeColor": "#ffffff",
           "strokeWidth": 8,
-          "transform": { "x": 960, "y": 540, "scale": 1, "flipX": false },
+          "transform": {
+            "x": 960,
+            "y": 540,
+            "scale": 1,
+            "flipX": false
+          },
           "z": 300,
-          "enter": { "type": "fade", "delay": 3.6, "dur": 0.7 },
-          "exit": { "type": "cut", "at": null, "dur": 0.4 },
+          "enter": {
+            "type": "fade",
+            "delay": 3.6,
+            "dur": 0.7
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
           "id": "01KZAA0000000000000004TXT1"
         }
       ],
       "seed": 3
+    },
+    {
+      "id": "01KTCLASSROOMSITTALK0001",
+      "duration": 8,
+      "seed": 41,
+      "background": {
+        "image": "assets/backgrounds/bg-classroom-001.svg"
+      },
+      "transition": {
+        "type": "fade",
+        "dur": 0.5
+      },
+      "camera": [],
+      "elements": [
+        {
+          "id": "obj-sofa-st",
+          "kind": "object",
+          "src": "assets/objects/sofa-navy-2seat.png",
+          "transform": {
+            "x": 1150,
+            "y": 890,
+            "scale": 0.62,
+            "flipX": false
+          },
+          "z": -10,
+          "locked": false,
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          }
+        },
+        {
+          "id": "char-saku-st",
+          "kind": "character",
+          "ref": "builtin:sakura",
+          "transform": {
+            "x": 380,
+            "y": 700,
+            "scale": 0.9,
+            "flipX": false
+          },
+          "z": 0,
+          "locked": false,
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          },
+          "actions": [
+            {
+              "t": 0,
+              "clip": "walk-girl",
+              "speed": 1.4,
+              "moveTo": {
+                "x": 1150
+              }
+            },
+            {
+              "t": 2.4,
+              "clip": "sit",
+              "speed": 1
+            },
+            {
+              "t": 3.6,
+              "clip": "sit-talk",
+              "speed": 1
+            }
+          ],
+          "expressions": [
+            {
+              "t": 0,
+              "preset": "smile"
+            },
+            {
+              "t": 3.4,
+              "preset": "happy"
+            }
+          ],
+          "talks": [
+            {
+              "t": 3.6,
+              "audio": "assets/audio/vo-001.wav",
+              "gain": 1
+            }
+          ]
+        },
+        {
+          "id": "bal-st",
+          "kind": "balloon",
+          "shape": "round",
+          "text": "ふぅ、やっと座れた〜",
+          "size": 38,
+          "w": 440,
+          "h": 150,
+          "fill": "#ffffff",
+          "textColor": "#2E2A33",
+          "lineColor": "#2E2A33",
+          "lineWidth": 4,
+          "tail": {
+            "x": -120,
+            "y": 120
+          },
+          "transform": {
+            "x": 1150,
+            "y": 360,
+            "scale": 1,
+            "flipX": false
+          },
+          "z": 200,
+          "locked": false,
+          "enter": {
+            "type": "pop",
+            "delay": 3.6,
+            "dur": 0.3
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          }
+        }
+      ],
+      "durationMode": "manual"
     }
   ]
 }

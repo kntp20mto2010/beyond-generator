@@ -44,6 +44,7 @@ import {
 } from "../../core/commands-project.js";
 import { audioLabel, listAudioOptions } from "./audio-options.js";
 import { getObjectSeat, objectLabel } from "./objects-catalog.js";
+import { spriteClipLabel } from "../newchar/sprite-clips.js";
 import { Section } from "../ui/Section.js";
 import { SegmentedButtons } from "../ui/SegmentedButtons.js";
 import { Popover } from "../ui/Popover.js";
@@ -327,8 +328,9 @@ function CharacterSections({ store, sceneId, scene, element, resolver, thumbs, f
   const id = element.id;
   const char: CharacterDoc | undefined = resolver.getCharacter(element.ref);
   const audioOptions = useAudioOptions(fs);
-  // sit ポーズはスプライトキャラのみ。座れる家具(座面アンカー持ち)を x 近接順で探す
-  const canSit = resolver.getSpriteCharacter?.(element.ref) != null;
+  // 新キャラ(スプライト)判定。アクション選択UI・着座系はスプライト専用クリップを使う
+  const isSprite = resolver.getSpriteCharacter?.(element.ref) != null;
+  // 座れる家具(座面アンカー持ち)を x 近接順で探す
   const seatables = scene.elements
     .filter(
       (e): e is Extract<SceneElement, { kind: "object" }> =>
@@ -339,7 +341,7 @@ function CharacterSections({ store, sceneId, scene, element, resolver, thumbs, f
   return (
     <>
       {/* 家具に座る(スプライトキャラのみ) */}
-      {canSit && (
+      {isSprite && (
         <Section title="家具に座る" defaultOpen={true}>
           {seatables.length === 0 ? (
             <div style={{ color: "var(--text-dim)", fontSize: "11px" }}>
@@ -351,17 +353,30 @@ function CharacterSections({ store, sceneId, scene, element, resolver, thumbs, f
                 座面に合わせて配置し、腰を下ろす動きを付けます
               </div>
               {seatables.map((obj) => (
-                <button
-                  key={obj.id}
-                  className="ui-btn"
-                  style={{ width: "100%", justifyContent: "center", marginBottom: "4px" }}
-                  onClick={() => {
-                    const seat = getObjectSeat(obj.src);
-                    if (seat) sitCharacterOnObject(store, sceneId, id, obj.id, seat);
-                  }}
-                >
-                  {objectLabel(obj.src)}に座らせる
-                </button>
+                <div key={obj.id} style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                  <button
+                    className="ui-btn"
+                    style={{ flex: 1, justifyContent: "center" }}
+                    onClick={() => {
+                      const seat = getObjectSeat(obj.src);
+                      if (seat) sitCharacterOnObject(store, sceneId, id, obj.id, seat);
+                    }}
+                    title={`${objectLabel(obj.src)}の座面に座らせる`}
+                  >
+                    {objectLabel(obj.src)}に座る
+                  </button>
+                  <button
+                    className="ui-btn"
+                    style={{ flex: 1, justifyContent: "center" }}
+                    onClick={() => {
+                      const seat = getObjectSeat(obj.src);
+                      if (seat) sitCharacterOnObject(store, sceneId, id, obj.id, seat, true);
+                    }}
+                    title="座らせて『座って話す』所作まで付ける(セリフ音声は別途)"
+                  >
+                    座って話す
+                  </button>
+                </div>
               ))}
             </>
           )}
@@ -380,6 +395,7 @@ function CharacterSections({ store, sceneId, scene, element, resolver, thumbs, f
             index={i}
             char={char ?? null}
             thumbs={thumbs}
+            isSprite={isSprite}
           />
         ))}
         <button
@@ -507,12 +523,13 @@ interface ActionRowProps {
   index: number;
   char: CharacterDoc | null;
   thumbs: ThumbnailService | null;
+  isSprite: boolean;
 }
 
-function ActionRow({ store, sceneId, elementId, action: a, index: i, char, thumbs }: ActionRowProps) {
+function ActionRow({ store, sceneId, elementId, action: a, index: i, char, thumbs, isSprite }: ActionRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement>(null);
-  const clipDef = CLIPS[a.clip];
+  const clipLabel = isSprite ? spriteClipLabel(a.clip) : (CLIPS[a.clip]?.label ?? a.clip);
 
   return (
     <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: "4px", marginBottom: "4px" }}>
@@ -533,7 +550,7 @@ function ActionRow({ store, sceneId, elementId, action: a, index: i, char, thumb
           style={{ flex: 1, justifyContent: "flex-start", overflow: "hidden" }}
           onClick={() => setPickerOpen((o) => !o)}
         >
-          {clipDef?.label ?? a.clip}
+          {clipLabel}
         </button>
         <button
           className="ui-btn ui-btn--danger"
@@ -549,6 +566,7 @@ function ActionRow({ store, sceneId, elementId, action: a, index: i, char, thumb
           char={char}
           value={a.clip}
           thumbs={thumbs}
+          isSprite={isSprite}
           onPick={(clipId) => {
             updateAction(store, sceneId, elementId, i, { clip: clipId });
             setPickerOpen(false);

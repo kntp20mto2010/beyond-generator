@@ -464,17 +464,19 @@ export function removeAction(
   });
 }
 
-// 家具に座らせる: キャラを家具の座面へ移動 + sit アクションを t=0 に置き、
-// 家具の手前(z+1)へ。seat は家具画像の下端中央アンカー基準のオフセット(dy上負)。
-// 既存アクションは sit 単体に置換(腰を下ろす動きが先頭から再生される)。
+// 家具に座らせる: キャラを家具の座面へ移動 + 着座アクションを置き、家具の手前(z+1)へ。
+// seat は家具画像の下端中央アンカー基準のオフセット(dy上負)。既存アクションは置換する。
+// withTalk=true なら sit(腰を下ろす)→ sit-talk(座って話す) を並べ、着座後に発話の所作へ
+// 移る。発話音声(talks)は別途付与すると口パクが音声に同期する。
 export function sitCharacterOnObject(
   store: DocStore<ProjectDoc>,
   sceneId: string,
   charId: string,
   objectId: string,
   seat: { dx: number; dy: number },
+  withTalk = false,
 ): void {
-  store.dispatch("座らせる", (d) => {
+  store.dispatch(withTalk ? "座って話す" : "座らせる", (d) => {
     const scene = findScene(d, sceneId);
     if (!scene) return;
     const ch = scene.elements.find((e) => e.id === charId);
@@ -485,7 +487,14 @@ export function sitCharacterOnObject(
     ch.transform.x = obj.transform.x + seat.dx * dirX * s;
     ch.transform.y = obj.transform.y + seat.dy * s;
     ch.z = obj.z + 1;
-    ch.actions = [{ t: 0, clip: "sit", speed: 1 } as Draft<Action>];
+    ch.actions = (
+      withTalk
+        ? [
+            { t: 0, clip: "sit", speed: 1 },
+            { t: 1, clip: "sit-talk", speed: 1 },
+          ]
+        : [{ t: 0, clip: "sit", speed: 1 }]
+    ) as Draft<Action>[];
   });
 }
 
