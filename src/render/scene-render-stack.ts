@@ -288,6 +288,7 @@ export function applyItem(view: ElView, item: SceneFrameItem): void {
       c.addChild(view.spriteCharView.container);
     }
     if (view.text) { view.text.destroy(); view.text = undefined; }
+    view.spriteCharView.update(item.payload.drivers);
     const tf = item.payload.transform;
     const s = tf.scale * visual.scaleMul;
     c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);

@@ -644,6 +644,11 @@ export function StageCanvas(props: Props) {
         transMeta = { type: trans.type, dur: trans.dur };
       };
 
+      // DEV: プレビュー iframe が非表示だと rAF がスロットルされ ticker が回らない。
+      // 検証時に手動で app.ticker.update() を回せるよう app を公開する。
+      if (import.meta.env.DEV) {
+        (globalThis as unknown as { __stageApp?: Application }).__stageApp = app;
+      }
       app.ticker.add(() => {
         // Pixi v8 の ticker は update() が throw すると次フレームの rAF を
         // スケジュールしないため、1度の例外でステージが完全に停止する。

@@ -342,6 +342,18 @@ export type SceneFramePayload =
       spriteCfg: unknown;
       flipX: boolean;
       transform: Transform;
+      // 動的リグ駆動用ドライバ。クリップ名のみ解決し、実サンプリングは render 層が行う
+      // (新キャラクリップは CLIPS 未登録のため scene-eval ではサンプルしない)。
+      drivers: {
+        clip: string;
+        localTime: number;
+        prevClip: string | null;
+        prevLocalTime: number;
+        blend: number;
+        expr: string;
+        talk: boolean;
+        clock: number;
+      };
     }
   | { kind: "text"; el: TextElement; transform: Transform }
   | { kind: "balloon"; el: BalloonElement; transform: Transform }
@@ -444,6 +456,55 @@ function evaluateCharacter(
   };
 }
 
+// 新キャラ(スプライト)の動的ドライバを評価。ボーン変換は render 層(SpriteRig)が
+// 行うため、ここではアクティブ clip 名・ローカル時刻・クロスフェード・表情・talk・位置/向き
+// だけを払い出す。新キャラクリップは CLIPS 未登録なので clip の sampleClip はしない
+// (moveTo の歩行速度は idle フォールバック→DEFAULT_WALK_V=240 で walk-girl と一致)。
+function evaluateSpriteCharacter(
+  el: CharacterElement,
+  spriteCfg: unknown,
+  t: number,
+): SceneFramePayload {
+  const origin: [number, number] = [el.transform.x, el.transform.y];
+  const list = expandActions(origin, el.actions);
+  const activeIdx = activeExpandedIdx(list, t);
+  const active = list[activeIdx]!;
+  const localTime = (t - active.t) * active.speed;
+
+  // クロスフェード: active 開始から CROSSFADE 未満かつ直前アクションがある
+  const since = t - active.t;
+  const prev = activeIdx > 0 ? list[activeIdx - 1] : undefined;
+  let prevClip: string | null = null;
+  let prevLocalTime = 0;
+  let blend = 1;
+  if (prev && since >= 0 && since < CROSSFADE) {
+    prevClip = prev.clip;
+    prevLocalTime = (t - prev.t) * prev.speed;
+    blend = smoothstep(since / CROSSFADE);
+  }
+
+  const motion = evaluateCharMotion(el, t);
+  const flipX = motion.facing === -1;
+  const transform: Transform = { ...el.transform, x: motion.pos[0], y: motion.pos[1], flipX };
+
+  return {
+    kind: "sprite-character",
+    spriteCfg,
+    flipX,
+    transform,
+    drivers: {
+      clip: active.clip,
+      localTime,
+      prevClip,
+      prevLocalTime,
+      blend,
+      expr: activeExpression(el.expressions, t),
+      talk: active.clip === "talk",
+      clock: t,
+    },
+  };
+}
+
 function evaluateElement(
   el: SceneElement,
   index: number,
@@ -461,12 +522,7 @@ function evaluateElement(
       // 先にスプライト系を確認(新キャラ)。あれば static sprite として返す。
       const spriteCfg = resolver.getSpriteCharacter?.(el.ref);
       if (spriteCfg) {
-        payload = {
-          kind: "sprite-character",
-          spriteCfg,
-          flipX: el.transform.flipX,
-          transform: el.transform,
-        };
+        payload = evaluateSpriteCharacter(el, spriteCfg, t);
         break;
       }
       const char = resolver.getCharacter(el.ref);
