@@ -6,7 +6,7 @@ import { lookupSpriteClip, SpriteRig, toExprKey } from "./sprite-rig.js";
 // テクスチャを非同期ロードし、SpriteRig(SpriteRigPage のリグ移植)で
 // clip/表情/まばたき/口パクを毎フレーム駆動する。
 //
-// 内部スケール 0.55 で 1280px テクスチャを ~700px に縮め、scene の transform.scale=1
+// 内部スケール 0.47 で 1280px テクスチャを ~600px に縮め、scene の transform.scale=1
 // で扱いやすくする。向き反転(flipX)は親(ElView コンテナ)側で行うため、ここでは反転しない。
 //
 // update() は scene-eval が払い出すドライバ(clip 名/ローカル時刻/表情/talk/clock)で駆動。
@@ -32,7 +32,7 @@ export class SpriteCharacterView {
 
   constructor(cfg: CharConfig) {
     this.cfg = cfg;
-    this.container.scale.set(0.55);
+    this.container.scale.set(0.47);
     void this.#loadAndBuild();
   }
 
