@@ -38,6 +38,14 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     nativeH: 630,
     seat: { dx: 0, dy: -306 },
   },
+  {
+    id: "school-chair",
+    label: "学校椅子",
+    src: "assets/objects/school-chair.png",
+    nativeW: 806, // ceil(806/300)=3, ceil(890/300)=3 → 3×3セル
+    nativeH: 890,
+    seat: { dx: 0, dy: -460 }, // 仮: 座面≒画像中央やや下。実測でキャリブ
+  },
 ];
 
 // オブジェクト既定の footprint セル(上書きが無ければ native/PX_PER_CELL)。
