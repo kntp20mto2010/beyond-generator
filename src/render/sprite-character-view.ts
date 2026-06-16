@@ -24,6 +24,7 @@ export class SpriteCharacterView {
   }
 
   get ready(): boolean { return this.#ready; }
+  get failed(): boolean { return this.#failed; }
 
   async #loadAndBuild(): Promise<void> {
     const cfg = this.cfg;

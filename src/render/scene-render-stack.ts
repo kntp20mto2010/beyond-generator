@@ -185,11 +185,16 @@ export class SceneRenderStack {
     for (const item of frame) {
       seen.add(item.elementId);
       let view = this.#views.get(item.elementId);
-      if (!view) {
-        view = { container: new Container() };
-        this.#views.set(item.elementId, view);
+      const isNew = !view;
+      if (!view) view = { container: new Container() };
+      try {
+        applyItem(view, item);
+      } catch (e) {
+        console.error("[SceneRenderStack] applyItem failed", item, e);
+        if (isNew) view.container.destroy({ children: true });
+        continue;
       }
-      applyItem(view, item);
+      if (isNew) this.#views.set(item.elementId, view);
       this.elLayer.addChild(view.container);
     }
     for (const [id, v] of [...this.#views]) {

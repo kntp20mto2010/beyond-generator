@@ -472,10 +472,9 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       //    肩キャップ領域(肩ピボットより上の数pxを含む上端帯)を身体に貼り付けたまま、
       //    その下から upperArm の回転に滑らかに渡せる → どのポーズで腕を回しても
       //    肩は body 側にとどまる(「付け根が浮遊」しない)。
-      // SHOULDER_BAND=80px + rows=40 で、+180° 回転でも隣接行の角度勾配 ~10°/行に
-      // 抑える。各行のローカル弧変位 = d·Δθ ≒ 40·0.175 = 7px、列間隔(19px)より十分
-      // 小さいので quad の折り返し(雷)が消える。
-      const SHOULDER_BAND = 80;
+      // rows=40 で、+180° 回転でも隣接行の角度勾配 ~10°/行に抑える。各行のローカル
+      // 弧変位 = d·Δθ ≒ 40·0.175 = 7px、列間隔(19px)より十分小さいので quad の
+      // 折り返し(雷)が消える。
       type ArmMeshData = { rest: Float32Array; W: Float32Array; posBuf: ReturnType<MeshGeometry["getBuffer"]>; mesh: Mesh; nV: number; upperKey: BoneId; foreKey: BoneId; uppPivot: [number, number]; forPivot: [number, number] };
       const buildArmMesh = (bbox: [number, number, number, number], elbowY: number, upperKey: BoneId, foreKey: BoneId, uppPivot: [number, number], forPivot: [number, number]): ArmMeshData => {
         const [xLo, yLo, xHi, yHi] = bbox;

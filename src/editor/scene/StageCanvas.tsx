@@ -645,6 +645,17 @@ export function StageCanvas(props: Props) {
       };
 
       app.ticker.add(() => {
+        // Pixi v8 の ticker は update() が throw すると次フレームの rAF を
+        // スケジュールしないため、1度の例外でステージが完全に停止する。
+        // フレーム処理を try/catch で囲い、1フレームの失敗で固まらないようにする。
+        try {
+          tickOnce();
+        } catch (e) {
+          console.error("[StageCanvas] ticker frame failed", e);
+        }
+      });
+
+      function tickOnce() {
         const cur = p();
         const scene = currentScene();
         const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
@@ -684,7 +695,7 @@ export function StageCanvas(props: Props) {
           prevT = cur.tRef.current;
           renderFrame(scene, cur.tRef.current);
         }
-      });
+      }
     })();
 
     return () => {
