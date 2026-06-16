@@ -5,6 +5,7 @@ import { sampleClip } from "../../runtime/clip-player.js";
 import { CLIP_WALK_GIRL } from "./walk-girl.js";
 import { CLIP_WAVE_RELAX } from "./wave-relax.js";
 import { CLIP_POINT_FWD } from "./point-fwd.js";
+import { CLIP_TALK_RELAX } from "./talk-relax.js";
 import { CLIP_IDLE } from "../../presets/clips/idle.js";
 import type { ClipDoc } from "../../core/schema/clip.js";
 import type { BoneId } from "../../runtime/skeleton.js";
@@ -36,12 +37,13 @@ const TABLE: { jp: string; file: string; bone: string }[] = [
 ];
 
 // ポーズ・表情のプリセット辞書(toolbar の <select> から参照)
-type PoseKey = "walk-girl" | "idle" | "wave" | "point" | "tpose";
+type PoseKey = "walk-girl" | "idle" | "wave" | "point" | "talk" | "tpose";
 const POSES: Record<PoseKey, { label: string; clip: ClipDoc | null }> = {
   "walk-girl": { label: "歩く", clip: CLIP_WALK_GIRL },
   idle: { label: "待機", clip: CLIP_IDLE },
   wave: { label: "手を振る", clip: CLIP_WAVE_RELAX },
   point: { label: "指差し", clip: CLIP_POINT_FWD },
+  talk: { label: "話す", clip: CLIP_TALK_RELAX },
   tpose: { label: "棒立ち", clip: null },
 };
 type ExprKey = "normal" | "smile" | "surprise" | "worry";
@@ -389,9 +391,33 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       const upper = new Container();
       root.addChild(upper);
       upper.addChild(placed(FRONT_LAYERS[0]!)); // 上着
-      // 目: まばたき用に 白目/瞳/睫毛 を 1 つの container にまとめ、白目の視覚中心を
-      // pivot にして scale.y を絞ると目の中央から閉じる。z 順を保つため、最初に出てきた
-      // 目レイヤーの位置で eyeCont を upper に挿入する。
+      // 首は上半身に貼り付き(頭が回っても首は動かない)。
+      const neckLayer = FRONT_LAYERS.find((l) => l.file === "neck.png");
+      if (neckLayer) upper.addChild(placed(neckLayer));
+
+      // 頭部 container: neck の上端 = 首の根元 を pivot にして head bone で nod できる。
+      // 内部に 頭/耳/顔/口/目/眉/前髪 を入れる(首より上は全部頭と一緒に動く)。
+      const headCont = new Container();
+      if (neckLayer) {
+        const hx = neckLayer.frame[0] + neckLayer.frame[2] / 2 - HIP[0];
+        const hy = neckLayer.frame[1] - HIP[1];
+        headCont.pivot.set(hx, hy);
+        headCont.position.set(hx, hy);
+      }
+      upper.addChild(headCont);
+
+      // 口 container: 喋り口用に scale.y を伸ばす。pivot は口の上端 = 口を開く時の
+      // 「上唇」相当。scale.y を上げると下方向(顎側)に開く挙動になる。
+      const mouthLayer = FRONT_LAYERS.find((l) => l.file === "mouth.png");
+      const mouthCont = new Container();
+      if (mouthLayer) {
+        const mx = mouthLayer.frame[0] + mouthLayer.frame[2] / 2 - HIP[0];
+        const my = mouthLayer.frame[1] - HIP[1]; // 上端
+        mouthCont.pivot.set(mx, my);
+        mouthCont.position.set(mx, my);
+      }
+
+      // 目: まばたき用に 白目/瞳/睫毛 を 1 つの container にまとめる(既存)。
       const EYE_FILES = new Set(["eyewhite.png", "irides.png", "eyelash.png"]);
       const eyeWhite = FRONT_LAYERS.find((l) => l.file === "eyewhite.png");
       const eyeCont = new Container();
@@ -401,13 +427,20 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         eyeCont.pivot.set(ex, ey);
         eyeCont.position.set(ex, ey);
       }
-      let eyeAttached = false;
+
+      // headCont 内へ 頭/耳/顔/口/眉/前髪 を z 順保持で配置。口は mouthCont、目は eyeCont 経由。
+      let eyeAttached = false, mouthAttached = false;
+      const HEAD_SKIP = new Set(["topwear.png", "neck.png"]);
       for (const l of FRONT_LAYERS.slice(1)) {
-        if (EYE_FILES.has(l.file)) {
-          if (!eyeAttached) { upper.addChild(eyeCont); eyeAttached = true; }
+        if (HEAD_SKIP.has(l.file)) continue; // 上着/首は既に upper に追加済み
+        if (l.file === "mouth.png") {
+          if (!mouthAttached) { headCont.addChild(mouthCont); mouthAttached = true; }
+          mouthCont.addChild(placed(l));
+        } else if (EYE_FILES.has(l.file)) {
+          if (!eyeAttached) { headCont.addChild(eyeCont); eyeAttached = true; }
           eyeCont.addChild(placed(l));
         } else {
-          upper.addChild(placed(l));
+          headCont.addChild(placed(l));
         }
       }
 
@@ -852,6 +885,20 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         hairVel += ((hairTarget - hairAng) * 80 - hairVel * 16) * dt; // バネ(減衰強めで揺れを抑制)
         hairAng += hairVel * dt;
         hairSwayCont.rotation = hairAng;
+
+        // 頭の前傾/うなずき: head ボーンの回転を首付け根 pivot で headCont に適用。
+        headCont.rotation = deg2rad(rot["head"] ?? 0);
+
+        // 口の喋り: ポーズが talk のとき 4Hz で口を上下に伸ばす(リップフラップ)。
+        // 半正弦で 1.0(閉じ) ↔ 4.0(開き) を行き来(口 sprite は元が 6–7px と細いので
+        // しっかり伸ばさないと見えない)。
+        const talkOn = poseRef.current === "talk";
+        if (talkOn) {
+          const phase = (tt * 4) % 1;
+          mouthCont.scale.y = 1.0 + 3.0 * 0.5 * (1 - Math.cos(2 * Math.PI * phase));
+        } else {
+          mouthCont.scale.y = 1.0;
+        }
 
         // まばたき: 閉じる(0–0.33) → 閉じたまま(0.33–0.55) → 開く(0.55–1)。
         if (blinkPhase < 0) {
