@@ -4,8 +4,8 @@ import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 import { sampleClip } from "../../runtime/clip-player.js";
 import { CLIP_WALK_GIRL } from "./walk-girl.js";
 import { CLIP_WAVE_RELAX } from "./wave-relax.js";
+import { CLIP_POINT_FWD } from "./point-fwd.js";
 import { CLIP_IDLE } from "../../presets/clips/idle.js";
-import { CLIP_POINT } from "../../presets/clips/point.js";
 import type { ClipDoc } from "../../core/schema/clip.js";
 import type { BoneId } from "../../runtime/skeleton.js";
 
@@ -41,7 +41,7 @@ const POSES: Record<PoseKey, { label: string; clip: ClipDoc | null }> = {
   "walk-girl": { label: "歩く", clip: CLIP_WALK_GIRL },
   idle: { label: "待機", clip: CLIP_IDLE },
   wave: { label: "手を振る", clip: CLIP_WAVE_RELAX },
-  point: { label: "指差し", clip: CLIP_POINT },
+  point: { label: "指差し", clip: CLIP_POINT_FWD },
   tpose: { label: "棒立ち", clip: null },
 };
 type ExprKey = "normal" | "smile" | "surprise" | "worry";
