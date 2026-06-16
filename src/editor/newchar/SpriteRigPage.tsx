@@ -776,9 +776,7 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         const WthighR = mul(transBob, rotAbout(HIP_R[0], HIP_R[1], thR));
         const WshinR = mul(WthighR, rotAbout(KNEE_R[0], KNEE_R[1], shR));
 
-        // 座るは脚を深く曲げるため剛体(カットアウト)に固定。メッシュだと腰(骨盤)まで
-        // 引っ張られてグネグネするので、深い曲げは剛体で腰を保つ。歩き等は従来の選択。
-        const lMode = poseRef.current === "sit" ? "cutout" : legModeRef.current;
+        const lMode = legModeRef.current;
         legMesh.visible = lMode === "mesh";
         legMixL.mesh.visible = legMixR.mesh.visible = lMode === "mix";
         legCutout.visible = lMode === "cutout";

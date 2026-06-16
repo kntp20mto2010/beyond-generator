@@ -114,7 +114,7 @@ export const SAKURA_CFG: CharConfig = {
   footRFrame: [601, 880, 78, 115],
   meshGx0: 548, meshGx1: 680, meshGy0: 480, meshGy1: 890,
   midline: 614,
-  wPRange: [530, 600],
+  wPRange: [590, 615],
   kTRange: [670, 740],
   sLRange: [584, 644],
   lowerYRange: [640, 720],
@@ -185,7 +185,7 @@ export const RYOUTA_CFG: CharConfig = {
   // 続きが上着の裏で常に保たれるので、上下身が分離して見えない。
   meshGx0: 531, meshGx1: 704, meshGy0: 551, meshGy1: 1122,
   midline: 612,
-  wPRange: [620, 680],
+  wPRange: [624, 652],
   kTRange: [820, 880],
   sLRange: [582, 642],
   lowerYRange: [800, 870],
