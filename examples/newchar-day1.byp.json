@@ -654,9 +654,9 @@
           "kind": "object",
           "src": "assets/objects/sofa-navy-2seat.png",
           "transform": {
-            "x": 1150,
-            "y": 890,
-            "scale": 0.5714285714285714,
+            "x": 1020,
+            "y": 840,
+            "scale": 0.375,
             "flipX": false
           },
           "z": -10,
@@ -672,8 +672,8 @@
             "dur": 0.4
           },
           "cells": {
-            "w": 5,
-            "h": 3
+            "w": 3,
+            "h": 2
           }
         },
         {
@@ -704,7 +704,7 @@
               "clip": "walk-girl",
               "speed": 1.4,
               "moveTo": {
-                "x": 1150
+                "x": 1020
               }
             },
             {

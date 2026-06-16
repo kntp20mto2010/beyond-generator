@@ -5,13 +5,24 @@ import { GRID } from "./grid.js";
 //
 // サイズはグリッドの n×m セルで定義し(全体の統一感のため)、scale は
 // 「幅 = cells.w セル」になるよう nativeW から導出する(objectScale)。
+// オブジェクトのサイズ密度: 画像の約 PX_PER_CELL px が 1 グリッドセルに収まるよう
+// リサイズする(例 900×1200px → 3×4セル)。footprint セルは native/PX_PER_CELL を四捨五入。
+export const PX_PER_CELL = 300;
+
+export function cellsFromNative(nativeW: number, nativeH: number): { w: number; h: number } {
+  return {
+    w: Math.max(1, Math.round(nativeW / PX_PER_CELL)),
+    h: Math.max(1, Math.round(nativeH / PX_PER_CELL)),
+  };
+}
+
 export interface ObjectDef {
   id: string;
   label: string;
   src: string;
-  cells: { w: number; h: number }; // グリッド footprint(セル数)。この箱に画像を収める
   nativeW: number; // 画像コンテンツ幅(px)
   nativeH: number; // 画像コンテンツ高(px)
+  cells?: { w: number; h: number }; // 既定 footprint の上書き(未指定=native/PX_PER_CELL)
   // 座れる家具は座面アンカーを持つ。下端中央アンカーからの画像空間オフセット
   // (キャラの腰=transform.y を置く点)。dy は上が負。
   seat?: { dx: number; dy: number };
@@ -22,12 +33,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    cells: { w: 5, h: 3 }, // 5×3セル(600×360)の箱に収める。実寸960×630
-    nativeW: 960,
+    nativeW: 960, // 960/300≒3, 630/300≒2 → 3×2セル
     nativeH: 630,
     seat: { dx: 0, dy: -306 },
   },
 ];
+
+// オブジェクト既定の footprint セル(上書きが無ければ native/PX_PER_CELL)。
+export function objectDefaultCells(def: ObjectDef): { w: number; h: number } {
+  return def.cells ?? cellsFromNative(def.nativeW, def.nativeH);
+}
 
 // 画像(nativeW×nativeH)を cells の箱へ「アスペクト保持で contain」する scale。
 // 短径(より厳しい方)を満たし、長径側は箱内に padding(中央寄せ)。歪み無し。
@@ -41,7 +56,7 @@ export function containScale(
 
 // カタログ既定セルでの contain scale。
 export function objectScale(def: ObjectDef): number {
-  return containScale(def.nativeW, def.nativeH, def.cells);
+  return containScale(def.nativeW, def.nativeH, objectDefaultCells(def));
 }
 
 // src + 任意セルでの contain scale(セルを変えてリサイズする際に使う)。

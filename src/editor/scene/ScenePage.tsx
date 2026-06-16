@@ -10,7 +10,7 @@ import {
   type TextElement,
 } from "../../core/schema/project.js";
 import { snapObjectXY } from "./grid.js";
-import { getObjectDef, objectScale } from "./objects-catalog.js";
+import { getObjectDef, objectDefaultCells, objectScale } from "./objects-catalog.js";
 import { newId } from "../../core/id.js";
 import { setTitle } from "../../core/commands.js";
 import {
@@ -461,13 +461,14 @@ export function ScenePage({ store }: Props) {
     if (!def) return;
     // サイズはグリッド footprint から導出(幅=cells.w セル)。中心は幅の偶奇で
     // 左右端がグリッド線に乗る位相へ吸着。
+    const cells = objectDefaultCells(def);
     const scale = objectScale(def);
-    const [gx, gy] = snapObjectXY(960, 960, def.cells.w);
+    const [gx, gy] = snapObjectXY(960, 960, cells.w);
     const el: ObjectElement = {
       id: newId(),
       kind: "object",
       src,
-      cells: { w: def.cells.w, h: def.cells.h },
+      cells,
       transform: { x: gx, y: gy, scale, flipX: false },
       z: -10, // キャラ(z=0)の奥
       locked: false,
