@@ -443,9 +443,16 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           const x = xLo + (xHi - xLo) * (c / (cols - 1));
           const y = yLo + (yHi - yLo) * (r / (rows - 1));
           rA[k * 2] = x; rA[k * 2 + 1] = y; uA[k * 2] = x / TEXW; uA[k * 2 + 1] = y / TEXW;
-          const wT = 1 - smooth(yLo, yLo + SHOULDER_BAND, y);  // rest(肩帯)
-          const wF = smooth(elbowY - 18.5, elbowY + 18.5, y);  // forearm(肘前後)
-          const wU = Math.max(0, 1 - wT - wF);                  // upperArm(残り)
+          // rest 帯は使わず 2 bone(upperArm / forearm)のみの剛体回転 + 肘の継ぎ目だけ
+          // log-blend で smooth につなぐ。継ぎ目=上腕下端の 2 点と前腕上端の 2 点が
+          // 同位置にあり、両 bone が同じ向きなら継ぎ目で破綻しない。
+          // 180° 回しても各 bone 内は剛体で texture orientation が一様にひっくり返るだけ
+          // なので mesh fold(雷)は出ない。
+          // トレードオフ: 肩キャップが pivot 周りに回るので body shoulder line から
+          // 少し下に移動する。pivot を armpit に下げてあるので大きくはズレない。
+          const wT = 0;
+          const wF = smooth(elbowY - 18.5, elbowY + 18.5, y);
+          const wU = Math.max(0, 1 - wT - wF);
           WA[k * 3] = wT;
           WA[k * 3 + 1] = wU;
           WA[k * 3 + 2] = wF;
