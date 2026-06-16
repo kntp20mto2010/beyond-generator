@@ -22,7 +22,7 @@ interface Props {
   onAddCharacter: (ref: string) => void;
   onAddText: () => void;
   onAddBalloon: (shape: BalloonElement["shape"]) => void;
-  onAddObject: (src: string, scale: number) => void;
+  onAddObject: (src: string) => void;
   onAddBackground: (color: string) => void;
   onSetBackgroundImage: (image: string | null) => void;
 }
@@ -219,7 +219,7 @@ export function AddPanel({
               label={o.label}
               width={84}
               height={64}
-              onClick={disabled ? undefined : () => onAddObject(o.src, o.scale)}
+              onClick={disabled ? undefined : () => onAddObject(o.src)}
             >
               <span style={{ fontSize: "10px", color: "var(--text-dim)", textAlign: "center" }}>{o.label}</span>
             </Thumb>

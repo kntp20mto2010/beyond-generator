@@ -7,6 +7,10 @@ export function snapToGrid(v: number): number {
 }
 
 // オブジェクトの基準点(下端中央)をグリッドへ吸着。
-export function snapObjectXY(x: number, y: number): [number, number] {
-  return [snapToGrid(x), snapToGrid(y)];
+// 幅 cellsW の偶奇で中心の吸着位相を変え、左右端がグリッド線に乗るようにする
+// (偶数幅→中心はグリッド線、奇数幅→中心はセル中央=半セルずらし)。Yは床=グリッド線。
+export function snapObjectXY(x: number, y: number, cellsW = 2): [number, number] {
+  const offX = cellsW % 2 === 1 ? GRID / 2 : 0;
+  const sx = Math.round((x - offX) / GRID) * GRID + offX;
+  return [sx, snapToGrid(y)];
 }

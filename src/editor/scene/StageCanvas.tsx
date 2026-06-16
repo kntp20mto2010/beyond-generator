@@ -27,6 +27,7 @@ import {
 } from "./stage-coords.js";
 import { computeSnap, type Edges } from "./snap.js";
 import { GRID, snapObjectXY } from "./grid.js";
+import { getObjectCells } from "./objects-catalog.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const SNAP_THRESHOLD = 12;
@@ -334,7 +335,8 @@ export function StageCanvas(props: Props) {
           const rawDy = gy - startStageY;
           // オブジェクト(家具)はグリッド吸着(Shiftで自由配置)。
           if (el.kind === "object" && !me.shiftKey) {
-            const [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy);
+            const cw = getObjectCells(el.src)?.w ?? 2;
+            const [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
             updateElementTransform(p().store, scene.id, hitId, { x: snx, y: sny });
             guides.clear();
             return;

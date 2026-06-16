@@ -10,6 +10,7 @@ import {
   type TextElement,
 } from "../../core/schema/project.js";
 import { snapObjectXY } from "./grid.js";
+import { getObjectDef, objectScale } from "./objects-catalog.js";
 import { newId } from "../../core/id.js";
 import { setTitle } from "../../core/commands.js";
 import {
@@ -454,10 +455,14 @@ export function ScenePage({ store }: Props) {
     if (!scene) return;
     setSceneBackgroundImage(store, scene.id, image);
   };
-  const addObject = (src: string, scale: number) => {
+  const addObject = (src: string) => {
     if (!scene) return;
-    // 既定はステージ中央やや下・床近く。グリッドに吸着して配置。
-    const [gx, gy] = snapObjectXY(960, 960);
+    const def = getObjectDef(src);
+    if (!def) return;
+    // サイズはグリッド footprint から導出(幅=cells.w セル)。中心は幅の偶奇で
+    // 左右端がグリッド線に乗る位相へ吸着。
+    const scale = objectScale(def);
+    const [gx, gy] = snapObjectXY(960, 960, def.cells.w);
     const el: ObjectElement = {
       id: newId(),
       kind: "object",
