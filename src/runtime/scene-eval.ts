@@ -484,7 +484,11 @@ function evaluateSpriteCharacter(
   }
 
   const motion = evaluateCharMotion(el, t);
-  const flipX = motion.facing === -1;
+  // 向き: 新キャラのテクスチャは「素=左向き」(リグの facing 既定=left)。
+  // 一方 motion.facing は旧ベクター基準で 1=右/-1=左。素が左なので、右を向くとき
+  // (facing===1)に鏡映する。ベクターキャラ(素=右)とは反転になる。
+  // これで「右へ歩く→右を向く」「向き合う2人」が台本どおりに描画される。
+  const flipX = motion.facing === 1;
   const transform: Transform = { ...el.transform, x: motion.pos[0], y: motion.pos[1], flipX };
 
   return {
