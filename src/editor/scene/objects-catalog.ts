@@ -9,8 +9,9 @@ export interface ObjectDef {
   id: string;
   label: string;
   src: string;
-  cells: { w: number; h: number }; // グリッド footprint(セル数)。幅で scale を決める
-  nativeW: number; // 画像コンテンツ幅(px)。cells.w セルに合わせる基準
+  cells: { w: number; h: number }; // グリッド footprint(セル数)。この箱に画像を収める
+  nativeW: number; // 画像コンテンツ幅(px)
+  nativeH: number; // 画像コンテンツ高(px)
   // 座れる家具は座面アンカーを持つ。下端中央アンカーからの画像空間オフセット
   // (キャラの腰=transform.y を置く点)。dy は上が負。
   seat?: { dx: number; dy: number };
@@ -21,15 +22,19 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    cells: { w: 5, h: 3 }, // 5×3セル ≒ 600×360。実寸960×630を幅5セル(600px)に
+    cells: { w: 5, h: 3 }, // 5×3セル(600×360)の箱に収める。実寸960×630
     nativeW: 960,
+    nativeH: 630,
     seat: { dx: 0, dy: -306 },
   },
 ];
 
-// cells.w セル幅にフィットする transform.scale。
+// cells の箱に「アスペクト比保持で contain」する transform.scale。
+// 短径(より厳しい方)を満たし、長径側は箱内に padding(中央寄せ)。歪み無し。
 export function objectScale(def: ObjectDef): number {
-  return (def.cells.w * GRID) / def.nativeW;
+  const sx = (def.cells.w * GRID) / def.nativeW;
+  const sy = (def.cells.h * GRID) / def.nativeH;
+  return Math.min(sx, sy);
 }
 
 export function getObjectDef(src: string): ObjectDef | undefined {

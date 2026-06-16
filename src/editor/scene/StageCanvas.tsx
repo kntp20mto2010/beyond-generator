@@ -590,7 +590,19 @@ export function StageCanvas(props: Props) {
         if (selEl?.kind === "object") {
           for (let x = 0; x <= 1920; x += GRID) gridLayer.moveTo(x, 0).lineTo(x, 1080);
           for (let y = 0; y <= 1080; y += GRID) gridLayer.moveTo(0, y).lineTo(1920, y);
-          gridLayer.stroke({ color: 0xffffff, width: 1.5, alpha: 0.45 });
+          gridLayer.stroke({ color: 0x22e24a, width: 2, alpha: 0.85 });
+          // 選択オブジェクトの footprint(n×mセル)を強調表示
+          const cells = getObjectCells(selEl.src);
+          if (cells) {
+            const fw = cells.w * GRID;
+            const fh = cells.h * GRID;
+            const fx = selEl.transform.x - fw / 2;
+            const fy = selEl.transform.y - fh;
+            gridLayer.rect(fx, fy, fw, fh);
+            gridLayer.fill({ color: 0x22e24a, alpha: 0.16 });
+            gridLayer.rect(fx, fy, fw, fh);
+            gridLayer.stroke({ color: 0x22e24a, width: 3, alpha: 1 });
+          }
         }
         if (!p().showGrid) return;
         // 3分割線+中央線(細線)

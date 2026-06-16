@@ -35,17 +35,27 @@ describe("オブジェクトのグリッド吸着", () => {
   });
 });
 
-describe("セル幅からのスケール導出", () => {
-  it("objectScale: 幅 = cells.w セル になる", () => {
+describe("セルの箱への contain スケール導出", () => {
+  it("objectScale: アスペクト保持で箱に収まり、片方の辺はちょうど整数セル", () => {
     for (const def of OBJECT_CATALOG) {
       const scale = objectScale(def);
-      const renderedW = scale * def.nativeW;
-      expect(renderedW).toBeCloseTo(def.cells.w * GRID, 6);
+      const rw = scale * def.nativeW;
+      const rh = scale * def.nativeH;
+      // 箱(cells×GRID)を超えない(contain)
+      expect(rw).toBeLessThanOrEqual(def.cells.w * GRID + 1e-6);
+      expect(rh).toBeLessThanOrEqual(def.cells.h * GRID + 1e-6);
+      // どちらかの辺はちょうど cells(満たす側)
+      const wFills = Math.abs(rw - def.cells.w * GRID) < 1e-6;
+      const hFills = Math.abs(rh - def.cells.h * GRID) < 1e-6;
+      expect(wFills || hFills).toBe(true);
     }
   });
 
-  it("ソファは 5 セル幅 (scale 0.625)", () => {
+  it("ソファ(960×630)を5×3箱に: 高さが3セル(360px)を満たし scale 0.571", () => {
     const sofa = OBJECT_CATALOG.find((o) => o.id === "sofa-navy")!;
-    expect(objectScale(sofa)).toBeCloseTo(0.625, 6);
+    const scale = objectScale(sofa);
+    expect(scale).toBeCloseTo(360 / 630, 6); // 高さ contain
+    expect(scale * sofa.nativeH).toBeCloseTo(3 * GRID, 6); // 高さ=3セル
+    expect(scale * sofa.nativeW).toBeLessThan(5 * GRID); // 幅は5セル未満(左右padding)
   });
 });
