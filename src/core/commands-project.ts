@@ -464,6 +464,31 @@ export function removeAction(
   });
 }
 
+// 家具に座らせる: キャラを家具の座面へ移動 + sit アクションを t=0 に置き、
+// 家具の手前(z+1)へ。seat は家具画像の下端中央アンカー基準のオフセット(dy上負)。
+// 既存アクションは sit 単体に置換(腰を下ろす動きが先頭から再生される)。
+export function sitCharacterOnObject(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  charId: string,
+  objectId: string,
+  seat: { dx: number; dy: number },
+): void {
+  store.dispatch("座らせる", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    const ch = scene.elements.find((e) => e.id === charId);
+    const obj = scene.elements.find((e) => e.id === objectId);
+    if (!ch || ch.kind !== "character" || !obj || obj.kind !== "object") return;
+    const s = obj.transform.scale;
+    const dirX = obj.transform.flipX ? -1 : 1;
+    ch.transform.x = obj.transform.x + seat.dx * dirX * s;
+    ch.transform.y = obj.transform.y + seat.dy * s;
+    ch.z = obj.z + 1;
+    ch.actions = [{ t: 0, clip: "sit", speed: 1 } as Draft<Action>];
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 表情キー(キャラ要素)
 // ---------------------------------------------------------------------------

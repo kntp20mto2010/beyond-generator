@@ -35,6 +35,7 @@ import {
   setElementZ,
   setSceneTransition,
   setTextProps,
+  sitCharacterOnObject,
   updateAction,
   updateCameraKey,
   updateElementTransform,
@@ -42,6 +43,7 @@ import {
   updateTalk,
 } from "../../core/commands-project.js";
 import { audioLabel, listAudioOptions } from "./audio-options.js";
+import { getObjectSeat, objectLabel } from "./objects-catalog.js";
 import { Section } from "../ui/Section.js";
 import { SegmentedButtons } from "../ui/SegmentedButtons.js";
 import { Popover } from "../ui/Popover.js";
@@ -290,6 +292,7 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
         <CharacterSections
           store={store}
           sceneId={sceneId}
+          scene={scene}
           element={element}
           resolver={resolver}
           thumbs={thumbs}
@@ -313,19 +316,58 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
 interface CharacterSectionsProps {
   store: DocStore<ProjectDoc>;
   sceneId: string;
+  scene: SceneDoc;
   element: Extract<SceneElement, { kind: "character" }>;
   resolver: AssetResolver;
   thumbs: ThumbnailService | null;
   fs: FileSystemAdapter | null;
 }
 
-function CharacterSections({ store, sceneId, element, resolver, thumbs, fs }: CharacterSectionsProps) {
+function CharacterSections({ store, sceneId, scene, element, resolver, thumbs, fs }: CharacterSectionsProps) {
   const id = element.id;
   const char: CharacterDoc | undefined = resolver.getCharacter(element.ref);
   const audioOptions = useAudioOptions(fs);
+  // sit ポーズはスプライトキャラのみ。座れる家具(座面アンカー持ち)を x 近接順で探す
+  const canSit = resolver.getSpriteCharacter?.(element.ref) != null;
+  const seatables = scene.elements
+    .filter(
+      (e): e is Extract<SceneElement, { kind: "object" }> =>
+        e.kind === "object" && getObjectSeat(e.src) != null,
+    )
+    .sort((a, b) => Math.abs(a.transform.x - element.transform.x) - Math.abs(b.transform.x - element.transform.x));
 
   return (
     <>
+      {/* 家具に座る(スプライトキャラのみ) */}
+      {canSit && (
+        <Section title="家具に座る" defaultOpen={true}>
+          {seatables.length === 0 ? (
+            <div style={{ color: "var(--text-dim)", fontSize: "11px" }}>
+              座れる家具がシーンにありません
+            </div>
+          ) : (
+            <>
+              <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "4px" }}>
+                座面に合わせて配置し、腰を下ろす動きを付けます
+              </div>
+              {seatables.map((obj) => (
+                <button
+                  key={obj.id}
+                  className="ui-btn"
+                  style={{ width: "100%", justifyContent: "center", marginBottom: "4px" }}
+                  onClick={() => {
+                    const seat = getObjectSeat(obj.src);
+                    if (seat) sitCharacterOnObject(store, sceneId, id, obj.id, seat);
+                  }}
+                >
+                  {objectLabel(obj.src)}に座らせる
+                </button>
+              ))}
+            </>
+          )}
+        </Section>
+      )}
+
       {/* アクション */}
       <Section title="アクション" defaultOpen={true}>
         {element.actions.map((a, i) => (
