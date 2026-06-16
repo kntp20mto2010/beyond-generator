@@ -706,20 +706,26 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         host.removeEventListener("pointercancel", onPU);
       };
 
+      let lastPose = poseRef.current;
       app.ticker.add(() => {
         const dt = Math.min(app.ticker.deltaMS / 1000, 1 / 15);
+        // ポーズ切替で時計を 0 に戻す(座る等のワンショットを頭から再生)。
+        if (poseRef.current !== lastPose) { lastPose = poseRef.current; t = 0; }
         if (scrubRef.current == null && playingRef.current) t += dt;
         const clip = POSES[poseRef.current].clip;
         const curDur = clip?.duration ?? 1;
         // scrubRef は ratio(0..1)。null=自動。秒換算は curDur を掛ける(ポーズが
         // 切り替わっても%指定はそのまま追従する)。
         const tt = scrubRef.current != null ? scrubRef.current * curDur : t;
-        const frame = clip ? sampleClip(clip, tt % curDur) : EMPTY_FRAME;
+        // sampleClip に生の時刻を渡す(loop=false は内部で末尾保持される。
+        // % curDur で渡すと loop 指定が無視されワンショットがループしてしまう)。
+        const frame = clip ? sampleClip(clip, tt) : EMPTY_FRAME;
         clipDurRef.current = curDur;
         tRef.current = tt;
         frameDispCount++;
         if (frameDispCount % 6 === 0 && frameDisplayRef.current) {
-          const inDur = tt % curDur;
+          // loop=false は末尾保持なので表示も clamp(ループしない)。
+          const inDur = clip && clip.loop === false ? Math.min(tt, curDur) : tt % curDur;
           const pct = curDur > 0 ? (inDur / curDur) * 100 : 0;
           frameDisplayRef.current.textContent =
             `${inDur.toFixed(2)}s / ${curDur.toFixed(2)}s (${pct.toFixed(0)}%)`;

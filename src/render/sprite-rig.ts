@@ -354,10 +354,12 @@ export class SpriteRig {
     const ANKLE_L = this.#ANKLE_L, ANKLE_R = this.#ANKLE_R;
     const dt = u.dt;
 
-    const base = u.clip ? sampleClip(u.clip, u.localTime % u.clip.duration) : EMPTY_FRAME;
+    // sampleClip に生の localTime を渡す(loop=true は内部で wrap、loop=false は末尾保持)。
+    // 着座など loop=false のワンショットを正しく一回再生し座り姿勢で止めるため。
+    const base = u.clip ? sampleClip(u.clip, u.localTime) : EMPTY_FRAME;
     let frame = base;
     if (u.prevClip !== undefined && u.blend !== undefined && u.blend < 1) {
-      const prev = u.prevClip ? sampleClip(u.prevClip, (u.prevLocalTime ?? 0) % u.prevClip.duration) : EMPTY_FRAME;
+      const prev = u.prevClip ? sampleClip(u.prevClip, u.prevLocalTime ?? 0) : EMPTY_FRAME;
       frame = blendFrames(prev, base, u.blend);
     }
     const rot = (frame.pose.rotations ?? {}) as Record<string, number>;
