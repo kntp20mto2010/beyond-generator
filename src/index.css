@@ -256,11 +256,22 @@ body {
 .stage-frame {
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: stretch;
   padding: 12px;
-  overflow: auto;
+  overflow: hidden;
   background: #e9e7e2;
   flex: 1;
+  min-height: 0;
+}
+/* ステージ canvas は領域に合わせて縦横比保持で縮小表示(はみ出さない)。
+   Pixi(autoDensity)が付ける inline の px サイズを上書きする。 */
+.stage-host canvas {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto !important;
+  height: auto !important;
+  display: block;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* スクロールバー */
@@ -357,6 +368,13 @@ body {
 }
 .tl-body {
   position: relative; /* 再生ヘッドの基準 */
+}
+/* 要素レーンは常に一定高さ(viewport 連動)。件数が増えても内部スクロールに収め、
+   シーンを切り替えてもタイムラインの高さが変わらない → ステージが圧迫/伸縮しない。 */
+.tl-lanes {
+  height: clamp(96px, 22vh, 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* レーン共通 */

@@ -109,40 +109,44 @@ export function Timeline({
           </div>
         </div>
 
-        {/* カメラレーン(キーがある時のみ) */}
-        {scene.camera.length > 0 && (
-          <CameraLane
-            store={store}
-            sceneId={scene.id}
-            camera={scene.camera}
-            duration={dur}
-            pxPerSec={pxPerSec}
-            onScrubEmpty={startScrub}
-            onPickKey={onPickCameraKey}
-          />
-        )}
+        {/* レーン群(カメラ + 要素)。要素が増えても高さ上限で打ち切り内部スクロール。
+            ルーラー/再生ヘッドは外側に残すのでステージを圧迫しない。 */}
+        <div className="tl-lanes">
+          {/* カメラレーン(キーがある時のみ) */}
+          {scene.camera.length > 0 && (
+            <CameraLane
+              store={store}
+              sceneId={scene.id}
+              camera={scene.camera}
+              duration={dur}
+              pxPerSec={pxPerSec}
+              onScrubEmpty={startScrub}
+              onPickKey={onPickCameraKey}
+            />
+          )}
 
-        {/* 要素レーン */}
-        {scene.elements.length === 0 && (
-          <div style={{ fontSize: "11px", color: "var(--text-dim)", paddingLeft: NAME_W + 8 }}>
-            要素がありません
-          </div>
-        )}
-        {scene.elements.map((el) => (
-          <ElementLane
-            key={el.id}
-            store={store}
-            sceneId={scene.id}
-            el={el}
-            duration={dur}
-            selected={el.id === selectedId}
-            onSelect={onSelect}
-            pxPerSec={pxPerSec}
-            resolver={resolver}
-            thumbs={thumbs}
-            onScrubEmpty={startScrub}
-          />
-        ))}
+          {/* 要素レーン */}
+          {scene.elements.length === 0 && (
+            <div style={{ fontSize: "11px", color: "var(--text-dim)", paddingLeft: NAME_W + 8 }}>
+              要素がありません
+            </div>
+          )}
+          {scene.elements.map((el) => (
+            <ElementLane
+              key={el.id}
+              store={store}
+              sceneId={scene.id}
+              el={el}
+              duration={dur}
+              selected={el.id === selectedId}
+              onSelect={onSelect}
+              pxPerSec={pxPerSec}
+              resolver={resolver}
+              thumbs={thumbs}
+              onScrubEmpty={startScrub}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

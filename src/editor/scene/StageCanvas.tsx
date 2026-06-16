@@ -716,11 +716,18 @@ export function StageCanvas(props: Props) {
   return (
     <div
       ref={hostRef}
+      className="stage-host"
       style={{
-        width: VIEW_W,
-        height: VIEW_H,
+        // 利用可能領域いっぱいに広げ、中の canvas を縦横比保持でフィットさせる。
+        // (固定 VIEW_W×VIEW_H だとパネル/タイムラインの増減でステージがはみ出す)
+        flex: 1,
+        alignSelf: "stretch",
+        minWidth: 0,
+        minHeight: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         touchAction: "none",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
       }}
     />
   );
