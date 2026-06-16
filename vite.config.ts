@@ -56,13 +56,14 @@ function rigSavePlugin(): Plugin {
         try {
           let body = "";
           for await (const chunk of req) body += chunk as string;
-          const { char, arms } = JSON.parse(body) as {
+          const { char, arms, legs } = JSON.parse(body) as {
             char?: string;
             arms?: { key: string; pivot: [number, number] }[];
+            legs?: { key: string; pos: [number, number] }[];
           };
           const CONST_BY_CHAR: Record<string, string> = { sakura: "SAKURA_CFG", ryouta: "RYOUTA_CFG" };
           const constName = CONST_BY_CHAR[char ?? ""];
-          if (!constName || !Array.isArray(arms)) {
+          if (!constName || (!Array.isArray(arms) && !Array.isArray(legs))) {
             res.statusCode = 400; res.end("bad payload"); return;
           }
           const path = "src/editor/newchar/character-configs.ts";
@@ -76,11 +77,20 @@ function rigSavePlugin(): Plugin {
           const blockEnd = blockStart + closeOffset;
           let block = orig.slice(blockStart, blockEnd);
           let n = 0;
-          for (const a of arms) {
+          for (const a of arms ?? []) {
             const [px, py] = a.pivot;
             // { key: "<KEY>", ... pivot: [a, b], ... } の数値だけを置換。
             // arms 配列の各要素は 1 行で書かれている前提(現状の整形に一致)。
             const pat = new RegExp(`(\\{[^}]*key:\\s*"${a.key}"[^}]*pivot:\\s*\\[)\\s*\\d+\\s*,\\s*\\d+\\s*(\\])`);
+            const next = block.replace(pat, `$1${Math.round(px)}, ${Math.round(py)}$2`);
+            if (next !== block) { n++; block = next; }
+          }
+          // 脚関節(トップレベルの hipL/hipR/kneeL/kneeR/ankleL/ankleR: [x, y])。
+          const LEG_KEYS = new Set(["hipL", "hipR", "kneeL", "kneeR", "ankleL", "ankleR"]);
+          for (const l of legs ?? []) {
+            if (!LEG_KEYS.has(l.key)) continue;
+            const [px, py] = l.pos;
+            const pat = new RegExp(`(\\b${l.key}:\\s*\\[)\\s*-?\\d+\\s*,\\s*-?\\d+\\s*(\\])`);
             const next = block.replace(pat, `$1${Math.round(px)}, ${Math.round(py)}$2`);
             if (next !== block) { n++; block = next; }
           }

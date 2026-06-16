@@ -13,6 +13,7 @@ import { CLIP_WALK_GIRL } from "../editor/newchar/walk-girl.js";
 import { CLIP_WAVE_RELAX } from "../editor/newchar/wave-relax.js";
 import { CLIP_POINT_FWD } from "../editor/newchar/point-fwd.js";
 import { CLIP_TALK_RELAX } from "../editor/newchar/talk-relax.js";
+import { CLIP_SIT } from "../editor/newchar/sit.js";
 import { CLIP_IDLE } from "../presets/clips/idle.js";
 
 const TEXW = 1280;
@@ -25,6 +26,7 @@ export const SPRITE_CLIPS: Record<string, ClipDoc | null> = {
   wave: CLIP_WAVE_RELAX,
   point: CLIP_POINT_FWD,
   talk: CLIP_TALK_RELAX,
+  sit: CLIP_SIT,
   tpose: null,
 };
 

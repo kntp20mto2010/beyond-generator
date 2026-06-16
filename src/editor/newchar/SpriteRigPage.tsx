@@ -6,6 +6,7 @@ import { CLIP_WALK_GIRL } from "./walk-girl.js";
 import { CLIP_WAVE_RELAX } from "./wave-relax.js";
 import { CLIP_POINT_FWD } from "./point-fwd.js";
 import { CLIP_TALK_RELAX } from "./talk-relax.js";
+import { CLIP_SIT } from "./sit.js";
 import { CLIP_IDLE } from "../../presets/clips/idle.js";
 import type { ClipDoc } from "../../core/schema/clip.js";
 import type { BoneId } from "../../runtime/skeleton.js";
@@ -37,13 +38,14 @@ const TABLE: { jp: string; file: string; bone: string }[] = [
 ];
 
 // ポーズ・表情のプリセット辞書(toolbar の <select> から参照)
-type PoseKey = "walk-girl" | "idle" | "wave" | "point" | "talk" | "tpose";
+type PoseKey = "walk-girl" | "idle" | "wave" | "point" | "talk" | "sit" | "tpose";
 const POSES: Record<PoseKey, { label: string; clip: ClipDoc | null }> = {
   "walk-girl": { label: "歩く", clip: CLIP_WALK_GIRL },
   idle: { label: "待機", clip: CLIP_IDLE },
   wave: { label: "手を振る", clip: CLIP_WAVE_RELAX },
   point: { label: "指差し", clip: CLIP_POINT_FWD },
   talk: { label: "話す", clip: CLIP_TALK_RELAX },
+  sit: { label: "座る", clip: CLIP_SIT },
   tpose: { label: "棒立ち", clip: null },
 };
 type ExprKey = "normal" | "smile" | "surprise" | "worry";
@@ -76,6 +78,12 @@ function mul(A: Aff, B: Aff): Aff {
 }
 const ax = (M: Aff, x: number, y: number) => M.a * x + M.c * y + M.tx;
 const ay = (M: Aff, x: number, y: number) => M.b * x + M.d * y + M.ty;
+// M·(x,y)=(X,Y) を (x,y) について解く(脚関節ドラッグの逆算用)。
+function affSolve(M: Aff, X: number, Y: number): [number, number] {
+  const det = M.a * M.d - M.c * M.b || 1e-9;
+  const ix = X - M.tx, iy = Y - M.ty;
+  return [(M.d * ix - M.c * iy) / det, (-M.b * ix + M.a * iy) / det];
+}
 
 // FKの脚振り。太腿(振り幅)を小さめにして遊脚が支持脚に「振り被る」のを抑える。
 // 膝の曲げ(shin)は保って歩きの表情は残す。IKモードはこの値を使わない。
@@ -143,8 +151,11 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
   const scrubRef = useRef<number | null>(null);
   const snapRef = useRef<(name?: string) => Promise<string | null>>(async () => null);
   const frameDisplayRef = useRef<HTMLSpanElement>(null);
-  // pivot エディタ用。hovered/dragging は armKey("upperArmL" 等)を保持。
+  // pivot エディタ用。hovered/dragging は armKey("upperArmL" 等) or 脚関節キー("hipL"等)。
   const editStateRefOuter = useRef<{ hovered: string | null; dragging: string | null }>({ hovered: null, dragging: null });
+  // 脚関節(股/膝/足首)のドラッグ用ハンドル。ticker が毎フレーム posed 画面位置と
+  // 逆算用アフィン(W)・ランドマーク参照を書き込む。
+  const legHandlesRef = useRef<{ key: string; sx: number; sy: number; W: Aff; landmark: [number, number] }[]>([]);
   const pointerCleanupRef = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState(true);
   const [sign, setSign] = useState(1);
@@ -378,13 +389,13 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       const legCutout = new Container();
       legCutout.visible = false;
       root.addChild(legCutout);
-      const cutPieces: { cont: Container; bone: BoneId; pivot: [number, number]; amp: number }[] = [];
+      const cutPieces: { cont: Container; bone: BoneId; pivot: [number, number]; parentPivot: [number, number]; amp: number }[] = [];
       const buildCut = (frame: Frame, pivot: [number, number], parentCont: Container, parentPivot: [number, number], bone: BoneId | null, amp: number) => {
         const cont = new Container();
         cont.position.set(pivot[0] - parentPivot[0], pivot[1] - parentPivot[1]);
         const s = new Sprite(sub("legwear.png", frame)); s.position.set(frame[0] - pivot[0], frame[1] - pivot[1]);
         cont.addChild(s); parentCont.addChild(cont);
-        if (bone) cutPieces.push({ cont, bone, pivot, amp });
+        if (bone) cutPieces.push({ cont, bone, pivot, parentPivot, amp });
         return cont;
       };
       const tL = buildCut(cfg.thighLFrame, HIP_L, legCutout, HIP, "thighL", FK_THIGH_AMP);
@@ -603,6 +614,9 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         (globalThis as unknown as { __rigBlinkNow?: () => void }).__rigBlinkNow = () => { blinkPhase = 0; };
         (globalThis as unknown as { __rigEyeHold?: (v: number | null) => void }).__rigEyeHold =
           (v) => { eyeHoldRef.current = v; };
+        (globalThis as unknown as { __rigLeg?: () => unknown }).__rigLeg = () =>
+          legHandlesRef.current.map((h) => ({ key: h.key, sx: h.sx, sy: h.sy, lm: [h.landmark[0], h.landmark[1]] }));
+        (globalThis as unknown as { __rigHost?: HTMLElement }).__rigHost = host;
       }
 
       // ───────────────────────────────────────────────────────────────────────
@@ -617,12 +631,17 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         const c = conts.get(armKey);
         return c ? c.toGlobal({ x: 0, y: 0 }) : null;
       };
-      const findArmAt = (mx: number, my: number): string | null => {
+      // 腕 pivot + 脚関節を一括ヒットテスト。脚関節は ticker が書き込む画面位置を使う。
+      const findHandleAt = (mx: number, my: number): string | null => {
         for (const p of ARMS) {
           const s = screenPosOf(p.key);
           if (!s) continue;
           const dx = s.x - mx, dy = s.y - my;
           if (dx * dx + dy * dy <= HIT_R * HIT_R) return p.key;
+        }
+        for (const lh of legHandlesRef.current) {
+          const dx = lh.sx - mx, dy = lh.sy - my;
+          if (dx * dx + dy * dy <= HIT_R * HIT_R) return lh.key;
         }
         return null;
       };
@@ -630,19 +649,29 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         if (!bonesRef.current) return;
         const rect = host.getBoundingClientRect();
         const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-        if (editStateRef.current.dragging) {
-          const armConf = ARMS.find((a) => a.key === editStateRef.current.dragging);
-          if (!armConf) return;
-          const parent = armConf.parent === "upper" ? upper : conts.get(armConf.parent);
-          if (!parent) return;
-          const parentLocal = parent.toLocal({ x: mx, y: my });
-          const pp = armPivots.get(armConf.parent);
-          if (!pp) return;
-          armConf.pivot[0] = parentLocal.x + pp[0];
-          armConf.pivot[1] = parentLocal.y + pp[1];
+        const dragging = editStateRef.current.dragging;
+        if (dragging) {
+          const armConf = ARMS.find((a) => a.key === dragging);
+          if (armConf) {
+            // 腕: 親コンテナの local 座標 + 親 pivot で逆算。
+            const parent = armConf.parent === "upper" ? upper : conts.get(armConf.parent);
+            const pp = armPivots.get(armConf.parent);
+            if (!parent || !pp) return;
+            const parentLocal = parent.toLocal({ x: mx, y: my });
+            armConf.pivot[0] = parentLocal.x + pp[0];
+            armConf.pivot[1] = parentLocal.y + pp[1];
+          } else {
+            // 脚関節: root-local → 画像座標(W·landmark) → W 逆変換でランドマーク更新。
+            const lh = legHandlesRef.current.find((h) => h.key === dragging);
+            if (!lh) return;
+            const rl = root.toLocal({ x: mx, y: my });
+            const [nx, ny] = affSolve(lh.W, rl.x + HIP[0], rl.y + HIP[1]);
+            lh.landmark[0] = nx;
+            lh.landmark[1] = ny;
+          }
           e.preventDefault();
         } else {
-          const hit = findArmAt(mx, my);
+          const hit = findHandleAt(mx, my);
           editStateRef.current.hovered = hit;
           host.style.cursor = hit ? "grab" : "";
         }
@@ -651,7 +680,7 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         if (!bonesRef.current) return;
         const rect = host.getBoundingClientRect();
         const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-        const hit = findArmAt(mx, my);
+        const hit = findHandleAt(mx, my);
         if (hit) {
           editStateRef.current.dragging = hit;
           host.setPointerCapture?.(e.pointerId);
@@ -746,7 +775,11 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         legMixL.mesh.visible = legMixR.mesh.visible = lMode === "mix";
         legCutout.visible = lMode === "cutout";
         if (lMode === "cutout") {
-          for (const { cont, bone, amp } of cutPieces) cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
+          // 位置も毎フレームランドマークから再設定(関節 pivot ドラッグに即追従)。
+          for (const { cont, bone, pivot, parentPivot, amp } of cutPieces) {
+            cont.position.set(pivot[0] - parentPivot[0], pivot[1] - parentPivot[1]);
+            cont.rotation = deg2rad(sg * amp * (rot[bone] ?? 0));
+          }
         } else {
           // 対数(スクリュー)ブレンドスキニング。各ボーン剛体変換の log を重み平均し exp で戻す
           // → 回転の大きさが保たれ(つぶれない)剛体変換を正しく内挿する(段差/せん断なし)。
@@ -993,6 +1026,15 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           const hipC = g(transBob, HIP[0], HIP[1]);
           const pHipL = g(transBob, HIP_L[0], HIP_L[1]), pKL = g(WthighL, KNEE_L[0], KNEE_L[1]), pAL = g(WshinL, ANKLE_L[0], ANKLE_L[1]);
           const pHipR = g(transBob, HIP_R[0], HIP_R[1]), pKR = g(WthighR, KNEE_R[0], KNEE_R[1]), pAR = g(WshinR, ANKLE_R[0], ANKLE_R[1]);
+          // 脚関節をドラッグ可能ハンドルとして記録(画面位置 + 逆算用アフィン + ランドマーク)。
+          legHandlesRef.current = [
+            { key: "hipL", sx: pHipL.x, sy: pHipL.y, W: transBob, landmark: HIP_L },
+            { key: "kneeL", sx: pKL.x, sy: pKL.y, W: WthighL, landmark: KNEE_L },
+            { key: "ankleL", sx: pAL.x, sy: pAL.y, W: WshinL, landmark: ANKLE_L },
+            { key: "hipR", sx: pHipR.x, sy: pHipR.y, W: transBob, landmark: HIP_R },
+            { key: "kneeR", sx: pKR.x, sy: pKR.y, W: WthighR, landmark: KNEE_R },
+            { key: "ankleR", sx: pAR.x, sy: pAR.y, W: WshinR, landmark: ANKLE_R },
+          ];
           bonesG.moveTo(hipC.x, hipC.y).lineTo(pHipL.x, pHipL.y).lineTo(pKL.x, pKL.y).lineTo(pAL.x, pAL.y);
           bonesG.moveTo(hipC.x, hipC.y).lineTo(pHipR.x, pHipR.y).lineTo(pKR.x, pKR.y).lineTo(pAR.x, pAR.y);
           const sh = (k: string) => conts.get(k)!.toGlobal({ x: 0, y: 0 });
@@ -1013,6 +1055,13 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
             if (!isDrag && !isHover) continue;
             const sp = c.toGlobal({ x: 0, y: 0 });
             bonesG.circle(sp.x, sp.y, isDrag ? 13 : 10).stroke({ width: isDrag ? 3 : 2, color: 0xffd400, alpha: 0.95 });
+          }
+          // 脚関節も同様に強調。
+          for (const lh of legHandlesRef.current) {
+            const isDrag = editStateRefOuter.current.dragging === lh.key;
+            const isHover = editStateRefOuter.current.hovered === lh.key;
+            if (!isDrag && !isHover) continue;
+            bonesG.circle(lh.sx, lh.sy, isDrag ? 13 : 10).stroke({ width: isDrag ? 3 : 2, color: 0xffd400, alpha: 0.95 });
           }
         }
       });
@@ -1091,12 +1140,18 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
           <button className="ui-btn" onClick={async () => {
             setSaveStatus("保存中…");
             const arms = cfg.arms.map((a) => ({ key: a.key, pivot: [a.pivot[0], a.pivot[1]] as [number, number] }));
+            // 脚関節(股/膝/足首)も書き戻す。ドラッグで cfg のランドマーク配列が更新済み。
+            const legs = ([
+              ["hipL", cfg.hipL], ["hipR", cfg.hipR],
+              ["kneeL", cfg.kneeL], ["kneeR", cfg.kneeR],
+              ["ankleL", cfg.ankleL], ["ankleR", cfg.ankleR],
+            ] as const).map(([key, p]) => ({ key, pos: [Math.round(p[0]), Math.round(p[1])] as [number, number] }));
             const charId = cfg.dir.split("/").pop() || "";
             try {
               const r = await fetch("/__rig-save", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ char: charId, arms }),
+                body: JSON.stringify({ char: charId, arms, legs }),
               });
               const j = await r.json() as { ok?: boolean; replaced?: number };
               setSaveStatus(j.ok ? `${j.replaced} 件保存` : "保存失敗");
