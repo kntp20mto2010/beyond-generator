@@ -249,14 +249,26 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         if (p.bone) armDriven.push({ cont, bone: p.bone, amp: p.amp ?? 1 });
       };
 
-      // 1) 後ろ髪(最奥)。頭の前傾に追従(股中心の hairLean)しつつ、毛先が遅れて
-      //    揺れる(生え際中心の hairSway をバネ減衰で遅延 = フォロースルー)。
+      // 1) 後ろ髪(最奥)。3 段の Container を入れ子にして:
+      //   hairLeanCont (rot=torso lean、pivot=hip)
+      //     → hairHeadCont (rot=head bone、pivot=首付け根) ← 頭うなずきに追従
+      //       → hairSwayCont (rot=毛先バネ、pivot=生え際)  ← フォロースルー
+      //         → bhSprite
+      // hairHeadCont は hairLeanCont が lean を反映済みなので、内部空間では
+      // 首付け根 (neckLayer.frame の上端中央) が静止座標で固定で取れる。
+      const neckLayerForHair = FRONT_LAYERS.find((l) => l.file === "neck.png");
+      const NECK_BASE_X = neckLayerForHair ? neckLayerForHair.frame[0] + neckLayerForHair.frame[2] / 2 - HIP[0] : 0;
+      const NECK_BASE_Y = neckLayerForHair ? neckLayerForHair.frame[1] - HIP[1] : 0;
       const bh = BACK_LAYERS[0]!;
       const hairLeanCont = new Container();
       root.addChild(hairLeanCont);
+      const hairHeadCont = new Container();
+      hairHeadCont.pivot.set(NECK_BASE_X, NECK_BASE_Y);
+      hairHeadCont.position.set(NECK_BASE_X, NECK_BASE_Y);
+      hairLeanCont.addChild(hairHeadCont);
       const hairSwayCont = new Container();
       hairSwayCont.position.set(HAIR_PIVOT[0] - HIP[0], HAIR_PIVOT[1] - HIP[1]);
-      hairLeanCont.addChild(hairSwayCont);
+      hairHeadCont.addChild(hairSwayCont);
       const bhSprite = new Sprite(sub(bh.file, bh.frame));
       bhSprite.position.set(bh.frame[0] - HAIR_PIVOT[0], bh.frame[1] - HAIR_PIVOT[1]);
       hairSwayCont.addChild(bhSprite);
@@ -887,7 +899,10 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
         hairSwayCont.rotation = hairAng;
 
         // 頭の前傾/うなずき: head ボーンの回転を首付け根 pivot で headCont に適用。
-        headCont.rotation = deg2rad(rot["head"] ?? 0);
+        // 後ろ髪も同じ角度で首付け根周りに回す(hairHeadCont)→ 頭にしっかり追従。
+        const headRot = deg2rad(rot["head"] ?? 0);
+        headCont.rotation = headRot;
+        hairHeadCont.rotation = headRot;
 
         // 口の喋り: ポーズが talk のとき 4Hz で口を上下に伸ばす(リップフラップ)。
         // 半正弦で 1.0(閉じ) ↔ 4.0(開き) を行き来(口 sprite は元が 6–7px と細いので
