@@ -799,7 +799,14 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
             const bTh: number[] = [], bUx: number[] = [], bUy: number[] = [];
             for (let b = 0; b < 3; b++) {
               const M = bones[b]!;
-              const th = Math.atan2(M.b, M.a);
+              let th = Math.atan2(M.b, M.a);
+              // 【重要】atan2 は (-π, π] にラップする。隣接 bone(=Wupp と Wfor)が
+              // 180° 跨ぎで符号反転すると、線形平均が逆方向へ飛んで肘が「折れて」見える。
+              // Wupp を基準に Wfor を ±2π 補正して連続区間に保つ。
+              if (b > 1 && bTh[1] != null) {
+                while (th - bTh[1]! > Math.PI) th -= 2 * Math.PI;
+                while (th - bTh[1]! < -Math.PI) th += 2 * Math.PI;
+              }
               let aC: number, bC: number;
               if (Math.abs(th) < 1e-6) { aC = 1; bC = 0; }
               else { aC = Math.sin(th) / th; bC = (1 - Math.cos(th)) / th; }
