@@ -357,6 +357,7 @@ export type SceneFramePayload =
     }
   | { kind: "text"; el: TextElement; transform: Transform }
   | { kind: "balloon"; el: BalloonElement; transform: Transform }
+  | { kind: "object"; src: string; transform: Transform }
   | { kind: "placeholder"; ref: string; transform: Transform };
 
 export interface SceneFrameItem {
@@ -543,6 +544,9 @@ function evaluateElement(
       break;
     case "balloon":
       payload = { kind: "balloon", el, transform: el.transform };
+      break;
+    case "object":
+      payload = { kind: "object", src: el.src, transform: el.transform };
       break;
   }
 

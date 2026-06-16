@@ -6,6 +6,7 @@ import type { CharacterDoc } from "../../core/schema/character.js";
 import type { ThumbnailService } from "../thumbs/thumbnail-service.js";
 import { Section } from "../ui/Section.js";
 import { Thumb } from "../ui/Thumb.js";
+import { OBJECT_CATALOG } from "./objects-catalog.js";
 
 interface CharEntry {
   ref: string;
@@ -21,6 +22,7 @@ interface Props {
   onAddCharacter: (ref: string) => void;
   onAddText: () => void;
   onAddBalloon: (shape: BalloonElement["shape"]) => void;
+  onAddObject: (src: string, scale: number) => void;
   onAddBackground: (color: string) => void;
   onSetBackgroundImage: (image: string | null) => void;
 }
@@ -74,12 +76,13 @@ function BalloonIcon({ shape }: { shape: BalloonElement["shape"] }) {
 
 export function AddPanel({
   fs, disabled, savedCharacters, resolver, thumbs,
-  onAddCharacter, onAddText, onAddBalloon, onAddBackground, onSetBackgroundImage,
+  onAddCharacter, onAddText, onAddBalloon, onAddObject, onAddBackground, onSetBackgroundImage,
 }: Props) {
   const [bgFiles, setBgFiles] = useState<string[]>([]);
   const [bgColor, setBgColor] = useState("#cfe3f7");
   const [charUrls, setCharUrls] = useState<Record<string, string>>({});
   const [bgUrls, setBgUrls] = useState<Record<string, string>>({});
+  const [objUrls, setObjUrls] = useState<Record<string, string>>({});
   const [resolverRev, setResolverRev] = useState(0);
   const colorPickerRef = useRef<HTMLInputElement>(null);
 
@@ -138,6 +141,18 @@ export function AddPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fs, bgFiles, resolverRev]);
 
+  // オブジェクトカタログ画像の読込 + objectURL
+  useEffect(() => {
+    const missing = OBJECT_CATALOG.map((o) => o.src).filter((p) => !resolver.getImageUrl(p));
+    if (missing.length > 0) void resolver.ensureImagesLoaded(missing, fs);
+    const urls: Record<string, string> = {};
+    for (const o of OBJECT_CATALOG) {
+      const u = resolver.getImageUrl(o.src);
+      if (u) urls[o.src] = u;
+    }
+    setObjUrls(urls);
+  }, [fs, resolver, resolverRev]);
+
   return (
     <div style={{ overflowY: "auto", height: "100%", background: "var(--bg-panel)" }}>
 
@@ -190,6 +205,24 @@ export function AddPanel({
               <BalloonIcon shape={shape} />
               <span>{shape === "round" ? "角丸" : shape === "cloud" ? "雲" : "トゲ"}</span>
             </button>
+          ))}
+        </div>
+      </Section>
+
+      {/* オブジェクト(家具/小物) */}
+      <Section title="オブジェクト" defaultOpen={true}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          {OBJECT_CATALOG.map((o) => (
+            <Thumb
+              key={o.id}
+              src={objUrls[o.src]}
+              label={o.label}
+              width={84}
+              height={64}
+              onClick={disabled ? undefined : () => onAddObject(o.src, o.scale)}
+            >
+              <span style={{ fontSize: "10px", color: "var(--text-dim)", textAlign: "center" }}>{o.label}</span>
+            </Thumb>
           ))}
         </div>
       </Section>

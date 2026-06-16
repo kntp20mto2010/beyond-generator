@@ -169,10 +169,27 @@ export const BalloonElementSchema = z
   .passthrough();
 export type BalloonElement = z.infer<typeof BalloonElementSchema>;
 
+// オブジェクト(家具/小物)。透過PNGをステージに配置。グリッドスナップで整列。
+// アンカーは下端中央(transform.x,y = 接地点)。
+export const ObjectElementSchema = z
+  .object({
+    id: z.string(),
+    kind: z.literal("object"),
+    src: z.string(), // リポジトリ相対の画像パス(例 "assets/objects/sofa-navy-2seat.png")
+    transform: TransformSchema,
+    z: z.number().default(-10), // 既定はキャラ(z=0)の奥
+    locked: z.boolean().default(false),
+    enter: EnterSchema.default({}),
+    exit: ExitSchema.default({}),
+  })
+  .passthrough();
+export type ObjectElement = z.infer<typeof ObjectElementSchema>;
+
 export const SceneElementSchema = z.discriminatedUnion("kind", [
   CharacterElementSchema,
   TextElementSchema,
   BalloonElementSchema,
+  ObjectElementSchema,
 ]);
 export type SceneElement = z.infer<typeof SceneElementSchema>;
 

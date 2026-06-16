@@ -24,6 +24,8 @@ interface ElView {
   text?: Text;
   balloon?: { g: Graphics; text: Text };
   placeholder?: { g: Graphics; label: Text };
+  objectSprite?: Sprite;
+  objectKey?: string; // 読込済みの src|url。変化したら貼り直す
 }
 
 // シーン境界トランジションの一時状態(snapshot方式)
@@ -188,7 +190,7 @@ export class SceneRenderStack {
       const isNew = !view;
       if (!view) view = { container: new Container() };
       try {
-        applyItem(view, item);
+        applyItem(view, item, (p) => this.#resolver.getImageUrl(p));
       } catch (e) {
         console.error("[SceneRenderStack] applyItem failed", item, e);
         if (isNew) view.container.destroy({ children: true });
@@ -277,7 +279,11 @@ export class SceneRenderStack {
 // 要素の表示更新(StageCanvas から移設。挙動は不変)
 // ---------------------------------------------------------------------------
 
-export function applyItem(view: ElView, item: SceneFrameItem): void {
+export function applyItem(
+  view: ElView,
+  item: SceneFrameItem,
+  getImageUrl?: (path: string) => string | undefined,
+): void {
   const c = view.container;
   const visual = item.visual;
   c.alpha = visual.alpha;
@@ -356,6 +362,28 @@ export function applyItem(view: ElView, item: SceneFrameItem): void {
     c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
     // balloon は flipX を適用しない(テキスト同様)
     c.scale.set(tf.scale * visual.scaleMul);
+  } else if (item.payload.kind === "object") {
+    // 家具/小物: 透過PNGをスプライトで描画。アンカー=下端中央(接地点)。
+    const src = item.payload.src;
+    const url = getImageUrl?.(src);
+    const key = url ? `${src}|${url}` : null;
+    if (key && view.objectKey !== key) {
+      if (view.objectSprite) { view.objectSprite.destroy(); view.objectSprite = undefined; }
+      const img = new Image();
+      img.onload = () => {
+        if (view.objectKey !== key) return; // 差し替え済みなら破棄
+        const sp = new Sprite(Texture.from(img));
+        sp.anchor.set(0.5, 1);
+        view.objectSprite = sp;
+        c.addChildAt(sp, 0);
+      };
+      img.src = url!;
+      view.objectKey = key;
+    }
+    const tf = item.payload.transform;
+    const s = tf.scale * visual.scaleMul;
+    c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
+    c.scale.set(tf.flipX ? -s : s, s);
   } else {
     // placeholder
     const tf = item.payload.transform;

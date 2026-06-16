@@ -4,10 +4,12 @@ import {
   createEmptyProject,
   type BalloonElement,
   type CharacterElement,
+  type ObjectElement,
   type ProjectDoc,
   type SceneElement,
   type TextElement,
 } from "../../core/schema/project.js";
+import { snapObjectXY } from "./grid.js";
 import { newId } from "../../core/id.js";
 import { setTitle } from "../../core/commands.js";
 import {
@@ -141,9 +143,11 @@ export function ScenePage({ store }: Props) {
     ];
     void resolver.ensureLoaded(refs, fs);
 
-    const images = doc.scenes
-      .map((s) => s.background?.image)
-      .filter((img): img is string => !!img);
+    const images = [
+      ...doc.scenes.map((s) => s.background?.image),
+      // オブジェクト要素の画像も読込
+      ...doc.scenes.flatMap((s) => s.elements).map((e) => (e.kind === "object" ? e.src : undefined)),
+    ].filter((img): img is string => !!img);
     if (images.length > 0) void resolver.ensureImagesLoaded(images, fs);
 
     // セリフ音声 / BGM をデコード(エンベロープ算出含む)。口パクと再生の両方に使う
@@ -449,6 +453,24 @@ export function ScenePage({ store }: Props) {
   const setBackgroundImage = (image: string | null) => {
     if (!scene) return;
     setSceneBackgroundImage(store, scene.id, image);
+  };
+  const addObject = (src: string, scale: number) => {
+    if (!scene) return;
+    // 既定はステージ中央やや下・床近く。グリッドに吸着して配置。
+    const [gx, gy] = snapObjectXY(960, 960);
+    const el: ObjectElement = {
+      id: newId(),
+      kind: "object",
+      src,
+      transform: { x: gx, y: gy, scale, flipX: false },
+      z: -10, // キャラ(z=0)の奥
+      locked: false,
+      enter: { type: "cut", delay: 0, dur: 0.4 },
+      exit: { type: "cut", at: null, dur: 0.4 },
+    };
+    addElement(store, scene.id, el);
+    setSelectedId(el.id);
+    void resolver.ensureImagesLoaded([src], fs); // 即時ロード
   };
 
   const deleteSelected = useCallback(() => {
@@ -950,6 +972,7 @@ export function ScenePage({ store }: Props) {
             onAddCharacter={addCharacter}
             onAddText={addText}
             onAddBalloon={addBalloon}
+            onAddObject={addObject}
             onAddBackground={addBackground}
             onSetBackgroundImage={setBackgroundImage}
           />

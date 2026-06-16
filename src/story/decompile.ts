@@ -76,9 +76,10 @@ export function decompileScene(scene: SceneDoc, sceneIndex: number): Scene {
       chars.push({ el, index: el.z, castId: refToCastId(el.ref) });
     } else if (el.kind === "balloon") {
       balloons.push(el);
-    } else {
+    } else if (el.kind === "text") {
       texts.push(el);
     }
+    // object(家具)は台本テキストに含めない
   }
 
   // cast(z 昇順)

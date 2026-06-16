@@ -26,6 +26,7 @@ import {
   stageToScreen,
 } from "./stage-coords.js";
 import { computeSnap, type Edges } from "./snap.js";
+import { GRID, snapObjectXY } from "./grid.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const SNAP_THRESHOLD = 12;
@@ -331,6 +332,13 @@ export function StageCanvas(props: Props) {
           const [gx, gy] = screenToStage(mx, my, lastCam);
           const rawDx = gx - startStageX;
           const rawDy = gy - startStageY;
+          // オブジェクト(家具)はグリッド吸着(Shiftで自由配置)。
+          if (el.kind === "object" && !me.shiftKey) {
+            const [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy);
+            updateElementTransform(p().store, scene.id, hitId, { x: snx, y: sny });
+            guides.clear();
+            return;
+          }
           let snapDx = 0;
           let snapDy = 0;
           if (!me.shiftKey && startEdges) {
@@ -574,6 +582,14 @@ export function StageCanvas(props: Props) {
 
       const drawGrid = () => {
         gridLayer.clear();
+        // オブジェクト選択中は配置グリッド(GRID px)を表示(吸着先が見える)。
+        const selId = p().selectedId;
+        const selEl = selId ? currentScene()?.elements.find((e) => e.id === selId) : null;
+        if (selEl?.kind === "object") {
+          for (let x = 0; x <= 1920; x += GRID) gridLayer.moveTo(x, 0).lineTo(x, 1080);
+          for (let y = 0; y <= 1080; y += GRID) gridLayer.moveTo(0, y).lineTo(1920, y);
+          gridLayer.stroke({ color: 0xffffff, width: 1.5, alpha: 0.45 });
+        }
         if (!p().showGrid) return;
         // 3分割線+中央線(細線)
         for (const x of [640, 960, 1280]) {

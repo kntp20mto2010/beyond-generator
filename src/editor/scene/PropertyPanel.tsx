@@ -108,6 +108,7 @@ const KIND_LABEL: Record<SceneElement["kind"], string> = {
   character: "キャラクター",
   text: "テキスト",
   balloon: "吹き出し",
+  object: "オブジェクト",
 };
 
 export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thumbs, fs }: Props) {

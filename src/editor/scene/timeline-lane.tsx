@@ -26,6 +26,7 @@ import {
   IconCharacter,
   IconText,
   IconBalloon,
+  IconBackground,
   IconLock,
 } from "../ui/icons.js";
 
@@ -155,6 +156,8 @@ function laneName(el: SceneElement): string {
       return el.text;
     case "balloon":
       return el.text;
+    case "object":
+      return el.src.replace(/^.*\//, "").replace(/\.(png|jpe?g|webp|svg)$/i, "");
   }
 }
 
@@ -166,6 +169,8 @@ function LaneIcon({ el }: { el: SceneElement }) {
       return <IconText />;
     case "balloon":
       return <IconBalloon />;
+    case "object":
+      return <IconBackground />;
   }
 }
 
