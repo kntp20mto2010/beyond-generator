@@ -6,13 +6,14 @@ import { GRID } from "./grid.js";
 // サイズはグリッドの n×m セルで定義し(全体の統一感のため)、scale は
 // 「幅 = cells.w セル」になるよう nativeW から導出する(objectScale)。
 // オブジェクトのサイズ密度: 画像の約 PX_PER_CELL px が 1 グリッドセルに収まるよう
-// リサイズする(例 900×1200px → 3×4セル)。footprint セルは native/PX_PER_CELL を四捨五入。
+// リサイズする(例 900×1200px → 3×4セル)。footprint セルは native/PX_PER_CELL を
+// 繰り上げ(ceil)。端数が出る画像はセルに収まるよう必ず1セル大きい箱にする。
 export const PX_PER_CELL = 300;
 
 export function cellsFromNative(nativeW: number, nativeH: number): { w: number; h: number } {
   return {
-    w: Math.max(1, Math.round(nativeW / PX_PER_CELL)),
-    h: Math.max(1, Math.round(nativeH / PX_PER_CELL)),
+    w: Math.max(1, Math.ceil(nativeW / PX_PER_CELL)),
+    h: Math.max(1, Math.ceil(nativeH / PX_PER_CELL)),
   };
 }
 
@@ -33,7 +34,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    nativeW: 960, // 960/300≒3, 630/300≒2 → 3×2セル
+    nativeW: 960, // ceil(960/300)=4, ceil(630/300)=3 → 4×3セル
     nativeH: 630,
     seat: { dx: 0, dy: -306 },
   },
