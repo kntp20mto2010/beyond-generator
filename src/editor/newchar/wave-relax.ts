@@ -16,7 +16,7 @@ export const CLIP_WAVE_RELAX: ClipDoc = {
   virtualVelocity: 0,
   tracks: {
     bones: {
-      upperArmR: { rot: [[0, 150]] },
+      upperArmR: { rot: [[0, 180]] },
       forearmR: {
         rot: [
           [0, -15, "sineInOut"],
