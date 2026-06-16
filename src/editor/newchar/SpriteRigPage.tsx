@@ -427,11 +427,14 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
       //    肩キャップ領域(肩ピボットより上の数pxを含む上端帯)を身体に貼り付けたまま、
       //    その下から upperArm の回転に滑らかに渡せる → どのポーズで腕を回しても
       //    肩は body 側にとどまる(「付け根が浮遊」しない)。
-      const SHOULDER_BAND = 30; // px(rest→upperArm 遷移帯。実画素で配筋約 1 行分)
+      // SHOULDER_BAND=50px:rest→upperArm の遷移帯。+180° 等の大回転でも隣接行の
+      //   角度勾配が破綻しない程度に広く。rows を増やすほど更に滑らかになる。
+      const SHOULDER_BAND = 50;
       type ArmMeshData = { rest: Float32Array; W: Float32Array; posBuf: ReturnType<MeshGeometry["getBuffer"]>; mesh: Mesh; nV: number; upperKey: BoneId; foreKey: BoneId; uppPivot: [number, number]; forPivot: [number, number] };
       const buildArmMesh = (bbox: [number, number, number, number], elbowY: number, upperKey: BoneId, foreKey: BoneId, uppPivot: [number, number], forPivot: [number, number]): ArmMeshData => {
         const [xLo, yLo, xHi, yHi] = bbox;
-        const cols = 5, rows = 14, n = cols * rows;
+        // rows=22:肩遷移帯と肘継ぎ目に十分な vertex 密度。1 行≒8 px の解像度。
+        const cols = 5, rows = 22, n = cols * rows;
         const rA = new Float32Array(n * 2), uA = new Float32Array(n * 2), pA = new Float32Array(n * 2);
         const WA = new Float32Array(n * 3); // 3 bones(rest/upperArm/forearm)
         let k = 0;
@@ -865,8 +868,10 @@ function CharRig({ cfg }: { cfg: CharConfig }) {
             if (!mesh.visible) return;
             const pos = (mesh.geometry.getBuffer("aPosition").data as Float32Array);
             const idx = mesh.geometry.getIndex().data as Uint16Array | Uint32Array;
-            const wt = mesh.worldTransform;
-            const tx = (x: number, y: number) => ({ x: wt.a * x + wt.c * y + wt.tx, y: wt.b * x + wt.d * y + wt.ty });
+            // worldTransform は前フレームのレンダ時点でしか更新されないため、
+            // ticker 内で読むと stale で wireframe が ズレた位置に出る。
+            // mesh.toGlobal は内部で transform を更新するので確実。
+            const tx = (x: number, y: number) => mesh.toGlobal({ x, y });
             // 三角辺
             for (let i = 0; i < idx.length; i += 3) {
               const i0 = idx[i]!, i1 = idx[i + 1]!, i2 = idx[i + 2]!;
