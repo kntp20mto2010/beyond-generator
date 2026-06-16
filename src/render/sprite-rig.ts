@@ -14,6 +14,7 @@ import { CLIP_WAVE_RELAX } from "../editor/newchar/wave-relax.js";
 import { CLIP_POINT_FWD } from "../editor/newchar/point-fwd.js";
 import { CLIP_TALK_RELAX } from "../editor/newchar/talk-relax.js";
 import { CLIP_SIT } from "../editor/newchar/sit.js";
+import { CLIP_SIT_TALK } from "../editor/newchar/sit-talk.js";
 import { CLIP_IDLE } from "../presets/clips/idle.js";
 
 const TEXW = 1280;
@@ -27,6 +28,7 @@ export const SPRITE_CLIPS: Record<string, ClipDoc | null> = {
   point: CLIP_POINT_FWD,
   talk: CLIP_TALK_RELAX,
   sit: CLIP_SIT,
+  "sit-talk": CLIP_SIT_TALK,
   tpose: null,
 };
 
@@ -34,9 +36,9 @@ export function lookupSpriteClip(id: string): ClipDoc | null {
   return id in SPRITE_CLIPS ? SPRITE_CLIPS[id]! : CLIP_IDLE;
 }
 
-// 喋りクリップ判定(口パク 4Hz を出すか)。
+// 喋りクリップ判定(口パク 4Hz を出すか)。talk / sit-talk が該当。
 export function isTalkClip(id: string): boolean {
-  return id === "talk";
+  return id === "talk" || id === "sit-talk";
 }
 
 // 表情 → 目の scale.y。null = 自動まばたきに任せる。

@@ -400,6 +400,22 @@ function mouthOverrideAt(
   return active.envelope[frame] === 1 ? "open" : undefined;
 }
 
+// アクティブな talk 音声があるか(talk.t <= t < talk.t + duration)。
+// スプライトの口パクを「body clip に依らず発話中だけ」動かすトリガに使う。
+// これにより座ったまま(clip="sit"/"sit-talk")でも音声に合わせて口が動く。
+function isTalkingAt(
+  talks: readonly Talk[],
+  t: number,
+  audio: AudioEnvelopeLookup | undefined,
+): boolean {
+  if (!audio || talks.length === 0) return false;
+  for (const talk of talks) {
+    const a = audio.lookup(talk.audio);
+    if (a && talk.t <= t && t < talk.t + a.duration) return true;
+  }
+  return false;
+}
+
 // 表情キー: t <= t の最後(default neutral)
 function activeExpression(keys: readonly ExpressionKey[], t: number): string {
   let preset = "neutral";
@@ -465,6 +481,7 @@ function evaluateSpriteCharacter(
   el: CharacterElement,
   spriteCfg: unknown,
   t: number,
+  audio: AudioEnvelopeLookup | undefined,
 ): SceneFramePayload {
   const origin: [number, number] = [el.transform.x, el.transform.y];
   const list = expandActions(origin, el.actions);
@@ -504,7 +521,14 @@ function evaluateSpriteCharacter(
       prevLocalTime,
       blend,
       expr: activeExpression(el.expressions, t),
-      talk: active.clip === "talk",
+      // 口パク発火条件:
+      //  1) 発話の所作クリップ(talk / sit-talk)がアクティブ — 音声に依らず口を動かす(従来踏襲)
+      //  2) talk音声がアクティブ — body clip に依らず発話中だけ口を動かす(音声同期)
+      // これで「座ったまま喋る」が成立し、音声があれば発話区間に同期して口が止まる。
+      talk:
+        active.clip === "talk" ||
+        active.clip === "sit-talk" ||
+        isTalkingAt(el.talks, t, audio),
       clock: t,
     },
   };
@@ -527,7 +551,7 @@ function evaluateElement(
       // 先にスプライト系を確認(新キャラ)。あれば static sprite として返す。
       const spriteCfg = resolver.getSpriteCharacter?.(el.ref);
       if (spriteCfg) {
-        payload = evaluateSpriteCharacter(el, spriteCfg, t);
+        payload = evaluateSpriteCharacter(el, spriteCfg, t, opts?.audio);
         break;
       }
       const char = resolver.getCharacter(el.ref);
