@@ -467,6 +467,7 @@ export function ScenePage({ store }: Props) {
       id: newId(),
       kind: "object",
       src,
+      cells: { w: def.cells.w, h: def.cells.h },
       transform: { x: gx, y: gy, scale, flipX: false },
       z: -10, // キャラ(z=0)の奥
       locked: false,

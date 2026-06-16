@@ -29,12 +29,29 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   },
 ];
 
-// cells の箱に「アスペクト比保持で contain」する transform.scale。
+// 画像(nativeW×nativeH)を cells の箱へ「アスペクト保持で contain」する scale。
 // 短径(より厳しい方)を満たし、長径側は箱内に padding(中央寄せ)。歪み無し。
+export function containScale(
+  nativeW: number,
+  nativeH: number,
+  cells: { w: number; h: number },
+): number {
+  return Math.min((cells.w * GRID) / nativeW, (cells.h * GRID) / nativeH);
+}
+
+// カタログ既定セルでの contain scale。
 export function objectScale(def: ObjectDef): number {
-  const sx = (def.cells.w * GRID) / def.nativeW;
-  const sy = (def.cells.h * GRID) / def.nativeH;
-  return Math.min(sx, sy);
+  return containScale(def.nativeW, def.nativeH, def.cells);
+}
+
+// src + 任意セルでの contain scale(セルを変えてリサイズする際に使う)。
+export function objectScaleForCells(
+  src: string,
+  cells: { w: number; h: number },
+): number {
+  const def = getObjectDef(src);
+  if (!def) return 1;
+  return containScale(def.nativeW, def.nativeH, cells);
 }
 
 export function getObjectDef(src: string): ObjectDef | undefined {

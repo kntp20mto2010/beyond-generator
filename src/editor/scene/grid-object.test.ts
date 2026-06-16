@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GRID, snapObjectXY } from "./grid.js";
-import { OBJECT_CATALOG, objectScale } from "./objects-catalog.js";
+import { OBJECT_CATALOG, objectScale, objectScaleForCells } from "./objects-catalog.js";
 
 // オブジェクトのグリッド吸着(偶奇位相)とセル幅スケール導出。
 describe("オブジェクトのグリッド吸着", () => {
@@ -57,5 +57,15 @@ describe("セルの箱への contain スケール導出", () => {
     expect(scale).toBeCloseTo(360 / 630, 6); // 高さ contain
     expect(scale * sofa.nativeH).toBeCloseTo(3 * GRID, 6); // 高さ=3セル
     expect(scale * sofa.nativeW).toBeLessThan(5 * GRID); // 幅は5セル未満(左右padding)
+  });
+
+  it("objectScaleForCells: セル変更で contain scale が追従", () => {
+    const src = "assets/objects/sofa-navy-2seat.png";
+    // 5×3: 高さ拘束 → 360/630
+    expect(objectScaleForCells(src, { w: 5, h: 3 })).toBeCloseTo(360 / 630, 6);
+    // 7×3: 幅を広げても高さ拘束のまま(箱が広がり padding 増)
+    expect(objectScaleForCells(src, { w: 7, h: 3 })).toBeCloseTo(360 / 630, 6);
+    // 7×4: 高さ拘束 480/630 で拡大
+    expect(objectScaleForCells(src, { w: 7, h: 4 })).toBeCloseTo(480 / 630, 6);
   });
 });

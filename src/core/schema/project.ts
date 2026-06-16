@@ -176,6 +176,11 @@ export const ObjectElementSchema = z
     id: z.string(),
     kind: z.literal("object"),
     src: z.string(), // リポジトリ相対の画像パス(例 "assets/objects/sofa-navy-2seat.png")
+    // グリッド footprint(セル数)。サイズはこの n×m セルで管理し、画像はアスペクト
+    // 保持で箱に contain する。transform.scale はその contain 値(セルから導出)。
+    cells: z
+      .object({ w: z.number().int().positive(), h: z.number().int().positive() })
+      .default({ w: 4, h: 3 }),
     transform: TransformSchema,
     z: z.number().default(-10), // 既定はキャラ(z=0)の奥
     locked: z.boolean().default(false),

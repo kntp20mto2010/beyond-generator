@@ -266,6 +266,24 @@ export function updateElementTransform(
   );
 }
 
+// オブジェクトのサイズをグリッド footprint(セル数)で設定。cells と、それに対応する
+// contain scale(呼び出し側がカタログから算出)を同時に更新する。
+export function setObjectSize(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  cells: { w: number; h: number },
+  scale: number,
+): void {
+  store.dispatch("サイズ変更", (d) => {
+    const el = findElement(d, sceneId, elementId);
+    if (el && el.kind === "object") {
+      el.cells = { w: cells.w, h: cells.h };
+      el.transform.scale = scale;
+    }
+  });
+}
+
 export function setElementZ(
   store: DocStore<ProjectDoc>,
   sceneId: string,

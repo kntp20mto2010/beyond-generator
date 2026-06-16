@@ -17,7 +17,7 @@ import {
 import { ScenePhysicsPool } from "../../runtime/scene-physics.js";
 import { SceneRenderStack } from "../../render/scene-render-stack.js";
 import type { AssetResolver } from "../../io/asset-resolver.js";
-import { setBalloonTail, updateElementTransform } from "../../core/commands-project.js";
+import { setBalloonTail, setObjectSize, updateElementTransform } from "../../core/commands-project.js";
 import {
   STAGE_SCALE,
   VIEW_H,
@@ -27,7 +27,7 @@ import {
 } from "./stage-coords.js";
 import { computeSnap, type Edges } from "./snap.js";
 import { GRID, snapObjectXY } from "./grid.js";
-import { getObjectCells } from "./objects-catalog.js";
+import { objectScaleForCells } from "./objects-catalog.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const SNAP_THRESHOLD = 12;
@@ -216,6 +216,22 @@ export function StageCanvas(props: Props) {
         const scene = currentScene();
         const el = scene?.elements.find((e) => e.id === id);
         if (!el || el.locked) return null;
+        // 要素中心(transform.x/y)のスクリーン座標 = scale基準点
+        const cs = stageToScreen(el.transform.x, el.transform.y, lastCam);
+        // オブジェクト: 選択枠 = グリッド footprint(n×mセル)。下端中央アンカー基準。
+        if (el.kind === "object") {
+          const fw = el.cells.w * GRID;
+          const fh = el.cells.h * GRID;
+          const [sl, st] = stageToScreen(el.transform.x - fw / 2, el.transform.y - fh, lastCam);
+          const [sr, sb] = stageToScreen(el.transform.x + fw / 2, el.transform.y, lastCam);
+          const corners: [number, number][] = [
+            [sl, st],
+            [sr, st],
+            [sl, sb],
+            [sr, sb],
+          ];
+          return { corners, centerScreen: cs };
+        }
         const container = stack.getView(id);
         if (!container) return null;
         const b = container.getBounds();
@@ -225,8 +241,6 @@ export function StageCanvas(props: Props) {
           [b.x - 6, b.y + b.height + 6],
           [b.x + b.width + 6, b.y + b.height + 6],
         ];
-        // 要素中心(transform.x/y)のスクリーン座標 = scale基準点
-        const cs = stageToScreen(el.transform.x, el.transform.y, lastCam);
         return { corners, centerScreen: cs };
       };
 
@@ -335,7 +349,7 @@ export function StageCanvas(props: Props) {
           const rawDy = gy - startStageY;
           // オブジェクト(家具)はグリッド吸着(Shiftで自由配置)。
           if (el.kind === "object" && !me.shiftKey) {
-            const cw = getObjectCells(el.src)?.w ?? 2;
+            const cw = el.cells?.w ?? 2;
             const [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
             updateElementTransform(p().store, scene.id, hitId, { x: snx, y: sny });
             guides.clear();
@@ -391,14 +405,24 @@ export function StageCanvas(props: Props) {
         if (!el || el.locked) return;
         const startScale = el.transform.scale;
         const startDist = Math.max(1e-3, Math.hypot(sx - centerScreen[0], sy - centerScreen[1]));
+        // オブジェクトは footprint(セル数)を整数で拡縮(グリッド方式)
+        const isObj = el.kind === "object";
+        const startCells = isObj ? { w: el.cells.w, h: el.cells.h } : null;
         canvas.setPointerCapture(ev.pointerId);
         dragging = true;
         drawHover(null);
         const onMove = (me: PointerEvent) => {
           const [mx, my] = toCanvasPx(me.clientX, me.clientY);
           const curDist = Math.hypot(mx - centerScreen[0], my - centerScreen[1]);
-          const raw = startScale * (curDist / startDist);
-          const next = Math.min(5, Math.max(0.1, raw));
+          const ratio = curDist / startDist;
+          if (isObj && startCells) {
+            const w = Math.max(1, Math.min(16, Math.round(startCells.w * ratio)));
+            const h = Math.max(1, Math.min(9, Math.round(startCells.h * ratio)));
+            const cells = { w, h };
+            setObjectSize(p().store, scene.id, id, cells, objectScaleForCells(el.src, cells));
+            return;
+          }
+          const next = Math.min(5, Math.max(0.1, startScale * ratio));
           updateElementTransform(p().store, scene.id, id, { scale: next });
         };
         const onUp = () => {
@@ -592,7 +616,7 @@ export function StageCanvas(props: Props) {
           for (let y = 0; y <= 1080; y += GRID) gridLayer.moveTo(0, y).lineTo(1920, y);
           gridLayer.stroke({ color: 0x22e24a, width: 2, alpha: 0.85 });
           // 選択オブジェクトの footprint(n×mセル)を強調表示
-          const cells = getObjectCells(selEl.src);
+          const cells = selEl.cells;
           if (cells) {
             const fw = cells.w * GRID;
             const fh = cells.h * GRID;

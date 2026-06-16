@@ -33,6 +33,7 @@ import {
   setElementExit,
   setElementLocked,
   setElementZ,
+  setObjectSize,
   setSceneTransition,
   setTextProps,
   sitCharacterOnObject,
@@ -43,7 +44,7 @@ import {
   updateTalk,
 } from "../../core/commands-project.js";
 import { audioLabel, listAudioOptions } from "./audio-options.js";
-import { getObjectSeat, objectLabel } from "./objects-catalog.js";
+import { getObjectSeat, objectLabel, objectScaleForCells } from "./objects-catalog.js";
 import { spriteClipLabel } from "../newchar/sprite-clips.js";
 import { Section } from "../ui/Section.js";
 import { SegmentedButtons } from "../ui/SegmentedButtons.js";
@@ -165,19 +166,53 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
             onChange={(e) => updateElementTransform(store, sceneId, id, { y: Number(e.target.value) })}
           />
         </div>
-        <div className="ui-row">
-          <label>拡大</label>
-          <input
-            type="range"
-            min="0.1"
-            max="3"
-            step="0.05"
-            value={tf.scale}
-            style={{ flex: 1 }}
-            onChange={(e) => updateElementTransform(store, sceneId, id, { scale: Number(e.target.value) })}
-          />
-          <span style={{ color: "var(--text-dim)", fontSize: "11px", minWidth: "32px" }}>{tf.scale.toFixed(2)}</span>
-        </div>
+        {element.kind === "object" ? (
+          <div className="ui-row">
+            <label>マス</label>
+            <input
+              type="number"
+              min="1"
+              max="16"
+              className="ui-num"
+              style={{ width: "48px" }}
+              value={element.cells.w}
+              onChange={(e) => {
+                const w = Math.max(1, Math.round(Number(e.target.value)));
+                const cells = { w, h: element.cells.h };
+                setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells));
+              }}
+            />
+            <span style={{ color: "var(--text-dim)" }}>×</span>
+            <input
+              type="number"
+              min="1"
+              max="9"
+              className="ui-num"
+              style={{ width: "48px" }}
+              value={element.cells.h}
+              onChange={(e) => {
+                const h = Math.max(1, Math.round(Number(e.target.value)));
+                const cells = { w: element.cells.w, h };
+                setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells));
+              }}
+            />
+            <span style={{ color: "var(--text-dim)", fontSize: "11px" }}>セル</span>
+          </div>
+        ) : (
+          <div className="ui-row">
+            <label>拡大</label>
+            <input
+              type="range"
+              min="0.1"
+              max="3"
+              step="0.05"
+              value={tf.scale}
+              style={{ flex: 1 }}
+              onChange={(e) => updateElementTransform(store, sceneId, id, { scale: Number(e.target.value) })}
+            />
+            <span style={{ color: "var(--text-dim)", fontSize: "11px", minWidth: "32px" }}>{tf.scale.toFixed(2)}</span>
+          </div>
+        )}
         <div className="ui-row">
           {element.kind === "character" && (
             <label style={{ display: "flex", alignItems: "center", gap: "3px", cursor: "pointer" }}>
