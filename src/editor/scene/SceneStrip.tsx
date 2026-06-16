@@ -211,6 +211,7 @@ function useSceneThumb(
     let live = true;
     const sr: SceneResolver = {
       getCharacter: (ref) => resolver.getCharacter(ref),
+      getSpriteCharacter: (ref) => resolver.getSpriteCharacter(ref),
       getImageUrl: (path) => resolver.getImageUrl(path),
     };
     const pull = () => {

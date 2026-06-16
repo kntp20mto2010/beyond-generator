@@ -271,6 +271,18 @@ export class ThumbnailService {
         const ty = (tf.y + off[1]) * s;
         drawItemsToCanvas(ctx, pay.char, pay.items, { scaleX: sx, scaleY: sy, tx, ty });
         ctx.globalAlpha = 1;
+      } else if (pay.kind === "sprite-character") {
+        // サムネ用は簡易: キャラの輪郭サイズで色付き矩形だけ描く(全ピクセル再現はコスト高)。
+        const tf = pay.transform;
+        const sc = tf.scale * item.visual.scaleMul * s;
+        ctx.fillStyle = "#c8d6e5";
+        ctx.strokeStyle = "#576574";
+        ctx.lineWidth = 2;
+        const px = (tf.x + off[0]) * s;
+        const py = (tf.y + off[1]) * s;
+        ctx.fillRect(px - 110 * sc, py - 360 * sc, 220 * sc, 360 * sc);
+        ctx.strokeRect(px - 110 * sc, py - 360 * sc, 220 * sc, 360 * sc);
+        ctx.globalAlpha = 1;
       } else if (pay.kind === "text") {
         this.#drawText(ctx, pay.el, pay.transform.x + off[0], pay.transform.y + off[1], pay.transform.scale * item.visual.scaleMul, s);
       } else if (pay.kind === "balloon") {

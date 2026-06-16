@@ -1,6 +1,8 @@
 import { Application, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import { drawBalloon } from "./balloon.js";
 import { CharacterView } from "./character-pixi.js";
+import { SpriteCharacterView } from "./sprite-character-view.js";
+import type { CharConfig } from "../editor/newchar/character-configs.js";
 import type { AssetResolver } from "../io/asset-resolver.js";
 import { PAPER_COLOR, type ProjectDoc, type SceneDoc } from "../core/schema/project.js";
 import {
@@ -18,6 +20,7 @@ import type { ScenePhysicsPool } from "../runtime/scene-physics.js";
 interface ElView {
   container: Container;
   charView?: CharacterView;
+  spriteCharView?: SpriteCharacterView;
   text?: Text;
   balloon?: { g: Graphics; text: Text };
   placeholder?: { g: Graphics; label: Text };
@@ -88,6 +91,7 @@ export class SceneRenderStack {
 
     this.#charResolver = {
       getCharacter: (ref) => this.#resolver.getCharacter(ref),
+      getSpriteCharacter: (ref) => this.#resolver.getSpriteCharacter(ref),
     };
   }
 
@@ -273,7 +277,17 @@ export function applyItem(view: ElView, item: SceneFrameItem): void {
   const visual = item.visual;
   c.alpha = visual.alpha;
 
-  if (item.payload.kind === "character") {
+  if (item.payload.kind === "sprite-character") {
+    if (!view.spriteCharView) {
+      view.spriteCharView = new SpriteCharacterView(item.payload.spriteCfg as CharConfig);
+      c.addChild(view.spriteCharView.container);
+    }
+    if (view.text) { view.text.destroy(); view.text = undefined; }
+    const tf = item.payload.transform;
+    const s = tf.scale * visual.scaleMul;
+    c.position.set(tf.x + visual.offset[0], tf.y + visual.offset[1]);
+    c.scale.set(item.payload.flipX ? -s : s, s);
+  } else if (item.payload.kind === "character") {
     if (!view.charView) {
       view.charView = new CharacterView();
       c.addChild(view.charView.container);

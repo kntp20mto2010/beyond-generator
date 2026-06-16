@@ -2,6 +2,7 @@ import type { CharacterDoc } from "../core/schema/character.js";
 import { TEMPLATE_A } from "../presets/characters/template-a.js";
 import { TEMPLATE_B } from "../presets/characters/template-b.js";
 import { computeMouthEnvelope } from "../runtime/mouth-envelope.js";
+import { CHARS, type CharConfig } from "../editor/newchar/character-configs.js";
 import type { FileSystemAdapter } from "./fs.js";
 import { characterDocIO } from "./serialize.js";
 
@@ -27,6 +28,13 @@ const BUILTINS: Record<string, CharacterDoc> = {
   "builtin:template-b": TEMPLATE_B,
 };
 
+// 新キャラ(スプライト合成)用 builtin。CharacterDoc とは別系統で
+// scene-eval が判別して SpriteCharacterView に振り分ける。
+const SPRITE_BUILTINS: Record<string, CharConfig> = {
+  "builtin:sakura": CHARS.sakura,
+  "builtin:ryouta": CHARS.ryouta,
+};
+
 // キャラ参照(ref)→ CharacterDoc の解決。builtinは即時、ファイルは非同期ロード+キャッシュ
 export class AssetResolver {
   #cache = new Map<string, CharacterDoc>();
@@ -48,6 +56,11 @@ export class AssetResolver {
     const builtin = BUILTINS[ref];
     if (builtin) return builtin;
     return this.#cache.get(ref);
+  }
+
+  // 新キャラ(スプライト)。CharacterDoc とは別系統で返す。
+  getSpriteCharacter(ref: string): CharConfig | undefined {
+    return SPRITE_BUILTINS[ref];
   }
 
   async ensureLoaded(refs: readonly string[], fs: FileSystemAdapter | null): Promise<void> {

@@ -323,6 +323,9 @@ export function evaluateEffect(
 
 export interface CharResolver {
   getCharacter(ref: string): CharacterDoc | undefined;
+  // 新キャラ(スプライト合成系)。CharConfig 型は実装側でしか持っていないので
+  // unknown で受け、利用側(scene-render-stack)で型を絞る。
+  getSpriteCharacter?(ref: string): unknown | undefined;
 }
 
 export type SceneFramePayload =
@@ -330,6 +333,13 @@ export type SceneFramePayload =
       kind: "character";
       char: CharacterDoc;
       items: RenderItem[];
+      flipX: boolean;
+      transform: Transform;
+    }
+  | {
+      kind: "sprite-character";
+      // CharConfig。scene-eval は内容に触らず render 層へ渡すだけ。
+      spriteCfg: unknown;
       flipX: boolean;
       transform: Transform;
     }
@@ -448,6 +458,17 @@ function evaluateElement(
   let payload: SceneFramePayload;
   switch (el.kind) {
     case "character": {
+      // 先にスプライト系を確認(新キャラ)。あれば static sprite として返す。
+      const spriteCfg = resolver.getSpriteCharacter?.(el.ref);
+      if (spriteCfg) {
+        payload = {
+          kind: "sprite-character",
+          spriteCfg,
+          flipX: el.transform.flipX,
+          transform: el.transform,
+        };
+        break;
+      }
       const char = resolver.getCharacter(el.ref);
       if (!char) {
         payload = { kind: "placeholder", ref: el.ref, transform: el.transform };
