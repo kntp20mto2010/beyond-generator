@@ -34,40 +34,42 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    nativeW: 960, // ceil(960/300)=4, ceil(630/300)=3 → 4×3セル
-    nativeH: 630,
-    seat: { dx: 0, dy: -306 },
+    // Dimetric 2:1 で再生成(トリム後 1048×802)。cells 4×3 で contain →
+    // 高さ拘束 scale=360/802=0.449。座面クッション上端は画像 y≈300。
+    nativeW: 1048,
+    nativeH: 802,
+    cells: { w: 4, h: 3 },
+    seat: { dx: 0, dy: -502 },
   },
   {
     id: "school-chair",
     label: "学校椅子",
     src: "assets/objects/school-chair.png",
-    // Codex 生成(セル塗り、トリム後 551×857)。cells を 2×3 明示指定で
-    // contain → 描画 232×360(高さ箱を満たし幅は微小padding)。
-    nativeW: 551,
-    nativeH: 857,
+    // Dimetric 2:1 再生成(トリム後 482×827)。cells 2×3 で contain →
+    // 高さ拘束 scale=360/827=0.435。座面木の中央 y≈403。
+    nativeW: 482,
+    nativeH: 827,
     cells: { w: 2, h: 3 },
-    // 座面パネル: 画像下端から 441-508 px の帯。中央付近にキャラ腰を置く。
-    seat: { dx: 0, dy: -470 },
+    seat: { dx: 0, dy: -424 },
   },
   {
     id: "school-desk",
     label: "学校机(横並び)",
     src: "assets/objects/school-desk.png",
-    // 横並び用: user side(脚を入れる側・バスケット)が手前を向く。椅子と
-    // 並べて教室の風景や机に肘をつくシーンに使う。
-    nativeW: 794,
-    nativeH: 882,
+    // Dimetric 2:1 再生成(トリム後 647×745)。
+    // user side(脚を入れる側・バスケット)が手前を向く。椅子と並べる用。
+    nativeW: 647,
+    nativeH: 745,
     cells: { w: 3, h: 3 },
   },
   {
     id: "school-desk-front",
     label: "学校机(対面)",
     src: "assets/objects/school-desk-front.png",
-    // 対面用: non-user side(モデスティパネル+前縁)が手前を向く=黒板側
-    // から見た構図。キャラがこの机の奥に座って手前を向く授業/勉強シーン用。
-    nativeW: 803,
-    nativeH: 824,
+    // Dimetric 2:1 再生成(トリム後 652×739)。
+    // non-user side(モデスティパネル+前縁)が手前=黒板側から見た構図。
+    nativeW: 652,
+    nativeH: 739,
     cells: { w: 3, h: 3 },
   },
 ];
