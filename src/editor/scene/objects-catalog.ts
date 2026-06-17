@@ -34,29 +34,28 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    // High-angle axonometric(仰角~40°、回転30°)で再生成(トリム後 1078×814)。
-    // 柔らかい家具カタログ風。座面クッション上端は画像 y≈300。
-    nativeW: 1078,
-    nativeH: 814,
+    // Weak perspective(low eye-level + 8-12° down + front-left 3/4 + 0-2°
+    // lateral + 15-25° depth)で再生成(トリム後 1163×790)。柔らか家具カタログ風。
+    nativeW: 1163,
+    nativeH: 790,
     cells: { w: 4, h: 3 },
-    seat: { dx: 0, dy: -510 },
+    seat: { dx: 0, dy: -499 },
   },
   {
     id: "school-chair",
     label: "学校椅子",
     src: "assets/objects/school-chair.png",
-    // High-angle axonometric 再生成(トリム後 502×877)。
-    // 座面木の中央 y≈418(下端から 459)。
-    nativeW: 502,
-    nativeH: 877,
+    // Weak perspective 再生成(トリム後 645×908)。
+    nativeW: 645,
+    nativeH: 908,
     cells: { w: 2, h: 3 },
-    seat: { dx: 0, dy: -459 },
+    seat: { dx: 0, dy: -498 },
   },
   {
     id: "school-desk",
     label: "学校机(横並び)",
     src: "assets/objects/school-desk.png",
-    // ※高仰角バージョン未対応(現在は Dimetric 2:1 のまま、必要時に再生成)。
+    // ※ weak perspective 版未対応(High-angle axonometric のまま、必要時に再生成)。
     nativeW: 647,
     nativeH: 745,
     cells: { w: 3, h: 3 },
@@ -65,10 +64,10 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-desk-front",
     label: "学校机(対面)",
     src: "assets/objects/school-desk-front.png",
-    // High-angle axonometric 再生成(トリム後 722×802)。
+    // Weak perspective 再生成(トリム後 771×751)。
     // non-user side(モデスティパネル+前縁)が手前=黒板側から見た構図。
-    nativeW: 722,
-    nativeH: 802,
+    nativeW: 771,
+    nativeH: 751,
     cells: { w: 3, h: 3 },
   },
 ];
