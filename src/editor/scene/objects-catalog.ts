@@ -50,6 +50,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     // 座面パネル: 画像下端から 441-508 px の帯。中央付近にキャラ腰を置く。
     seat: { dx: 0, dy: -470 },
   },
+  {
+    id: "school-desk",
+    label: "学校机",
+    src: "assets/objects/school-desk.png",
+    // Codex 生成(セル塗り、トリム後 794×882)。cells {3,3}(=900×900箱)で
+    // contain → 描画 約324×360。座らせる対象ではないので seat なし。
+    nativeW: 794,
+    nativeH: 882,
+    cells: { w: 3, h: 3 },
+  },
 ];
 
 // オブジェクト既定の footprint セル(上書きが無ければ native/PX_PER_CELL)。
