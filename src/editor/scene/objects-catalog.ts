@@ -42,9 +42,13 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-chair",
     label: "学校椅子",
     src: "assets/objects/school-chair.png",
-    nativeW: 806, // ceil(806/300)=3, ceil(890/300)=3 → 3×3セル
-    nativeH: 890,
-    seat: { dx: 0, dy: -460 }, // 仮: 座面≒画像中央やや下。実測でキャリブ
+    // Codex 生成(セル塗り、トリム後 551×857)。cells を 2×3 明示指定で
+    // contain → 描画 232×360(高さ箱を満たし幅は微小padding)。
+    nativeW: 551,
+    nativeH: 857,
+    cells: { w: 2, h: 3 },
+    // 座面パネル: 画像下端から 441-508 px の帯。中央付近にキャラ腰を置く。
+    seat: { dx: 0, dy: -470 },
   },
 ];
 
