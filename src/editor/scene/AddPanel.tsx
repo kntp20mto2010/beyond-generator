@@ -12,6 +12,7 @@ import { OBJECT_CATALOG } from "./objects-catalog.js";
 interface CharEntry {
   ref: string;
   label: string;
+  thumb?: string; // スプライトキャラ用: 立ち絵サムネ画像パス(assets配信)
 }
 
 interface Props {
@@ -123,6 +124,14 @@ export function AddPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thumbs, resolverRev]);
 
+  // スプライトキャラの立ち絵サムネ画像を読み込む(assets配信)
+  useEffect(() => {
+    const thumbsPaths = chars.map((c) => c.thumb).filter((p): p is string => !!p);
+    const missing = thumbsPaths.filter((p) => !resolver.getImageUrl(p));
+    if (missing.length > 0) void resolver.ensureImagesLoaded(missing, fs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fs, resolverRev]);
+
   // 背景画像の objectURL を取得
   const allBgPaths = [...BUILTIN_BGS, ...bgFiles.map((f) => `assets/bg/${f}`)];
 
@@ -161,10 +170,10 @@ export function AddPanel({
       {/* キャラ */}
       <Section title="キャラ" defaultOpen={true}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-          {chars.map(({ ref, label }) => (
+          {chars.map(({ ref, label, thumb }) => (
             <Thumb
               key={ref}
-              src={charUrls[ref]}
+              src={thumb ? resolver.getImageUrl(thumb) : charUrls[ref]}
               label={label}
               width={72}
               height={108}
