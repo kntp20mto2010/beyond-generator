@@ -34,30 +34,29 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    // Dimetric 2:1 で再生成(トリム後 1048×802)。cells 4×3 で contain →
-    // 高さ拘束 scale=360/802=0.449。座面クッション上端は画像 y≈300。
-    nativeW: 1048,
-    nativeH: 802,
+    // High-angle axonometric(仰角~40°、回転30°)で再生成(トリム後 1078×814)。
+    // 柔らかい家具カタログ風。座面クッション上端は画像 y≈300。
+    nativeW: 1078,
+    nativeH: 814,
     cells: { w: 4, h: 3 },
-    seat: { dx: 0, dy: -502 },
+    seat: { dx: 0, dy: -510 },
   },
   {
     id: "school-chair",
     label: "学校椅子",
     src: "assets/objects/school-chair.png",
-    // Dimetric 2:1 再生成(トリム後 482×827)。cells 2×3 で contain →
-    // 高さ拘束 scale=360/827=0.435。座面木の中央 y≈403。
-    nativeW: 482,
-    nativeH: 827,
+    // High-angle axonometric 再生成(トリム後 502×877)。
+    // 座面木の中央 y≈418(下端から 459)。
+    nativeW: 502,
+    nativeH: 877,
     cells: { w: 2, h: 3 },
-    seat: { dx: 0, dy: -424 },
+    seat: { dx: 0, dy: -459 },
   },
   {
     id: "school-desk",
     label: "学校机(横並び)",
     src: "assets/objects/school-desk.png",
-    // Dimetric 2:1 再生成(トリム後 647×745)。
-    // user side(脚を入れる側・バスケット)が手前を向く。椅子と並べる用。
+    // ※高仰角バージョン未対応(現在は Dimetric 2:1 のまま、必要時に再生成)。
     nativeW: 647,
     nativeH: 745,
     cells: { w: 3, h: 3 },
@@ -66,10 +65,10 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-desk-front",
     label: "学校机(対面)",
     src: "assets/objects/school-desk-front.png",
-    // Dimetric 2:1 再生成(トリム後 652×739)。
+    // High-angle axonometric 再生成(トリム後 722×802)。
     // non-user side(モデスティパネル+前縁)が手前=黒板側から見た構図。
-    nativeW: 652,
-    nativeH: 739,
+    nativeW: 722,
+    nativeH: 802,
     cells: { w: 3, h: 3 },
   },
 ];
