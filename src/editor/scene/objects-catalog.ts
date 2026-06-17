@@ -52,12 +52,22 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   },
   {
     id: "school-desk",
-    label: "学校机",
+    label: "学校机(横並び)",
     src: "assets/objects/school-desk.png",
-    // Codex 生成(セル塗り、トリム後 794×882)。cells {3,3}(=900×900箱)で
-    // contain → 描画 約324×360。座らせる対象ではないので seat なし。
+    // 横並び用: user side(脚を入れる側・バスケット)が手前を向く。椅子と
+    // 並べて教室の風景や机に肘をつくシーンに使う。
     nativeW: 794,
     nativeH: 882,
+    cells: { w: 3, h: 3 },
+  },
+  {
+    id: "school-desk-front",
+    label: "学校机(対面)",
+    src: "assets/objects/school-desk-front.png",
+    // 対面用: non-user side(モデスティパネル+前縁)が手前を向く=黒板側
+    // から見た構図。キャラがこの机の奥に座って手前を向く授業/勉強シーン用。
+    nativeW: 803,
+    nativeH: 824,
     cells: { w: 3, h: 3 },
   },
 ];
