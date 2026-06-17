@@ -35,6 +35,11 @@ const SPRITE_BUILTINS: Record<string, CharConfig> = {
   "builtin:ryouta": CHARS.ryouta,
 };
 
+// 内蔵スプライトキャラの一覧(ref + 表示名)。シーン編集のキャラ追加UIで使う。
+export const SPRITE_BUILTIN_LIST: { ref: string; label: string }[] = Object.entries(
+  SPRITE_BUILTINS,
+).map(([ref, cfg]) => ({ ref, label: cfg.label }));
+
 // キャラ参照(ref)→ CharacterDoc の解決。builtinは即時、ファイルは非同期ロード+キャッシュ
 export class AssetResolver {
   #cache = new Map<string, CharacterDoc>();

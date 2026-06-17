@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FileSystemAdapter } from "../../io/fs.js";
 import type { AssetResolver } from "../../io/asset-resolver.js";
+import { SPRITE_BUILTIN_LIST } from "../../io/asset-resolver.js";
 import type { BalloonElement } from "../../core/schema/project.js";
 import type { CharacterDoc } from "../../core/schema/character.js";
 import type { ThumbnailService } from "../thumbs/thumbnail-service.js";
@@ -102,6 +103,7 @@ export function AddPanel({
 
   // キャラサムネを起動時に生成
   const chars: CharEntry[] = [
+    ...SPRITE_BUILTIN_LIST, // 新キャラ(スプライト): サクラ / リョウタ
     { ref: "builtin:template-a", label: "ハル(内蔵)" },
     { ref: "builtin:template-b", label: "ハナ(内蔵)" },
     ...savedCharacters.map((f) => ({ ref: `characters/${f}`, label: f.replace(/\.byc\.json$/, "") })),
