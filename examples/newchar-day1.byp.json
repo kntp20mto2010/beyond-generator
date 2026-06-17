@@ -11,7 +11,7 @@
   "scenes": [
     {
       "id": "01KZAA0000000000000001SCN1",
-      "duration": 5,
+      "duration": 6.5,
       "durationMode": "manual",
       "background": {
         "image": "assets/generated/bg-school-001.png"
@@ -87,7 +87,7 @@
           "z": 200,
           "enter": {
             "type": "pop",
-            "delay": 2.7,
+            "delay": 4.4,
             "dur": 0.35
           },
           "exit": {
