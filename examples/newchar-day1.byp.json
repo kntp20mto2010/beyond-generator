@@ -27,16 +27,16 @@
           "kind": "character",
           "ref": "builtin:sakura",
           "transform": {
-            "x": 320,
+            "x": -120,
             "y": 700,
             "scale": 0.9,
             "flipX": false
           },
           "z": 0,
           "enter": {
-            "type": "slideL",
+            "type": "cut",
             "delay": 0,
-            "dur": 0.5
+            "dur": 0.4
           },
           "exit": {
             "type": "cut",
@@ -45,7 +45,7 @@
           },
           "actions": [
             {
-              "t": 0.3,
+              "t": 0,
               "clip": "walk-girl",
               "speed": 1,
               "moveTo": {
@@ -702,18 +702,18 @@
             {
               "t": 0,
               "clip": "walk-girl",
-              "speed": 1.4,
+              "speed": 1,
               "moveTo": {
                 "x": 1020
               }
             },
             {
-              "t": 2.4,
+              "t": 2.8,
               "clip": "sit",
               "speed": 1
             },
             {
-              "t": 3.6,
+              "t": 4,
               "clip": "sit-talk",
               "speed": 1
             }
@@ -730,7 +730,7 @@
           ],
           "talks": [
             {
-              "t": 3.6,
+              "t": 4,
               "audio": "assets/audio/vo-001.wav",
               "gain": 1
             }
@@ -762,7 +762,7 @@
           "locked": false,
           "enter": {
             "type": "pop",
-            "delay": 3.6,
+            "delay": 4,
             "dur": 0.3
           },
           "exit": {
