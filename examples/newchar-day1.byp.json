@@ -638,7 +638,7 @@
     },
     {
       "id": "01KTCLASSROOMSITTALK0001",
-      "duration": 8,
+      "duration": 7.5,
       "seed": 41,
       "background": {
         "image": "assets/backgrounds/bg-classroom-001.svg"
@@ -650,13 +650,17 @@
       "camera": [],
       "elements": [
         {
-          "id": "obj-sofa-st",
+          "id": "obj-chair",
           "kind": "object",
-          "src": "assets/objects/sofa-navy-2seat.png",
+          "src": "assets/objects/school-chair.png",
+          "cells": {
+            "w": 2,
+            "h": 3
+          },
           "transform": {
             "x": 1020,
-            "y": 875,
-            "scale": 0.5,
+            "y": 960,
+            "scale": 0.4200700116686114,
             "flipX": false
           },
           "z": -10,
@@ -670,14 +674,10 @@
             "type": "cut",
             "at": null,
             "dur": 0.4
-          },
-          "cells": {
-            "w": 4,
-            "h": 3
           }
         },
         {
-          "id": "char-saku-st",
+          "id": "char-saku",
           "kind": "character",
           "ref": "builtin:sakura",
           "transform": {
@@ -710,7 +710,11 @@
             {
               "t": 2.8,
               "clip": "sit",
-              "speed": 1
+              "speed": 1,
+              "moveTo": {
+                "x": 1020,
+                "y": 763
+              }
             },
             {
               "t": 4,
@@ -721,40 +725,67 @@
           "expressions": [
             {
               "t": 0,
-              "preset": "smile"
+              "preset": "normal"
             },
             {
-              "t": 3.4,
-              "preset": "happy"
+              "t": 3.8,
+              "preset": "thinking"
             }
           ],
           "talks": [
             {
-              "t": 4,
-              "audio": "assets/audio/vo-001.wav",
+              "t": 4.2,
+              "audio": "assets/audio/vo-002.wav",
               "gain": 1
             }
           ]
         },
         {
+          "id": "obj-desk-front",
+          "kind": "object",
+          "src": "assets/objects/school-desk-front.png",
+          "cells": {
+            "w": 3,
+            "h": 2
+          },
+          "transform": {
+            "x": 1020,
+            "y": 960,
+            "scale": 0.2912621359223301,
+            "flipX": false
+          },
+          "z": 5,
+          "locked": false,
+          "enter": {
+            "type": "cut",
+            "delay": 0,
+            "dur": 0.4
+          },
+          "exit": {
+            "type": "cut",
+            "at": null,
+            "dur": 0.4
+          }
+        },
+        {
           "id": "bal-st",
           "kind": "balloon",
           "shape": "round",
-          "text": "ふぅ、やっと座れた〜",
-          "size": 38,
-          "w": 440,
-          "h": 150,
+          "text": "うーん、この問題ぜんぜん分かんない…",
+          "size": 36,
+          "w": 480,
+          "h": 140,
           "fill": "#ffffff",
           "textColor": "#2E2A33",
           "lineColor": "#2E2A33",
           "lineWidth": 4,
           "tail": {
-            "x": -120,
+            "x": -100,
             "y": 120
           },
           "transform": {
-            "x": 1150,
-            "y": 360,
+            "x": 1080,
+            "y": 280,
             "scale": 1,
             "flipX": false
           },
@@ -762,7 +793,7 @@
           "locked": false,
           "enter": {
             "type": "pop",
-            "delay": 4,
+            "delay": 4.2,
             "dur": 0.3
           },
           "exit": {
