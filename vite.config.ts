@@ -107,7 +107,40 @@ function rigSavePlugin(): Plugin {
   };
 }
 
+// オブジェクト画像の水平反転上書き専用 middleware。
+// POST /__object-flip { src, dataUrl } → assets/objects/ 配下の src を上書き。
+// src は assets/objects/ 配下に限定(他パスへの書き込みを防ぐ)。
+function objectFlipPlugin(): Plugin {
+  return {
+    name: "object-flip",
+    configureServer(server) {
+      server.middlewares.use("/__object-flip", async (req, res) => {
+        if (req.method !== "POST") { res.statusCode = 405; res.end("POST only"); return; }
+        try {
+          let body = "";
+          for await (const chunk of req) body += chunk as string;
+          const { src, dataUrl } = JSON.parse(body) as { src?: string; dataUrl?: string };
+          if (typeof src !== "string" || !src.startsWith("assets/objects/") || src.includes("..")) {
+            res.statusCode = 400; res.end("bad src (must be under assets/objects/)"); return;
+          }
+          const PREFIX = "data:image/png;base64,";
+          if (typeof dataUrl !== "string" || !dataUrl.startsWith(PREFIX)) {
+            res.statusCode = 400; res.end("bad dataUrl"); return;
+          }
+          const data = Buffer.from(dataUrl.slice(PREFIX.length), "base64");
+          await writeFile(src, data);
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ ok: true, src, bytes: data.length }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(String((e as Error)?.message ?? e));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin()],
+  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin()],
   server: { port: 5273, strictPort: true },
 });

@@ -6,6 +6,7 @@ import { CharacterEditorPage } from "./editor/character/CharacterEditorPage.js";
 import { ContactSheetPage } from "./editor/character/ContactSheetPage.js";
 import { ClipSheetPage } from "./editor/character/ClipSheetPage.js";
 import { SpriteRigPage } from "./editor/newchar/SpriteRigPage.js";
+import { ObjectPage } from "./editor/object/ObjectPage.js";
 import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
@@ -15,7 +16,7 @@ if (import.meta.env.DEV) {
   (globalThis as unknown as { __byondStore?: unknown }).__byondStore = store;
 }
 
-type Tab = "scene" | "character" | "newchar";
+type Tab = "scene" | "character" | "newchar" | "object";
 
 // ハッシュルートは初回判定のみ(リアクティブルーティング不要)
 const IS_CONTACT_SHEET = location.hash === "#contact-sheet";
@@ -26,7 +27,7 @@ const TAB_KEY = "byond.activeTab";
 function loadTab(): Tab {
   try {
     const v = localStorage.getItem(TAB_KEY);
-    if (v === "scene" || v === "character" || v === "newchar") return v;
+    if (v === "scene" || v === "character" || v === "newchar" || v === "object") return v;
   } catch {
     /* localStorage 不可環境は既定へ */
   }
@@ -74,13 +75,21 @@ function App() {
         >
           新キャラクター
         </button>
+        <button
+          className={`app-tab${tab === "object" ? " app-tab--active" : ""}`}
+          onClick={() => setTab("object")}
+        >
+          オブジェクト
+        </button>
       </nav>
       {tab === "character" ? (
         <CharacterEditorPage fs={fs} />
       ) : tab === "scene" ? (
         <ScenePage store={store} />
-      ) : (
+      ) : tab === "newchar" ? (
         <SpriteRigPage />
+      ) : (
+        <ObjectPage />
       )}
     </div>
   );
