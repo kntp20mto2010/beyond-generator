@@ -34,40 +34,31 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     src: "assets/objects/sofa-navy-2seat.png",
-    // Weak perspective(low eye-level + 8-12° down + front-left 3/4 + 0-2°
-    // lateral + 15-25° depth)で再生成(トリム後 1163×790)。柔らか家具カタログ風。
-    nativeW: 1163,
-    nativeH: 790,
+    // Flat L1b(アウトライン無し+フラット質感+影シェイプ)で再生成(トリム後
+    // 1202×811)。weak perspective + front-left 3/4 は維持。
+    nativeW: 1202,
+    nativeH: 811,
     cells: { w: 4, h: 3 },
-    seat: { dx: 0, dy: -499 },
+    seat: { dx: 0, dy: -520 },
   },
   {
     id: "school-chair",
     label: "学校椅子",
     src: "assets/objects/school-chair.png",
-    // Weak perspective 再生成(トリム後 645×908)。
-    nativeW: 645,
-    nativeH: 908,
+    // Flat L1b 再生成(トリム後 604×875)。
+    nativeW: 604,
+    nativeH: 875,
     cells: { w: 2, h: 3 },
-    seat: { dx: 0, dy: -498 },
-  },
-  {
-    id: "school-desk",
-    label: "学校机(横並び)",
-    src: "assets/objects/school-desk.png",
-    // ※ weak perspective 版未対応(High-angle axonometric のまま、必要時に再生成)。
-    nativeW: 647,
-    nativeH: 745,
-    cells: { w: 3, h: 3 },
+    seat: { dx: 0, dy: -495 },
   },
   {
     id: "school-desk-front",
     label: "学校机(対面)",
     src: "assets/objects/school-desk-front.png",
-    // Weak perspective 再生成(トリム後 771×751)。
+    // Flat L1b 再生成(トリム後 874×787)。左短径・右長径の構図。
     // non-user side(モデスティパネル+前縁)が手前=黒板側から見た構図。
-    nativeW: 771,
-    nativeH: 751,
+    nativeW: 874,
+    nativeH: 787,
     cells: { w: 3, h: 3 },
   },
 ];
