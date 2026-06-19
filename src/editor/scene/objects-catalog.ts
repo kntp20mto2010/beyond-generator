@@ -111,6 +111,17 @@ export const PLACEMENT_LABEL: Record<ObjectPlacement, string> = {
   ground: "床敷き",
 };
 
+// 配置ごとに使う角度 (view) の許可リスト。
+// - floor : 全 3 角度(AC 風配置で正面/斜め/壁付け全部使う)
+// - wall  : 正面のみ(壁にぴったり貼る平面画)
+// - ground: 正面のみ(ラグは正面 or 上面のみ、立体だと模様が歪む)
+// テストでカタログ整合性を保証する(grid-object.test.ts)。
+export const ALLOWED_ANGLES_BY_PLACEMENT: Record<ObjectPlacement, readonly ObjectViewName[]> = {
+  floor: ["front", "front-dimetric", "side"],
+  wall: ["front"],
+  ground: ["front"],
+};
+
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
   id: string;

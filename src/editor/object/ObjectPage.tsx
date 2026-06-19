@@ -12,6 +12,7 @@ import {
   KIND_LABEL,
   PLACEMENT_LABEL,
   VIEW_LABEL,
+  ALLOWED_ANGLES_BY_PLACEMENT,
   type ObjectDef,
   type ObjectVariant,
   type ObjectViewName,
@@ -87,6 +88,16 @@ export function ObjectPage() {
     setSelectedPlacements((prev) => {
       const next = new Set(prev);
       next.has(p) ? next.delete(p) : next.add(p);
+      // placement が変わったら、その配置で使えない角度を選択集合から自動除外
+      // (壁掛け選択時の `selectedAngles=side` が見えない 0 件を残さない)
+      setSelectedAngles((angles) => {
+        if (next.size === 0 || angles.size === 0) return angles;
+        const allowedNow = new Set<ObjectViewName>(
+          [...next].flatMap((pp) => [...ALLOWED_ANGLES_BY_PLACEMENT[pp]]),
+        );
+        const pruned = new Set([...angles].filter((a) => allowedNow.has(a)));
+        return pruned.size === angles.size ? angles : pruned;
+      });
       return next;
     });
   const toggleAngle = (a: ObjectViewName) =>
@@ -132,6 +143,19 @@ export function ObjectPage() {
         selected={selectedAngles as Set<string>}
         onToggle={(a) => toggleAngle(a as ObjectViewName)}
         onClear={() => setSelectedAngles(new Set())}
+        disabledKeys={
+          selectedPlacements.size === 0
+            ? undefined
+            : new Set(
+                anglesUsed.filter(
+                  (a) =>
+                    ![...selectedPlacements].some((p) =>
+                      ALLOWED_ANGLES_BY_PLACEMENT[p].includes(a),
+                    ),
+                ),
+              )
+        }
+        disabledTitle="選択中の配置では使われない角度"
       />
       <div
         style={{
@@ -151,13 +175,15 @@ export function ObjectPage() {
 }
 
 function FilterChipRow({
-  label, items, selected, onToggle, onClear,
+  label, items, selected, onToggle, onClear, disabledKeys, disabledTitle,
 }: {
   label: string;
   items: { key: string; label: string }[];
   selected: Set<string>;
   onToggle: (key: string) => void;
   onClear: () => void;
+  disabledKeys?: Set<string>;
+  disabledTitle?: string;
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
@@ -180,11 +206,15 @@ function FilterChipRow({
       </button>
       {items.map((it) => {
         const on = selected.has(it.key);
+        const off = (disabledKeys?.has(it.key) ?? false) && !on;
         return (
           <button
             key={it.key}
             type="button"
-            onClick={() => onToggle(it.key)}
+            onClick={off ? undefined : () => onToggle(it.key)}
+            aria-disabled={off}
+            aria-pressed={on}
+            title={off ? disabledTitle : undefined}
             style={{
               padding: "2px 8px",
               fontSize: "11px",
@@ -192,8 +222,10 @@ function FilterChipRow({
               border: "1px solid var(--border)",
               background: on ? "var(--accent, #3b82f6)" : "var(--bg-elev)",
               color: on ? "white" : "var(--text)",
-              cursor: "pointer",
+              cursor: off ? "not-allowed" : "pointer",
               fontWeight: on ? 600 : 400,
+              opacity: off ? 0.35 : 1,
+              textDecoration: off ? "line-through" : undefined,
             }}
           >
             {it.label}

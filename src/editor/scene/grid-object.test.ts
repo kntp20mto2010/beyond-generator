@@ -6,6 +6,8 @@ import {
   objectScale,
   objectScaleForCells,
   OBJECT_CATALOG,
+  ALLOWED_ANGLES_BY_PLACEMENT,
+  type ObjectViewName,
 } from "./objects-catalog.js";
 
 // オブジェクトのグリッド吸着(偶奇位相)とセル幅スケール導出。
@@ -38,6 +40,27 @@ describe("オブジェクトのグリッド吸着", () => {
     const [sx, sy] = snapObjectXY(1010, 950);
     expect(sx % GRID).toBe(0);
     expect(sy % GRID).toBe(0);
+  });
+});
+
+describe("カタログ整合性: placement → 許可される角度 (views キー)", () => {
+  it("各 def の views キーは ALLOWED_ANGLES_BY_PLACEMENT[placement] の subset", () => {
+    for (const def of OBJECT_CATALOG) {
+      if (!def.placement) continue; // placement 未指定の def は許容(早期家具)
+      const allowed = ALLOWED_ANGLES_BY_PLACEMENT[def.placement];
+      const views = Object.keys(def.views) as ObjectViewName[];
+      for (const v of views) {
+        expect(allowed, `${def.id} (placement=${def.placement}) は ${v} を持てない`).toContain(v);
+      }
+    }
+  });
+
+  it("defaultView も ALLOWED_ANGLES_BY_PLACEMENT[placement] に含まれる", () => {
+    for (const def of OBJECT_CATALOG) {
+      if (!def.placement) continue;
+      const allowed = ALLOWED_ANGLES_BY_PLACEMENT[def.placement];
+      expect(allowed, `${def.id} の defaultView=${def.defaultView} が許可リスト外`).toContain(def.defaultView);
+    }
   });
 });
 
