@@ -49,3 +49,38 @@ export function regionAtCell(
   if (col < 0 || col >= map.cols || row < 0 || row >= map.rows) return undefined;
   return map.regions[row]?.[col];
 }
+
+// 配置 → 許可される region 集合。
+// floor は床セル、wall は奥/左/右壁、ground は床(ラグは床敷き)。
+export const ALLOWED_REGIONS_BY_PLACEMENT: Record<
+  "floor" | "wall" | "ground",
+  ReadonlyArray<RegionCode>
+> = {
+  floor: ["F"],
+  wall: ["L", "B", "R"],
+  ground: ["F"],
+};
+
+// 最も近い「許可された region」のセル中心 (col, row) を Manhattan 距離で探す。
+// 見つからなければ undefined。
+export function nearestAllowedCell(
+  map: RoomRegionMap,
+  startCol: number,
+  startRow: number,
+  allowed: ReadonlyArray<RegionCode>,
+): { col: number; row: number } | undefined {
+  let best: { col: number; row: number } | undefined;
+  let bestDist = Infinity;
+  for (let r = 0; r < map.rows; r++) {
+    for (let c = 0; c < map.cols; c++) {
+      const code = map.regions[r]?.[c];
+      if (!code || !allowed.includes(code)) continue;
+      const d = Math.abs(r - startRow) + Math.abs(c - startCol);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { col: c, row: r };
+      }
+    }
+  }
+  return best;
+}

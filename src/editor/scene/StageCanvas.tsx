@@ -28,7 +28,12 @@ import {
 import { computeSnap, type Edges } from "./snap.js";
 import { GRID, snapObjectXY } from "./grid.js";
 import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
-import { objectScaleForCells } from "./objects-catalog.js";
+import {
+  ALLOWED_REGIONS_BY_PLACEMENT,
+  nearestAllowedCell,
+  type RoomRegionMap,
+} from "./room-regions/types.js";
+import { getObjectDef, objectScaleForCells } from "./objects-catalog.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const SNAP_THRESHOLD = 12;
@@ -154,6 +159,14 @@ export function StageCanvas(props: Props) {
       let camFrameValue: CameraState = { x: 960, y: 540, zoom: 1 };
 
       const p = () => pRef.current;
+      // scene.background から領域マップを引く。現状 sakura-room のみ対応。
+      // TODO: 部屋増設時に room-id レジストリ化
+      const currentRoomMap = (scene: SceneDoc | undefined): RoomRegionMap | undefined => {
+        const bg = scene?.background as { image?: string } | null | undefined;
+        if (bg?.image?.includes("sakura-room-empty")) return SAKURA_ROOM_REGIONS;
+        return undefined;
+      };
+
       const currentScene = (): SceneDoc | undefined =>
         p().store.doc.scenes.find((s) => s.id === p().sceneId);
 
@@ -353,7 +366,26 @@ export function StageCanvas(props: Props) {
           // オブジェクト(家具)はグリッド吸着(Shiftで自由配置)。
           if (el.kind === "object" && !me.shiftKey) {
             const cw = el.cells?.w ?? 2;
-            const [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
+            let [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
+            // 配置種別 (floor/wall/ground) で許可された region に制約。
+            // 許可外 cell に来たら、Manhattan 最近傍の許可 cell に bottom-center を再吸着。
+            const def = getObjectDef(el.src);
+            const map = currentRoomMap(scene);
+            if (map && def?.placement && (def.placement === "floor" || def.placement === "wall" || def.placement === "ground")) {
+              const allowed = ALLOWED_REGIONS_BY_PLACEMENT[def.placement];
+              const cellRow = Math.floor(sny / map.grid) - 1; // bottom-center が乗っているセル行
+              const cellCol = Math.floor(snx / map.grid);
+              const code = map.regions[cellRow]?.[cellCol];
+              if (!code || !allowed.includes(code)) {
+                const near = nearestAllowedCell(map, cellCol, cellRow, allowed);
+                if (near) {
+                  // セル中心 X (奇数幅は半セルずらし) + bottom Y = (row+1)*GRID
+                  const offX = cw % 2 === 1 ? map.grid / 2 : 0;
+                  snx = near.col * map.grid + offX;
+                  sny = (near.row + 1) * map.grid;
+                }
+              }
+            }
             updateElementTransform(p().store, scene.id, hitId, { x: snx, y: sny });
             guides.clear();
             return;
