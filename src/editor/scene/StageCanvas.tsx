@@ -27,6 +27,7 @@ import {
 } from "./stage-coords.js";
 import { computeSnap, type Edges } from "./snap.js";
 import { GRID, snapObjectXY } from "./grid.js";
+import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
 import { objectScaleForCells } from "./objects-catalog.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
@@ -61,6 +62,8 @@ interface Props {
   resolverRev: number;
   // グリッド+セーフエリア常時表示
   showGrid: boolean;
+  // 領域オーバーレイ (床/奥壁/左壁/右壁) の色付きセル表示
+  showRegions: boolean;
   // カメラモード(ON中は要素ヒットテスト/ドラッグ/ホバー/ハンドルを無効化しカメラ枠を表示)
   cameraEdit: boolean;
   // 右クリックメニュー要求(clientX/Y, ステージ座標, 対象elementId | null)
@@ -609,6 +612,27 @@ export function StageCanvas(props: Props) {
 
       const drawGrid = () => {
         gridLayer.clear();
+        // 領域オーバーレイ(床/奥壁/左壁/右壁の色分け)。最背面に重ねる。
+        // TODO: scene.background に応じて region map を選択(現状 sakura-room 固定)
+        if (p().showRegions) {
+          const map = SAKURA_ROOM_REGIONS;
+          const colorOf: Record<string, number> = {
+            F: 0x00d4d4, // floor   = cyan
+            B: 0xff00ff, // back    = magenta
+            L: 0xffeb00, // left    = yellow
+            R: 0x00cc00, // right   = lime
+          };
+          for (let r = 0; r < map.rows; r++) {
+            for (let c = 0; c < map.cols; c++) {
+              const code = map.regions[r]?.[c];
+              if (!code) continue;
+              gridLayer.rect(c * map.grid, r * map.grid, map.grid, map.grid);
+              gridLayer.fill({ color: colorOf[code], alpha: 0.18 });
+              gridLayer.rect(c * map.grid, r * map.grid, map.grid, map.grid);
+              gridLayer.stroke({ color: colorOf[code], width: 1, alpha: 0.45 });
+            }
+          }
+        }
         // オブジェクト選択中は配置グリッド(GRID px)を表示(吸着先が見える)。
         const selId = p().selectedId;
         const selEl = selId ? currentScene()?.elements.find((e) => e.id === selId) : null;

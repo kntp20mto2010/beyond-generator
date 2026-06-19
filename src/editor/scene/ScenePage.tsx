@@ -102,6 +102,7 @@ export function ScenePage({ store }: Props) {
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
   const [seekNonce, setSeekNonce] = useState(0);
   const [showGrid, setShowGrid] = useState(false);
+  const [showRegions, setShowRegions] = useState(false);
   const [cameraEdit, setCameraEdit] = useState(false);
   const [rightTab, setRightTab] = useState<"property" | "script">("property");
   // 書き出し: ダイアログ開閉 / 進捗(null=設定中) / エラー。実行中はStageCanvasをアンマウント
@@ -933,6 +934,18 @@ export function ScenePage({ store }: Props) {
           <IconGrid />
         </button>
         <button
+          className={`ui-icon-btn${showRegions ? " ui-icon-btn--active" : ""}`}
+          onClick={() => setShowRegions((s) => !s)}
+          title="領域オーバーレイ (床/奥壁/左壁/右壁)"
+        >
+          <svg viewBox="0 0 16 16" width={16} height={16}>
+            <rect x="0" y="0" width="6" height="10" fill="#ffeb00" />
+            <polygon points="6,0 12,0 12,7 6,10" fill="#ff00ff" />
+            <polygon points="12,0 16,0 16,12 12,7" fill="#00cc00" />
+            <polygon points="0,10 6,10 12,7 16,12 16,16 0,16" fill="#00d4d4" />
+          </svg>
+        </button>
+        <button
           className={`ui-icon-btn${cameraEdit ? " ui-icon-btn--active" : ""}`}
           onClick={() => setCameraEdit((c) => !c)}
           disabled={!scene}
@@ -1019,6 +1032,7 @@ export function ScenePage({ store }: Props) {
               revision={revision}
               resolverRev={resolverRev}
               showGrid={showGrid}
+              showRegions={showRegions}
               cameraEdit={cameraEdit}
               onContextMenu={onContextMenu}
               onQuickAction={(info) => setQuickAction(info)}
