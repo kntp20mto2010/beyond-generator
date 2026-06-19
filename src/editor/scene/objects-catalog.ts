@@ -59,9 +59,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
       front: {
         src: "assets/objects/sofa-navy-front.png",
         nativeW: 823,
-        nativeH: 530,
+        nativeH: 480,
         cells: { w: 4, h: 3 },
-        seat: { dx: 0, dy: -260 },
+        seat: { dx: 0, dy: -251 },
       },
       "front-dimetric": {
         src: "assets/objects/sofa-navy-dimetric.png",
