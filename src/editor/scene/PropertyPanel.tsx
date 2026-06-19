@@ -34,6 +34,7 @@ import {
   setElementLocked,
   setElementZ,
   setObjectSize,
+  setObjectView,
   setSceneTransition,
   setTextProps,
   sitCharacterOnObject,
@@ -44,7 +45,15 @@ import {
   updateTalk,
 } from "../../core/commands-project.js";
 import { audioLabel, listAudioOptions } from "./audio-options.js";
-import { getObjectSeat, objectLabel, objectScaleForCells } from "./objects-catalog.js";
+import {
+  getObjectSeat,
+  objectLabel,
+  objectScaleForCells,
+  lookupVariantBySrc,
+  getOtherViewSrc,
+  variantCells,
+  containScale,
+} from "./objects-catalog.js";
 import { snapObjectXY } from "./grid.js";
 import { spriteClipLabel } from "../newchar/sprite-clips.js";
 import { Section } from "../ui/Section.js";
@@ -168,38 +177,66 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
           />
         </div>
         {element.kind === "object" ? (
-          <div className="ui-row">
-            <label>マス</label>
-            <input
-              type="number"
-              min="1"
-              max="16"
-              className="ui-num"
-              style={{ width: "48px" }}
-              value={element.cells.w}
-              onChange={(e) => {
-                const w = Math.max(1, Math.round(Number(e.target.value)));
-                const cells = { w, h: element.cells.h };
-                const [sx] = snapObjectXY(tf.x, tf.y, w);
-                setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells), sx);
-              }}
-            />
-            <span style={{ color: "var(--text-dim)" }}>×</span>
-            <input
-              type="number"
-              min="1"
-              max="9"
-              className="ui-num"
-              style={{ width: "48px" }}
-              value={element.cells.h}
-              onChange={(e) => {
-                const h = Math.max(1, Math.round(Number(e.target.value)));
-                const cells = { w: element.cells.w, h };
-                setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells));
-              }}
-            />
-            <span style={{ color: "var(--text-dim)", fontSize: "11px" }}>セル</span>
-          </div>
+          <>
+            <div className="ui-row">
+              <label>マス</label>
+              <input
+                type="number"
+                min="1"
+                max="16"
+                className="ui-num"
+                style={{ width: "48px" }}
+                value={element.cells.w}
+                onChange={(e) => {
+                  const w = Math.max(1, Math.round(Number(e.target.value)));
+                  const cells = { w, h: element.cells.h };
+                  const [sx] = snapObjectXY(tf.x, tf.y, w);
+                  setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells), sx);
+                }}
+              />
+              <span style={{ color: "var(--text-dim)" }}>×</span>
+              <input
+                type="number"
+                min="1"
+                max="9"
+                className="ui-num"
+                style={{ width: "48px" }}
+                value={element.cells.h}
+                onChange={(e) => {
+                  const h = Math.max(1, Math.round(Number(e.target.value)));
+                  const cells = { w: element.cells.w, h };
+                  setObjectSize(store, sceneId, id, cells, objectScaleForCells(element.src, cells));
+                }}
+              />
+              <span style={{ color: "var(--text-dim)", fontSize: "11px" }}>セル</span>
+            </div>
+            {(() => {
+              // ビュー切替: 別 view(front↔side)があれば表示
+              const hit = lookupVariantBySrc(element.src);
+              const otherSrc = getOtherViewSrc(element.src);
+              if (!hit || !otherSrc) return null;
+              const otherView = hit.view === "front" ? "side" : "front";
+              const otherVariant = hit.def.views[otherView]!;
+              const otherCells = variantCells(otherVariant);
+              const otherScale = containScale(otherVariant.nativeW, otherVariant.nativeH, otherCells);
+              return (
+                <div className="ui-row">
+                  <label>視点</label>
+                  <SegmentedButtons
+                    value={hit.view}
+                    onChange={(v) => {
+                      if (v === hit.view) return;
+                      setObjectView(store, sceneId, id, otherSrc, otherCells, otherScale);
+                    }}
+                    options={[
+                      { value: "front", label: "front" },
+                      { value: "side", label: "side" },
+                    ]}
+                  />
+                </div>
+              );
+            })()}
+          </>
         ) : (
           <div className="ui-row">
             <label>拡大</label>

@@ -42,19 +42,22 @@ describe("オブジェクトのグリッド吸着", () => {
 });
 
 describe("セルの箱への contain スケール導出", () => {
-  it("objectScale: アスペクト保持で箱に収まり、片方の辺はちょうど整数セル", () => {
+  it("objectScale: 各 def の全 view が箱に収まり、片方の辺はちょうど整数セル", () => {
     for (const def of OBJECT_CATALOG) {
-      const cells = objectDefaultCells(def);
-      const scale = objectScale(def);
-      const rw = scale * def.nativeW;
-      const rh = scale * def.nativeH;
-      // 箱(cells×GRID)を超えない(contain)
-      expect(rw).toBeLessThanOrEqual(cells.w * GRID + 1e-6);
-      expect(rh).toBeLessThanOrEqual(cells.h * GRID + 1e-6);
-      // どちらかの辺はちょうど cells(満たす側)
-      const wFills = Math.abs(rw - cells.w * GRID) < 1e-6;
-      const hFills = Math.abs(rh - cells.h * GRID) < 1e-6;
-      expect(wFills || hFills).toBe(true);
+      for (const view of Object.keys(def.views) as ("front" | "side")[]) {
+        const variant = def.views[view]!;
+        const cells = objectDefaultCells(def, view);
+        const scale = objectScale(def, view);
+        const rw = scale * variant.nativeW;
+        const rh = scale * variant.nativeH;
+        // 箱(cells×GRID)を超えない(contain)
+        expect(rw).toBeLessThanOrEqual(cells.w * GRID + 1e-6);
+        expect(rh).toBeLessThanOrEqual(cells.h * GRID + 1e-6);
+        // どちらかの辺はちょうど cells(満たす側)
+        const wFills = Math.abs(rw - cells.w * GRID) < 1e-6;
+        const hFills = Math.abs(rh - cells.h * GRID) < 1e-6;
+        expect(wFills || hFills).toBe(true);
+      }
     }
   });
 
@@ -67,21 +70,22 @@ describe("セルの箱への contain スケール導出", () => {
 
   it("ソファ既定 footprint は cells で明示 4×3", () => {
     const sofa = OBJECT_CATALOG.find((o) => o.id === "sofa-navy")!;
+    const sofaFront = sofa.views.front!;
     expect(objectDefaultCells(sofa)).toEqual({ w: 4, h: 3 });
     const scale = objectScale(sofa);
-    // 4×3箱に contain: native 1202×811、min(480/1202, 360/811)=min(0.413,0.456)=0.413(幅拘束)
-    expect(scale).toBeCloseTo(480 / 1202, 6);
-    expect(scale * sofa.nativeW).toBeCloseTo(4 * GRID, 6); // 幅=4セル
-    expect(scale * sofa.nativeH).toBeLessThanOrEqual(3 * GRID); // 高さ≤3セル
+    // 4×3箱に contain: native 1010×789、min(480/1010, 360/789)=min(0.475,0.456)=0.456(高さ拘束)
+    expect(scale).toBeCloseTo(360 / 789, 6);
+    expect(scale * sofaFront.nativeH).toBeCloseTo(3 * GRID, 6); // 高さ=3セル
+    expect(scale * sofaFront.nativeW).toBeLessThanOrEqual(4 * GRID); // 幅≤4セル
   });
 
   it("objectScaleForCells: セル変更で contain scale が追従", () => {
-    const src = "assets/objects/sofa-navy-2seat.png";
-    // native 1202×811。5×3: min(600/1202, 360/811)=min(0.573,0.449)=0.449(高さ拘束)
-    expect(objectScaleForCells(src, { w: 5, h: 3 })).toBeCloseTo(360 / 811, 6);
+    const src = "assets/objects/sofa-navy-dimetric.png";
+    // native 1010×789。5×3: min(600/1010, 360/789)=min(0.594,0.456)=0.456(高さ拘束)
+    expect(objectScaleForCells(src, { w: 5, h: 3 })).toBeCloseTo(360 / 789, 6);
     // 7×3: 幅を広げても高さ拘束のまま
-    expect(objectScaleForCells(src, { w: 7, h: 3 })).toBeCloseTo(360 / 811, 6);
-    // 7×4: 高さ拘束 480/811 で拡大
-    expect(objectScaleForCells(src, { w: 7, h: 4 })).toBeCloseTo(480 / 811, 6);
+    expect(objectScaleForCells(src, { w: 7, h: 3 })).toBeCloseTo(360 / 789, 6);
+    // 7×4: 高さ拘束 480/789 で拡大
+    expect(objectScaleForCells(src, { w: 7, h: 4 })).toBeCloseTo(480 / 789, 6);
   });
 });

@@ -16,6 +16,7 @@ import {
 } from "../runtime/scene-eval.js";
 import type { Mat2D } from "../runtime/mat2d.js";
 import type { ScenePhysicsPool } from "../runtime/scene-physics.js";
+import { getObjectShadowSrc } from "../editor/scene/objects-catalog.js";
 
 interface ElView {
   container: Container;
@@ -26,6 +27,8 @@ interface ElView {
   placeholder?: { g: Graphics; label: Text };
   objectSprite?: Sprite;
   objectKey?: string; // 読込済みの src|url。変化したら貼り直す
+  objectShadowSprite?: Sprite;
+  objectShadowKey?: string; // 影レイヤの src|url
 }
 
 // シーン境界トランジションの一時状態(snapshot方式)
@@ -364,6 +367,8 @@ export function applyItem(
     c.scale.set(tf.scale * visual.scaleMul);
   } else if (item.payload.kind === "object") {
     // 家具/小物: 透過PNGをスプライトで描画。アンカー=下端中央(接地点)。
+    // 影レイヤ(shadowSrc)があれば本体の下に blendMode="multiply" で重ねて
+    // 床や壁紙を darken する(浮いた見た目を回避)。
     const src = item.payload.src;
     const url = getImageUrl?.(src);
     const key = url ? `${src}|${url}` : null;
@@ -374,11 +379,35 @@ export function applyItem(
         if (view.objectKey !== key) return; // 差し替え済みなら破棄
         const sp = new Sprite(Texture.from(img));
         sp.anchor.set(0.5, 1);
+        sp.zIndex = 0;
         view.objectSprite = sp;
-        c.addChildAt(sp, 0);
+        c.sortableChildren = true;
+        c.addChild(sp);
       };
       img.src = url!;
       view.objectKey = key;
+    }
+    // 影レイヤ。catalog で shadowSrc が指定されてる時のみ。
+    const shadowSrc = getObjectShadowSrc(src);
+    const shadowUrl = shadowSrc ? getImageUrl?.(shadowSrc) : undefined;
+    const shadowKey = shadowSrc && shadowUrl ? `${shadowSrc}|${shadowUrl}` : null;
+    if (shadowKey !== view.objectShadowKey) {
+      if (view.objectShadowSprite) { view.objectShadowSprite.destroy(); view.objectShadowSprite = undefined; }
+      view.objectShadowKey = shadowKey ?? undefined;
+      if (shadowUrl && shadowKey) {
+        const sImg = new Image();
+        sImg.onload = () => {
+          if (view.objectShadowKey !== shadowKey) return;
+          const sp = new Sprite(Texture.from(sImg));
+          sp.anchor.set(0.5, 1);
+          sp.blendMode = "multiply";
+          sp.zIndex = -1; // 本体より下
+          view.objectShadowSprite = sp;
+          c.sortableChildren = true;
+          c.addChild(sp);
+        };
+        sImg.src = shadowUrl;
+      }
     }
     const tf = item.payload.transform;
     const s = tf.scale * visual.scaleMul;

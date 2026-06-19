@@ -7,7 +7,7 @@ import type { CharacterDoc } from "../../core/schema/character.js";
 import type { ThumbnailService } from "../thumbs/thumbnail-service.js";
 import { Section } from "../ui/Section.js";
 import { Thumb } from "../ui/Thumb.js";
-import { OBJECT_CATALOG } from "./objects-catalog.js";
+import { OBJECT_CATALOG, getDefaultVariantSrc } from "./objects-catalog.js";
 
 interface CharEntry {
   ref: string;
@@ -32,6 +32,7 @@ interface Props {
 const BUILTIN_BGS = [
   "assets/generated/bg-school-001.png",
   "assets/backgrounds/bg-classroom-001.svg",
+  "assets/backgrounds/sakura-room-empty.png",
 ];
 
 const BG_SWATCHES = [
@@ -152,14 +153,16 @@ export function AddPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fs, bgFiles, resolverRev]);
 
-  // オブジェクトカタログ画像の読込 + objectURL
+  // オブジェクトカタログ画像の読込 + objectURL(各 def の defaultView をサムネに使う)
   useEffect(() => {
-    const missing = OBJECT_CATALOG.map((o) => o.src).filter((p) => !resolver.getImageUrl(p));
+    const defaultSrcs = OBJECT_CATALOG.map((o) => getDefaultVariantSrc(o));
+    const missing = defaultSrcs.filter((p) => !resolver.getImageUrl(p));
     if (missing.length > 0) void resolver.ensureImagesLoaded(missing, fs);
     const urls: Record<string, string> = {};
     for (const o of OBJECT_CATALOG) {
-      const u = resolver.getImageUrl(o.src);
-      if (u) urls[o.src] = u;
+      const src = getDefaultVariantSrc(o);
+      const u = resolver.getImageUrl(src);
+      if (u) urls[src] = u;
     }
     setObjUrls(urls);
   }, [fs, resolver, resolverRev]);
@@ -223,18 +226,25 @@ export function AddPanel({
       {/* オブジェクト(家具/小物) */}
       <Section title="オブジェクト" defaultOpen={true}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-          {OBJECT_CATALOG.map((o) => (
-            <Thumb
-              key={o.id}
-              src={objUrls[o.src]}
-              label={o.label}
-              width={84}
-              height={64}
-              onClick={disabled ? undefined : () => onAddObject(o.src)}
-            >
-              <span style={{ fontSize: "10px", color: "var(--text-dim)", textAlign: "center" }}>{o.label}</span>
-            </Thumb>
-          ))}
+          {OBJECT_CATALOG.map((o) => {
+            const defaultSrc = getDefaultVariantSrc(o);
+            const hasMultipleViews = Object.keys(o.views).length > 1;
+            return (
+              <Thumb
+                key={o.id}
+                src={objUrls[defaultSrc]}
+                label={o.label}
+                width={84}
+                height={64}
+                onClick={disabled ? undefined : () => onAddObject(defaultSrc)}
+              >
+                <span style={{ fontSize: "10px", color: "var(--text-dim)", textAlign: "center" }}>
+                  {o.label}
+                  {hasMultipleViews && <span style={{ marginLeft: 4, opacity: 0.6 }}>F/S</span>}
+                </span>
+              </Thumb>
+            );
+          })}
         </div>
       </Section>
 

@@ -287,6 +287,27 @@ export function setObjectSize(
   });
 }
 
+// オブジェクトの表示画像(variant)を別の view 用 src に切り替える。
+// cells は新 variant のものに合わせ、scale も再計算。サイズ変更コマンドと同じく
+// ステージ上での見た目が大きく変わるので別 dispatch にする。
+export function setObjectView(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  elementId: string,
+  newSrc: string,
+  newCells: { w: number; h: number },
+  newScale: number,
+): void {
+  store.dispatch("ビュー切替", (d) => {
+    const el = findElement(d, sceneId, elementId);
+    if (el && el.kind === "object") {
+      el.src = newSrc;
+      el.cells = { w: newCells.w, h: newCells.h };
+      el.transform.scale = newScale;
+    }
+  });
+}
+
 export function setElementZ(
   store: DocStore<ProjectDoc>,
   sceneId: string,
