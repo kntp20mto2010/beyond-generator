@@ -50,9 +50,10 @@ import {
   objectLabel,
   objectScaleForCells,
   lookupVariantBySrc,
-  getOtherViewSrc,
   variantCells,
   containScale,
+  VIEW_LABEL,
+  type ObjectViewName,
 } from "./objects-catalog.js";
 import { snapObjectXY } from "./grid.js";
 import { spriteClipLabel } from "../newchar/sprite-clips.js";
@@ -211,14 +212,11 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
               <span style={{ color: "var(--text-dim)", fontSize: "11px" }}>セル</span>
             </div>
             {(() => {
-              // ビュー切替: 別 view(front↔side)があれば表示
+              // ビュー切替: 2 つ以上の view がある場合に各 view へのボタンを並べる
               const hit = lookupVariantBySrc(element.src);
-              const otherSrc = getOtherViewSrc(element.src);
-              if (!hit || !otherSrc) return null;
-              const otherView = hit.view === "front" ? "side" : "front";
-              const otherVariant = hit.def.views[otherView]!;
-              const otherCells = variantCells(otherVariant);
-              const otherScale = containScale(otherVariant.nativeW, otherVariant.nativeH, otherCells);
+              if (!hit) return null;
+              const allViews = Object.keys(hit.def.views) as ObjectViewName[];
+              if (allViews.length < 2) return null;
               return (
                 <div className="ui-row">
                   <label>視点</label>
@@ -226,12 +224,16 @@ export function PropertyPanel({ store, sceneId, scene, element, t, resolver, thu
                     value={hit.view}
                     onChange={(v) => {
                       if (v === hit.view) return;
-                      setObjectView(store, sceneId, id, otherSrc, otherCells, otherScale);
+                      const targetVariant = hit.def.views[v as ObjectViewName]!;
+                      const targetCells = variantCells(targetVariant);
+                      const targetScale = containScale(
+                        targetVariant.nativeW,
+                        targetVariant.nativeH,
+                        targetCells,
+                      );
+                      setObjectView(store, sceneId, id, targetVariant.src, targetCells, targetScale);
                     }}
-                    options={[
-                      { value: "front", label: "front" },
-                      { value: "side", label: "side" },
-                    ]}
+                    options={allViews.map((v) => ({ value: v, label: VIEW_LABEL[v] }))}
                   />
                 </div>
               );

@@ -70,7 +70,7 @@ describe("セルの箱への contain スケール導出", () => {
 
   it("ソファ既定 footprint は cells で明示 4×3", () => {
     const sofa = OBJECT_CATALOG.find((o) => o.id === "sofa-navy")!;
-    const sofaFront = sofa.views.front!;
+    const sofaFront = sofa.views["front-dimetric"]!;
     expect(objectDefaultCells(sofa)).toEqual({ w: 4, h: 3 });
     const scale = objectScale(sofa);
     // 4×3箱に contain: native 1010×789、min(480/1010, 360/789)=min(0.475,0.456)=0.456(高さ拘束)

@@ -3,9 +3,11 @@ import { GRID } from "./grid.js";
 // 配置可能オブジェクト(家具/小物)のカタログ。AddPanel のオブジェクト一覧 +
 // グリッド footprint + 座面アンカーに使う。src はリポジトリ相対の透過PNGパス。
 //
-// 各家具は **2 視点(views: front + side)** を持てる。例: ワードローブの front =
-// 正面向き(将来 dimetric 2:1)、side = 左壁這う(weak perspective v10)。配置時の
-// view 選択で見た目を切り替える(どうぶつの森方式)。右壁配置は side + flipX。
+// 各家具は最大 **3 視点(views: front / front-dimetric / side)** を持てる。
+//   - front          : 真正面 elevation(orthographic, no perspective, no top visible)
+//   - front-dimetric : dimetric 2:1 + sitting eye-level(L1b、AC 風配置)
+//   - side           : 左壁這う(v10 wall-aligned)。右壁は side + flipX
+// 配置時の view 選択で見た目を切り替える(どうぶつの森方式)。
 //
 // サイズはグリッドの n×m セルで定義し(全体の統一感のため)、scale は
 // 「幅 = cells.w セル」になるよう nativeW から導出する(objectScale)。
@@ -21,7 +23,7 @@ export function cellsFromNative(nativeW: number, nativeH: number): { w: number; 
   };
 }
 
-// 単一視点の画像定義(front か side のどちらか)。
+// 単一視点の画像定義。
 export interface ObjectVariant {
   src: string;
   nativeW: number;
@@ -31,7 +33,13 @@ export interface ObjectVariant {
   shadowSrc?: string;
 }
 
-export type ObjectViewName = "front" | "side";
+export type ObjectViewName = "front" | "front-dimetric" | "side";
+
+export const VIEW_LABEL: Record<ObjectViewName, string> = {
+  front: "正面",
+  "front-dimetric": "立体",
+  side: "壁付",
+};
 
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
@@ -46,9 +54,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sofa-navy",
     label: "ソファ",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
       front: {
+        src: "assets/objects/sofa-navy-front.png",
+        nativeW: 823,
+        nativeH: 530,
+        cells: { w: 4, h: 3 },
+        seat: { dx: 0, dy: -260 },
+      },
+      "front-dimetric": {
         src: "assets/objects/sofa-navy-dimetric.png",
         nativeW: 1010,
         nativeH: 789,
@@ -66,9 +81,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "school-chair",
     label: "学校椅子",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/school-chair-front-dimetric.png",
         nativeW: 548,
         nativeH: 865,
@@ -86,9 +101,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "school-desk-front",
     label: "学校机(対面)",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/school-desk-front-dimetric.png",
         nativeW: 889,
         nativeH: 772,
@@ -107,10 +122,10 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sakura-bed-pink-single",
     label: "ベッド(ピンク シングル)",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      // front: dimetric 2:1 + sitting eye-level + L1b 無アウトライン
-      front: {
+      // front-dimetric: dimetric 2:1 + sitting eye-level + L1b 無アウトライン
+      "front-dimetric": {
         src: "assets/objects/sakura-bed-pink-single-dimetric.png",
         nativeW: 1253,
         nativeH: 644,
@@ -144,9 +159,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sakura-study-desk",
     label: "学習デスク",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/sakura-study-desk-dimetric.png",
         nativeW: 1041,
         nativeH: 836,
@@ -163,9 +178,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sakura-desk-chair-pink",
     label: "デスクチェア(ピンク)",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/sakura-desk-chair-pink-dimetric.png",
         nativeW: 550,
         nativeH: 907,
@@ -183,9 +198,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sakura-wardrobe",
     label: "ワードローブ",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/sakura-wardrobe-dimetric.png",
         nativeW: 553,
         nativeH: 835,
@@ -204,9 +219,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sakura-bookshelf",
     label: "本棚",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/sakura-bookshelf-dimetric.png",
         nativeW: 424,
         nativeH: 872,
@@ -223,9 +238,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
   {
     id: "sakura-vanity-dresser-with-pouf",
     label: "ドレッサー+鏡+プフ",
-    defaultView: "front",
+    defaultView: "front-dimetric",
     views: {
-      front: {
+      "front-dimetric": {
         src: "assets/objects/sakura-vanity-dresser-with-pouf-dimetric.png",
         nativeW: 1092,
         nativeH: 901,
@@ -397,15 +412,6 @@ export function objectLabel(src: string): string {
 // src から影 PNG パスを引く(未指定なら undefined)。
 export function getObjectShadowSrc(src: string): string | undefined {
   return lookupVariantBySrc(src)?.variant.shadowSrc;
-}
-
-// src から「もう一方の view」の variant src を引く(両 view ある場合のみ)。
-// view 切替ボタンで使う: 現在 front なら side の src を返す、など。
-export function getOtherViewSrc(src: string): string | undefined {
-  const hit = lookupVariantBySrc(src);
-  if (!hit) return undefined;
-  const otherView: ObjectViewName = hit.view === "front" ? "side" : "front";
-  return hit.def.views[otherView]?.src;
 }
 
 // 既定 view の src を返す(AddPanel の初期サムネ用)。
