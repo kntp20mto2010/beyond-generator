@@ -11,6 +11,7 @@ import {
   PROJECTION_PRESETS,
   KIND_LABEL,
   PLACEMENT_LABEL,
+  VIEW_LABEL,
   type ObjectDef,
   type ObjectVariant,
   type ObjectViewName,
@@ -70,8 +71,12 @@ export function ObjectPage() {
   const placementsUsed = Array.from(
     new Set(OBJECT_CATALOG.map((d) => d.placement).filter((p): p is ObjectPlacement => !!p)),
   );
+  const anglesUsed = Array.from(
+    new Set(allTiles.map((t) => t.view)),
+  );
   const [selectedKinds, setSelectedKinds] = useState<Set<ObjectKind>>(new Set());
   const [selectedPlacements, setSelectedPlacements] = useState<Set<ObjectPlacement>>(new Set());
+  const [selectedAngles, setSelectedAngles] = useState<Set<ObjectViewName>>(new Set());
   const toggleKind = (k: ObjectKind) =>
     setSelectedKinds((prev) => {
       const next = new Set(prev);
@@ -84,9 +89,16 @@ export function ObjectPage() {
       next.has(p) ? next.delete(p) : next.add(p);
       return next;
     });
-  const tiles = allTiles.filter(({ def }) => {
+  const toggleAngle = (a: ObjectViewName) =>
+    setSelectedAngles((prev) => {
+      const next = new Set(prev);
+      next.has(a) ? next.delete(a) : next.add(a);
+      return next;
+    });
+  const tiles = allTiles.filter(({ def, view }) => {
     if (selectedKinds.size > 0 && (!def.kind || !selectedKinds.has(def.kind))) return false;
     if (selectedPlacements.size > 0 && (!def.placement || !selectedPlacements.has(def.placement))) return false;
+    if (selectedAngles.size > 0 && !selectedAngles.has(view)) return false;
     return true;
   });
 
@@ -113,6 +125,13 @@ export function ObjectPage() {
         selected={selectedPlacements as Set<string>}
         onToggle={(p) => togglePlacement(p as ObjectPlacement)}
         onClear={() => setSelectedPlacements(new Set())}
+      />
+      <FilterChipRow
+        label="角度"
+        items={anglesUsed.map((a) => ({ key: a, label: VIEW_LABEL[a] }))}
+        selected={selectedAngles as Set<string>}
+        onToggle={(a) => toggleAngle(a as ObjectViewName)}
+        onClear={() => setSelectedAngles(new Set())}
       />
       <div
         style={{
@@ -638,12 +657,13 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
             fontSize: "10px",
             padding: "1px 6px",
             borderRadius: "3px",
-            background: view === "front" ? "var(--accent, #3b82f6)" : "var(--bg-elev)",
-            color: view === "front" ? "white" : "var(--text-dim)",
+            background: "var(--accent, #3b82f6)",
+            color: "white",
             fontWeight: 600,
           }}
+          title={`角度: ${view}`}
         >
-          {view}
+          {VIEW_LABEL[view]}
         </span>
         {isDefault && (
           <span style={{ fontSize: "9px", color: "var(--text-dim)", fontWeight: 400 }}>(default)</span>
