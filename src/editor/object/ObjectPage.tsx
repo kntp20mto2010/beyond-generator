@@ -649,6 +649,40 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
           <span style={{ fontSize: "9px", color: "var(--text-dim)", fontWeight: 400 }}>(default)</span>
         )}
       </div>
+      {(def.kind || def.placement) && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {def.kind && (
+            <span
+              style={{
+                fontSize: "10px",
+                padding: "1px 6px",
+                borderRadius: 10,
+                background: "var(--bg-elev)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+              }}
+              title="種類"
+            >
+              {KIND_LABEL[def.kind]}
+            </span>
+          )}
+          {def.placement && (
+            <span
+              style={{
+                fontSize: "10px",
+                padding: "1px 6px",
+                borderRadius: 10,
+                background: "var(--bg-elev)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+              }}
+              title="配置"
+            >
+              {PLACEMENT_LABEL[def.placement]}
+            </span>
+          )}
+        </div>
+      )}
       <div style={{ fontFamily: "monospace", fontSize: "10px", color: "var(--text-dim)", lineHeight: 1.5 }}>
         <div>id: {def.id}</div>
         <div>src: {variant.src.replace(/^assets\/objects\//, "")}</div>
