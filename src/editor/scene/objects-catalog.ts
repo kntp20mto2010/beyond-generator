@@ -84,12 +84,41 @@ export const VIEW_LABEL: Record<ObjectViewName, string> = {
   side: "壁付",
 };
 
+// 家具のカテゴリ(種類)。AddPanel / ObjectPage のフィルタチップで使う。
+export type ObjectKind =
+  | "sofa" | "chair" | "desk" | "bed"
+  | "storage" | "vanity"
+  | "window" | "rug" | "wall-decor";
+
+export const KIND_LABEL: Record<ObjectKind, string> = {
+  sofa: "ソファ",
+  chair: "椅子",
+  desk: "机",
+  bed: "ベッド",
+  storage: "収納",
+  vanity: "ドレッサー",
+  window: "窓",
+  rug: "ラグ",
+  "wall-decor": "壁飾り",
+};
+
+// 配置方法。Scene 上の Z 並びやスナップ規則を将来分けるためにも使う。
+export type ObjectPlacement = "floor" | "wall" | "ground";
+
+export const PLACEMENT_LABEL: Record<ObjectPlacement, string> = {
+  floor: "床置き",
+  wall: "壁掛け",
+  ground: "床敷き",
+};
+
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
   id: string;
   label: string;
   defaultView: ObjectViewName;
   views: Partial<Record<ObjectViewName, ObjectVariant>>;
+  kind?: ObjectKind;
+  placement?: ObjectPlacement;
 }
 
 export const OBJECT_CATALOG: ObjectDef[] = [
@@ -98,6 +127,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     defaultView: "front-dimetric",
+    kind: "sofa",
+    placement: "floor",
     views: {
       front: {
         src: "assets/objects/sofa-navy-front.png",
@@ -131,6 +162,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-chair",
     label: "学校椅子",
     defaultView: "front-dimetric",
+    kind: "chair",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/school-chair-front-dimetric.png",
@@ -155,6 +188,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-desk-front",
     label: "学校机(対面)",
     defaultView: "front-dimetric",
+    kind: "desk",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/school-desk-front-dimetric.png",
@@ -180,6 +215,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-bed-pink-single",
     label: "ベッド(ピンク シングル)",
     defaultView: "front-dimetric",
+    kind: "bed",
+    placement: "floor",
     views: {
       // front-dimetric: dimetric 2:1 + sitting eye-level + L1b 無アウトライン
       "front-dimetric": {
@@ -208,6 +245,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-window-curtain",
     label: "窓+カーテン",
     defaultView: "front",
+    kind: "window",
+    placement: "wall",
     views: {
       front: {
         src: "assets/objects/sakura-window-curtain.png",
@@ -221,6 +260,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-study-desk",
     label: "学習デスク",
     defaultView: "front-dimetric",
+    kind: "desk",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/sakura-study-desk-dimetric.png",
@@ -244,6 +285,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-desk-chair-pink",
     label: "デスクチェア(ピンク)",
     defaultView: "front-dimetric",
+    kind: "chair",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/sakura-desk-chair-pink-dimetric.png",
@@ -268,6 +311,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wardrobe",
     label: "ワードローブ",
     defaultView: "front-dimetric",
+    kind: "storage",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/sakura-wardrobe-dimetric.png",
@@ -293,6 +338,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-bookshelf",
     label: "本棚",
     defaultView: "front-dimetric",
+    kind: "storage",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/sakura-bookshelf-dimetric.png",
@@ -316,6 +363,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-vanity-dresser-with-pouf",
     label: "ドレッサー+鏡+プフ",
     defaultView: "front-dimetric",
+    kind: "vanity",
+    placement: "floor",
     views: {
       "front-dimetric": {
         src: "assets/objects/sakura-vanity-dresser-with-pouf-dimetric.png",
@@ -340,6 +389,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-rug-floral",
     label: "ラグ(花柄)",
     defaultView: "front",
+    kind: "rug",
+    placement: "ground",
     views: {
       front: {
         src: "assets/objects/sakura-rug-floral.png",
@@ -355,6 +406,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-frame-floral",
     label: "額絵(花柄)",
     defaultView: "front",
+    kind: "wall-decor",
+    placement: "wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-frame-floral.png",
@@ -368,6 +421,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-clock",
     label: "壁掛け時計",
     defaultView: "front",
+    kind: "wall-decor",
+    placement: "wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-clock.png",
@@ -381,6 +436,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-dried-bouquet",
     label: "ドライフラワー束",
     defaultView: "front",
+    kind: "wall-decor",
+    placement: "wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-dried-bouquet.png",
@@ -394,6 +451,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-pennant",
     label: "ペナント(5旗)",
     defaultView: "front",
+    kind: "wall-decor",
+    placement: "wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-pennant.png",
@@ -407,6 +466,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-fairy-lights",
     label: "フェアリーライト",
     defaultView: "front",
+    kind: "wall-decor",
+    placement: "wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-fairy-lights.png",

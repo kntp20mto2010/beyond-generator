@@ -9,9 +9,13 @@ import {
   variantCells,
   containScale,
   PROJECTION_PRESETS,
+  KIND_LABEL,
+  PLACEMENT_LABEL,
   type ObjectDef,
   type ObjectVariant,
   type ObjectViewName,
+  type ObjectKind,
+  type ObjectPlacement,
 } from "../scene/objects-catalog.js";
 
 interface FlipState {
@@ -52,34 +56,131 @@ async function flipImageHorizontally(url: string): Promise<string> {
 
 export function ObjectPage() {
   // 各 def の各 view を1タイルとして並べる。家具によっては 1 view、2 view 両方を持つ。
-  const tiles: { def: ObjectDef; view: ObjectViewName; variant: ObjectVariant }[] = [];
+  const allTiles: { def: ObjectDef; view: ObjectViewName; variant: ObjectVariant }[] = [];
   for (const def of OBJECT_CATALOG) {
     for (const view of Object.keys(def.views) as ObjectViewName[]) {
       const variant = def.views[view];
-      if (variant) tiles.push({ def, view, variant });
+      if (variant) allTiles.push({ def, view, variant });
     }
   }
+  // 利用可能な kind / placement(カタログに登場するものだけチップ表示)
+  const kindsUsed = Array.from(
+    new Set(OBJECT_CATALOG.map((d) => d.kind).filter((k): k is ObjectKind => !!k)),
+  );
+  const placementsUsed = Array.from(
+    new Set(OBJECT_CATALOG.map((d) => d.placement).filter((p): p is ObjectPlacement => !!p)),
+  );
+  const [selectedKinds, setSelectedKinds] = useState<Set<ObjectKind>>(new Set());
+  const [selectedPlacements, setSelectedPlacements] = useState<Set<ObjectPlacement>>(new Set());
+  const toggleKind = (k: ObjectKind) =>
+    setSelectedKinds((prev) => {
+      const next = new Set(prev);
+      next.has(k) ? next.delete(k) : next.add(k);
+      return next;
+    });
+  const togglePlacement = (p: ObjectPlacement) =>
+    setSelectedPlacements((prev) => {
+      const next = new Set(prev);
+      next.has(p) ? next.delete(p) : next.add(p);
+      return next;
+    });
+  const tiles = allTiles.filter(({ def }) => {
+    if (selectedKinds.size > 0 && (!def.kind || !selectedKinds.has(def.kind))) return false;
+    if (selectedPlacements.size > 0 && (!def.placement || !selectedPlacements.has(def.placement))) return false;
+    return true;
+  });
+
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "var(--bg-app)", color: "var(--text)" }}>
-      <GeneratedImportSection />
-      <div style={{ fontWeight: 700, marginBottom: "12px", marginTop: "24px", fontSize: "14px" }}>
-        オブジェクト({OBJECT_CATALOG.length} 家具 / {tiles.length} 視点バリアント)
+      <div style={{ fontWeight: 700, marginBottom: "12px", fontSize: "14px" }}>
+        オブジェクト({OBJECT_CATALOG.length} 家具 / {allTiles.length} 視点バリアント
+        {tiles.length !== allTiles.length ? ` ・ 表示中 ${tiles.length}` : ""})
       </div>
-      <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "16px" }}>
+      <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "12px" }}>
         カタログの全オブジェクト。各家具は front / side の 2 視点を持てる。
         Codex で逆向きに出てしまった場合は「水平反転して上書き」で直接 PNG を反転保存できる。
       </div>
+      <FilterChipRow
+        label="種類"
+        items={kindsUsed.map((k) => ({ key: k, label: KIND_LABEL[k] }))}
+        selected={selectedKinds as Set<string>}
+        onToggle={(k) => toggleKind(k as ObjectKind)}
+        onClear={() => setSelectedKinds(new Set())}
+      />
+      <FilterChipRow
+        label="配置"
+        items={placementsUsed.map((p) => ({ key: p, label: PLACEMENT_LABEL[p] }))}
+        selected={selectedPlacements as Set<string>}
+        onToggle={(p) => togglePlacement(p as ObjectPlacement)}
+        onClear={() => setSelectedPlacements(new Set())}
+      />
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
           gap: "12px",
+          marginTop: "12px",
         }}
       >
         {tiles.map(({ def, view, variant }) => (
           <ObjectTile key={`${def.id}|${view}`} def={def} view={view} variant={variant} />
         ))}
       </div>
+      <GeneratedImportSection />
+    </div>
+  );
+}
+
+function FilterChipRow({
+  label, items, selected, onToggle, onClear,
+}: {
+  label: string;
+  items: { key: string; label: string }[];
+  selected: Set<string>;
+  onToggle: (key: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+      <span style={{ fontSize: "11px", color: "var(--text-dim)", minWidth: "36px" }}>{label}</span>
+      <button
+        type="button"
+        onClick={onClear}
+        style={{
+          padding: "2px 8px",
+          fontSize: "11px",
+          borderRadius: 12,
+          border: "1px solid var(--border)",
+          background: selected.size === 0 ? "var(--accent, #3b82f6)" : "var(--bg-elev)",
+          color: selected.size === 0 ? "white" : "var(--text-dim)",
+          cursor: "pointer",
+          fontWeight: selected.size === 0 ? 600 : 400,
+        }}
+      >
+        全て
+      </button>
+      {items.map((it) => {
+        const on = selected.has(it.key);
+        return (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onToggle(it.key)}
+            style={{
+              padding: "2px 8px",
+              fontSize: "11px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: on ? "var(--accent, #3b82f6)" : "var(--bg-elev)",
+              color: on ? "white" : "var(--text)",
+              cursor: "pointer",
+              fontWeight: on ? 600 : 400,
+            }}
+          >
+            {it.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
