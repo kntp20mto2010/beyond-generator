@@ -55,6 +55,12 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 4, h: 3 },
         seat: { dx: 0, dy: -506 },
       },
+      side: {
+        src: "assets/objects/sofa-navy-leftwall.png",
+        nativeW: 672,
+        nativeH: 762,
+        cells: { w: 4, h: 3 },
+      },
     },
   },
   {
@@ -69,6 +75,12 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 2, h: 3 },
         seat: { dx: 0, dy: -525 },
       },
+      side: {
+        src: "assets/objects/school-chair-leftwall.png",
+        nativeW: 550,
+        nativeH: 862,
+        cells: { w: 2, h: 3 },
+      },
     },
   },
   {
@@ -82,10 +94,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 772,
         cells: { w: 3, h: 3 },
       },
+      side: {
+        src: "assets/objects/school-desk-front-leftwall.png",
+        nativeW: 895,
+        nativeH: 752,
+        cells: { w: 3, h: 3 },
+      },
     },
   },
 
-  // === サクラ部屋家具(front + 一部 side) ===
+  // === サクラ部屋家具(front + side) ===
   {
     id: "sakura-bed-pink-single",
     label: "ベッド(ピンク シングル)",
@@ -134,6 +152,12 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 836,
         cells: { w: 4, h: 3 },
       },
+      side: {
+        src: "assets/objects/sakura-study-desk-leftwall.png",
+        nativeW: 570,
+        nativeH: 842,
+        cells: { w: 4, h: 3 },
+      },
     },
   },
   {
@@ -147,6 +171,12 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 907,
         cells: { w: 2, h: 3 },
         seat: { dx: 0, dy: -539 },
+      },
+      side: {
+        src: "assets/objects/sakura-desk-chair-pink-leftwall.png",
+        nativeW: 973,
+        nativeH: 815,
+        cells: { w: 2, h: 3 },
       },
     },
   },
@@ -182,6 +212,12 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 872,
         cells: { w: 2, h: 4 },
       },
+      side: {
+        src: "assets/objects/sakura-bookshelf-leftwall.png",
+        nativeW: 425,
+        nativeH: 906,
+        cells: { w: 2, h: 4 },
+      },
     },
   },
   {
@@ -195,6 +231,12 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 901,
         cells: { w: 4, h: 4 },
         seat: { dx: 354, dy: -339 },
+      },
+      side: {
+        src: "assets/objects/sakura-vanity-dresser-with-pouf-leftwall.png",
+        nativeW: 652,
+        nativeH: 907,
+        cells: { w: 4, h: 4 },
       },
     },
   },
