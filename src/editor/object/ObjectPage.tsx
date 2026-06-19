@@ -8,6 +8,7 @@ import {
   OBJECT_CATALOG,
   variantCells,
   containScale,
+  PROJECTION_PRESETS,
   type ObjectDef,
   type ObjectVariant,
   type ObjectViewName,
@@ -348,6 +349,97 @@ function ImportTile({ entry, onAfterImport }: { entry: GenEntry; onAfterImport: 
   );
 }
 
+// ─── 投影メタ + プロンプト表示 ──────────────────────────
+
+function ProjectionPromptSection({ variant }: { variant: ObjectVariant }) {
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [promptText, setPromptText] = useState<string | null>(null);
+  const [promptErr, setPromptErr] = useState<string | null>(null);
+  const preset = variant.projection ? PROJECTION_PRESETS[variant.projection] : undefined;
+
+  useEffect(() => {
+    if (!showPrompt || promptText !== null || !variant.promptFile) return;
+    fetch(`/assets/objects/prompts/${variant.promptFile}.md`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
+      .then((t) => setPromptText(t))
+      .catch((e) => setPromptErr(String((e as Error)?.message ?? e)));
+  }, [showPrompt, promptText, variant.promptFile]);
+
+  if (!preset && !variant.promptFile) {
+    return (
+      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "var(--text-dim)" }}>
+        <div style={{ fontStyle: "italic", opacity: 0.6 }}>投影/プロンプト 記録なし</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ fontFamily: "monospace", fontSize: "10px", color: "var(--text-dim)", lineHeight: 1.5 }}>
+      {preset && (
+        <>
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 4 }}>
+            <span style={{ color: "var(--text)", fontWeight: 600 }}>{preset.type}</span>
+          </div>
+          {preset.eyeLevelCm !== undefined && (
+            <div>eye: {preset.eyeLevelCm === "sitting" ? "sitting" : `${preset.eyeLevelCm}cm`}</div>
+          )}
+          {preset.rotationDeg !== undefined && <div>rotation: {preset.rotationDeg}°</div>}
+          {preset.cameraTiltDeg !== undefined && <div>tilt (pitch): {preset.cameraTiltDeg}°</div>}
+          {preset.lateralAxisTiltDeg !== undefined && (
+            <div>lateral axis: {preset.lateralAxisTiltDeg}°</div>
+          )}
+          {preset.depthAxisTiltDeg !== undefined && <div>depth axis: {preset.depthAxisTiltDeg}°</div>}
+          {preset.ratioWDH && <div>W:D:H: {preset.ratioWDH}</div>}
+        </>
+      )}
+      {variant.promptFile && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowPrompt((v) => !v)}
+            style={{
+              marginTop: 4,
+              padding: "2px 6px",
+              fontSize: "10px",
+              fontFamily: "monospace",
+              background: "var(--bg-elev)",
+              border: "1px solid var(--border)",
+              borderRadius: 3,
+              color: "var(--text)",
+              cursor: "pointer",
+            }}
+          >
+            {showPrompt ? "▾ prompt" : "▸ prompt"} {variant.promptFile}
+          </button>
+          {showPrompt && (
+            <pre
+              style={{
+                marginTop: 4,
+                padding: "6px 8px",
+                background: "var(--bg-app)",
+                border: "1px solid var(--border)",
+                borderRadius: 3,
+                fontSize: "9.5px",
+                lineHeight: 1.35,
+                color: "var(--text-dim)",
+                maxHeight: "200px",
+                overflowY: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {promptErr ? `(エラー: ${promptErr})` : promptText ?? "読込中…"}
+            </pre>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── 既存カタログタイル ──────────────────────────────
 
 function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewName; variant: ObjectVariant }) {
@@ -468,6 +560,8 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
         )}
         {variant.shadowSrc && <div>shadow: ✓</div>}
       </div>
+      <ProjectionPromptSection variant={variant} />
+
       <button
         className="ui-btn"
         onClick={handleFlip}

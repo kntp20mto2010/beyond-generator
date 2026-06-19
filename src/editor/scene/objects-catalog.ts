@@ -23,6 +23,47 @@ export function cellsFromNative(nativeW: number, nativeH: number): { w: number; 
   };
 }
 
+// 視点ごとの投影設定(カメラ・軸傾き・projection type)。ObjectPage カードに表示する。
+export interface ProjectionInfo {
+  type: string;                       // "dimetric 2:1" / "weak high-angle" / "wall-aligned v10" etc.
+  eyeLevelCm?: number | "sitting";    // カメラ目線の高さ(cm)、"sitting" = 着席アイレベル
+  rotationDeg?: number;               // yaw(横回転)
+  cameraTiltDeg?: number;             // pitch(俯仰)、+ = 見下ろし
+  lateralAxisTiltDeg?: number;        // dimetric の幅軸 (lateral axis) 傾き
+  depthAxisTiltDeg?: number;          // dimetric の奥行軸 (depth axis) 傾き
+  ratioWDH?: string;                  // 例 "2:1:vertical" (W:D:H)
+}
+
+export const PROJECTION_PRESETS = {
+  "weak-high-angle-eye120": {
+    type: "weak high-angle",
+    eyeLevelCm: 120,
+    rotationDeg: 0,
+    cameraTiltDeg: 12,
+    lateralAxisTiltDeg: 0,
+    depthAxisTiltDeg: 0,
+    ratioWDH: "front-only (no depth)",
+  },
+  "dimetric-2to1-sitting": {
+    type: "dimetric 2:1",
+    eyeLevelCm: "sitting",
+    rotationDeg: 0,
+    lateralAxisTiltDeg: 12,
+    depthAxisTiltDeg: 20,
+    ratioWDH: "2:1 (lateral:depth)",
+  },
+  "wall-aligned-v10": {
+    type: "weak perspective (wall-aligned)",
+    eyeLevelCm: 160,
+    rotationDeg: -65,
+    cameraTiltDeg: 30,
+    lateralAxisTiltDeg: 10,
+    ratioWDH: "—",
+  },
+} as const satisfies Record<string, ProjectionInfo>;
+
+export type ProjectionPresetKey = keyof typeof PROJECTION_PRESETS;
+
 // 単一視点の画像定義。
 export interface ObjectVariant {
   src: string;
@@ -31,6 +72,8 @@ export interface ObjectVariant {
   cells?: { w: number; h: number };
   seat?: { dx: number; dy: number };
   shadowSrc?: string;
+  projection?: ProjectionPresetKey;   // 投影プリセット参照
+  promptFile?: string;                // assets/objects/prompts/<promptFile>.md
 }
 
 export type ObjectViewName = "front" | "front-dimetric" | "side";
@@ -62,6 +105,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 508,
         cells: { w: 4, h: 3 },
         seat: { dx: 0, dy: -289 },
+        projection: "weak-high-angle-eye120",
+        promptFile: "sofa-navy-front-eye120-v2-rattan-20260619",
       },
       "front-dimetric": {
         src: "assets/objects/sofa-navy-dimetric.png",
@@ -69,12 +114,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 789,
         cells: { w: 4, h: 3 },
         seat: { dx: 0, dy: -506 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sofa-navy-sitting-2to1-l1b-v1-20260619",
       },
       side: {
         src: "assets/objects/sofa-navy-leftwall.png",
         nativeW: 672,
         nativeH: 762,
         cells: { w: 4, h: 3 },
+        projection: "wall-aligned-v10",
+        promptFile: "sofa-navy-leftwall-v10-l1b-20260619",
       },
     },
   },
@@ -89,12 +138,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 865,
         cells: { w: 2, h: 3 },
         seat: { dx: 0, dy: -525 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "school-chair-sitting-2to1-l1b-v2-20260619",
       },
       side: {
         src: "assets/objects/school-chair-leftwall.png",
         nativeW: 550,
         nativeH: 862,
         cells: { w: 2, h: 3 },
+        projection: "wall-aligned-v10",
+        promptFile: "school-chair-leftwall-v10-l1b-20260619",
       },
     },
   },
@@ -108,12 +161,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 889,
         nativeH: 772,
         cells: { w: 3, h: 3 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "school-desk-front-sitting-2to1-l1b-v1-20260619",
       },
       side: {
         src: "assets/objects/school-desk-front-leftwall.png",
         nativeW: 895,
         nativeH: 752,
         cells: { w: 3, h: 3 },
+        projection: "wall-aligned-v10",
+        promptFile: "school-desk-front-leftwall-v10-l1b-20260619",
       },
     },
   },
@@ -131,6 +188,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 644,
         cells: { w: 5, h: 3 },
         seat: { dx: 0, dy: -432 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-bed-pink-single-sitting-2to1-l1b-v1-20260619",
       },
       // side: 左壁這う(2D 回転 hack で生成、Codex は対角 orientation 未対応)
       side: {
@@ -140,6 +199,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 710,
         cells: { w: 5, h: 3 },
         seat: { dx: 0, dy: -460 },
+        projection: "wall-aligned-v10",
+        promptFile: "sakura-bed-wall-aligned-v10-r2-20260618",
       },
     },
   },
@@ -166,12 +227,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 1041,
         nativeH: 836,
         cells: { w: 4, h: 3 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-study-desk-sitting-2to1-l1b-v1-20260619",
       },
       side: {
         src: "assets/objects/sakura-study-desk-leftwall.png",
         nativeW: 570,
         nativeH: 842,
         cells: { w: 4, h: 3 },
+        projection: "wall-aligned-v10",
+        promptFile: "sakura-study-desk-leftwall-v10-l1b-20260619",
       },
     },
   },
@@ -186,12 +251,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 907,
         cells: { w: 2, h: 3 },
         seat: { dx: 0, dy: -539 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-desk-chair-pink-sitting-2to1-l1b-v1-20260619",
       },
       side: {
         src: "assets/objects/sakura-desk-chair-pink-leftwall.png",
         nativeW: 973,
         nativeH: 815,
         cells: { w: 2, h: 3 },
+        projection: "wall-aligned-v10",
+        promptFile: "sakura-desk-chair-pink-leftwall-v10-l1b-20260619",
       },
     },
   },
@@ -205,6 +274,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 553,
         nativeH: 835,
         cells: { w: 3, h: 5 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-wardrobe-sitting-2to1-l1b-v1-20260619",
       },
       // side: v10 (Eye 160 / Rotation -65° / Lateral 10° / Depth 30°)
       side: {
@@ -213,6 +284,8 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 665,
         nativeH: 1380,
         cells: { w: 3, h: 5 },
+        projection: "wall-aligned-v10",
+        promptFile: "sakura-wardrobe-wall-aligned-v10-20260618",
       },
     },
   },
@@ -226,12 +299,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 424,
         nativeH: 872,
         cells: { w: 2, h: 4 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-bookshelf-sitting-2to1-l1b-v1-20260619",
       },
       side: {
         src: "assets/objects/sakura-bookshelf-leftwall.png",
         nativeW: 425,
         nativeH: 906,
         cells: { w: 2, h: 4 },
+        projection: "wall-aligned-v10",
+        promptFile: "sakura-bookshelf-leftwall-v10-l1b-20260619",
       },
     },
   },
@@ -246,12 +323,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeH: 901,
         cells: { w: 4, h: 4 },
         seat: { dx: 354, dy: -339 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-vanity-dresser-with-pouf-sitting-2to1-l1b-v1-20260619",
       },
       side: {
         src: "assets/objects/sakura-vanity-dresser-with-pouf-leftwall.png",
         nativeW: 652,
         nativeH: 907,
         cells: { w: 4, h: 4 },
+        projection: "wall-aligned-v10",
+        promptFile: "sakura-vanity-dresser-with-pouf-leftwall-v10-l1b-20260619",
       },
     },
   },
