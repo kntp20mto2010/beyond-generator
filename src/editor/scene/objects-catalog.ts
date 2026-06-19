@@ -58,10 +58,10 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     views: {
       front: {
         src: "assets/objects/sofa-navy-front.png",
-        nativeW: 823,
-        nativeH: 480,
+        nativeW: 828,
+        nativeH: 508,
         cells: { w: 4, h: 3 },
-        seat: { dx: 0, dy: -251 },
+        seat: { dx: 0, dy: -289 },
       },
       "front-dimetric": {
         src: "assets/objects/sofa-navy-dimetric.png",
