@@ -28,6 +28,7 @@ import type { Mat2D } from "./mat2d.js";
 import { computeBoneWorld } from "./pose.js";
 import { buildRenderList, type RenderItem } from "./pose.js";
 import { mulberry32 } from "./rand.js";
+import { getObjectDef } from "../editor/scene/objects-catalog.js";
 
 const CROSSFADE = 0.22;
 const STAGE_W = 1920;
@@ -574,7 +575,30 @@ function evaluateElement(
       break;
   }
 
-  return { elementId: el.id, z: el.z, visual, payload };
+  return { elementId: el.id, z: effectiveZ(el), visual, payload };
+}
+
+// 描画 z を「配置種別 + Y 位置」で計算する。
+//
+// レイヤ構造(上に来るほど手前):
+//   壁掛け  : -10000 + el.z (常に最背面、壁デコ・窓カーテン等)
+//   床敷き  :  -5000 + el.z (ラグ等)
+//   床置き  :  el.y  + el.z (家具・キャラ。Y が大きいほど手前)
+//   その他  :  el.z         (text / balloon は UI overlay として従来通り)
+//
+// el.z は手動オフセット (同じ Y 内のタイブレーク、例外配置用)。
+function effectiveZ(el: SceneElement): number {
+  if (el.kind === "object") {
+    const def = getObjectDef(el.src);
+    if (def?.placement === "wall")   return -10000 + el.z;
+    if (def?.placement === "ground") return -5000 + el.z;
+    if (def?.placement === "floor")  return el.transform.y + el.z;
+    return el.z;
+  }
+  if (el.kind === "character") {
+    return el.transform.y + el.z; // キャラも床上扱い
+  }
+  return el.z; // text / balloon
 }
 
 export function evaluateScene(

@@ -261,6 +261,77 @@ describe("evaluateScene", () => {
     const { project, scene } = sceneWith([char]);
     expect(evaluateScene(project, scene, 0.5, resolver)).toHaveLength(0);
   });
+
+  // ---- effective z (placement + Y による自動 z) -----------------------------
+
+  it("床置きオブジェクトは Y が大きいほど手前 (前の row が高 z)", () => {
+    const makeObj = (id: string, src: string, y: number, z = 0) => ({
+      id,
+      kind: "object" as const,
+      src,
+      cells: { w: 4, h: 3 },
+      transform: { x: 960, y, scale: 1, flipX: false },
+      z,
+      locked: false,
+      enter: { type: "cut", delay: 0, dur: 0 } as const,
+      exit: { type: "cut", at: null, dur: 0 } as const,
+    });
+    // 同じ src(=同じ placement=floor)で奥/手前に置く
+    const back = makeObj("back", "assets/objects/sakura-wardrobe-dimetric.png", 480);
+    const front = makeObj("front", "assets/objects/sakura-wardrobe-dimetric.png", 960);
+    // 配列順は back→front (自然描画なら back→front=front 手前)
+    const { project, scene } = sceneWith([back, front]);
+    const frame = evaluateScene(project, scene, 0, resolver);
+    // ソート結果: 小→大 (奥→手前)。back が先、front が後。
+    expect(frame.map((f) => f.elementId)).toEqual(["back", "front"]);
+    expect(frame[0]!.z).toBe(480); // y=480 + z=0
+    expect(frame[1]!.z).toBe(960);
+    // 配列順を逆にしても同じ結果(自動 z が勝つ)
+    const swapped = sceneWith([front, back]);
+    const f2 = evaluateScene(swapped.project, swapped.scene, 0, resolver);
+    expect(f2.map((f) => f.elementId)).toEqual(["back", "front"]);
+  });
+
+  it("壁掛けは最背面 (-10000 + z) で常に床置きより奥", () => {
+    const wallItem = {
+      id: "wall",
+      kind: "object" as const,
+      src: "assets/objects/sakura-window-curtain.png", // placement: wall
+      cells: { w: 4, h: 3 },
+      transform: { x: 960, y: 240, scale: 1, flipX: false },
+      z: 100, // 大きい手動 z でも壁は奥
+      locked: false,
+      enter: { type: "cut", delay: 0, dur: 0 } as const,
+      exit: { type: "cut", at: null, dur: 0 } as const,
+    };
+    const floorItem = {
+      ...wallItem,
+      id: "floor",
+      src: "assets/objects/sakura-wardrobe-dimetric.png", // placement: floor
+      transform: { x: 1200, y: 960, scale: 1, flipX: false },
+      z: -50,
+    };
+    const { project, scene } = sceneWith([wallItem, floorItem]);
+    const frame = evaluateScene(project, scene, 0, resolver);
+    // 壁掛けは -10000+100=-9900、床は 960-50=910 → 壁が先
+    expect(frame.map((f) => f.elementId)).toEqual(["wall", "floor"]);
+    expect(frame[0]!.z).toBe(-9900);
+    expect(frame[1]!.z).toBe(910);
+  });
+
+  it("text / balloon は el.z をそのまま使う (Y 加算しない)", () => {
+    const text: TextElement = {
+      id: "t1", kind: "text", text: "hi", size: 48, color: "#000",
+      strokeColor: null, strokeWidth: 6,
+      transform: { x: 0, y: 900, scale: 1, flipX: false },
+      z: 500, locked: false,
+      enter: { type: "cut", delay: 0, dur: 0 },
+      exit: { type: "cut", at: null, dur: 0 },
+    };
+    const { project, scene } = sceneWith([text]);
+    const frame = evaluateScene(project, scene, 0, resolver);
+    expect(frame[0]!.z).toBe(500); // y は加算されない
+  });
 });
 
 // ---------------------------------------------------------------------------
