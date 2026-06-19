@@ -61,6 +61,30 @@ export const ALLOWED_REGIONS_BY_PLACEMENT: Record<
   ground: ["F"],
 };
 
+// 床セル (col, row) が壁にどう接しているか分類する。
+// 戻り値: "leftBorder"  = 左隣が左壁(L)
+//        "rightBorder" = 右隣が右壁(R)
+//        "backBorder"  = 上隣が奥壁(B)
+//        "interior"    = 壁に接していない or マップ外
+// 角(複数該当)の場合は left/right > back の優先順。
+export type FloorWallAdjacency = "leftBorder" | "rightBorder" | "backBorder" | "interior";
+
+export function floorWallAdjacency(
+  map: RoomRegionMap,
+  col: number,
+  row: number,
+): FloorWallAdjacency {
+  const here = map.regions[row]?.[col];
+  if (here !== "F") return "interior"; // 床以外はそもそも対象外
+  const left = map.regions[row]?.[col - 1];
+  const right = map.regions[row]?.[col + 1];
+  const top = map.regions[row - 1]?.[col];
+  if (left === "L") return "leftBorder";
+  if (right === "R") return "rightBorder";
+  if (top === "B") return "backBorder";
+  return "interior";
+}
+
 // 最も近い「許可された region」のセル中心 (col, row) を Manhattan 距離で探す。
 // 見つからなければ undefined。
 export function nearestAllowedCell(

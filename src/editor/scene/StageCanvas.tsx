@@ -17,7 +17,7 @@ import {
 import { ScenePhysicsPool } from "../../runtime/scene-physics.js";
 import { SceneRenderStack } from "../../render/scene-render-stack.js";
 import type { AssetResolver } from "../../io/asset-resolver.js";
-import { setBalloonTail, setObjectSize, updateElementTransform } from "../../core/commands-project.js";
+import { setBalloonTail, setObjectSize, setObjectView, updateElementTransform } from "../../core/commands-project.js";
 import {
   STAGE_SCALE,
   VIEW_H,
@@ -30,10 +30,18 @@ import { GRID, snapObjectXY } from "./grid.js";
 import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
 import {
   ALLOWED_REGIONS_BY_PLACEMENT,
+  floorWallAdjacency,
   nearestAllowedCell,
   type RoomRegionMap,
 } from "./room-regions/types.js";
-import { getObjectDef, objectScaleForCells } from "./objects-catalog.js";
+import {
+  containScale,
+  getObjectDef,
+  objectScaleForCells,
+  variantCells,
+  type ObjectDef,
+  type ObjectViewName,
+} from "./objects-catalog.js";
 import { withPixiInitLock } from "../../render/pixi-init-lock.js";
 
 const SNAP_THRESHOLD = 12;
@@ -165,6 +173,26 @@ export function StageCanvas(props: Props) {
         const bg = scene?.background as { image?: string } | null | undefined;
         if (bg?.image?.includes("sakura-room-empty")) return SAKURA_ROOM_REGIONS;
         return undefined;
+      };
+
+      // 床置きオブジェクトの cell 位置から、最適な view (角度) と flipX を選ぶ。
+      // 左壁隣 → side / 右壁隣 → side+flipX / 奥壁隣 → front / 内側 → front-dimetric。
+      // 該当 view が def.views に無ければ前段にフォールバック。
+      const pickViewForFloorPosition = (
+        def: ObjectDef,
+        col: number,
+        row: number,
+        map: RoomRegionMap,
+      ): { view: ObjectViewName; flipX: boolean } | null => {
+        if (def.placement !== "floor") return null;
+        const adj = floorWallAdjacency(map, col, row);
+        const has = (v: ObjectViewName) => def.views[v] !== undefined;
+        if (adj === "leftBorder"  && has("side"))           return { view: "side",           flipX: false };
+        if (adj === "rightBorder" && has("side"))           return { view: "side",           flipX: true  };
+        if (adj === "backBorder"  && has("front"))          return { view: "front",          flipX: false };
+        if (has("front-dimetric"))                          return { view: "front-dimetric", flipX: false };
+        if (has("front"))                                   return { view: "front",          flipX: false };
+        return null;
       };
 
       const currentScene = (): SceneDoc | undefined =>
@@ -373,8 +401,8 @@ export function StageCanvas(props: Props) {
             const map = currentRoomMap(scene);
             if (map && def?.placement && (def.placement === "floor" || def.placement === "wall" || def.placement === "ground")) {
               const allowed = ALLOWED_REGIONS_BY_PLACEMENT[def.placement];
-              const cellRow = Math.floor(sny / map.grid) - 1; // bottom-center が乗っているセル行
-              const cellCol = Math.floor(snx / map.grid);
+              let cellRow = Math.floor(sny / map.grid) - 1; // bottom-center が乗っているセル行
+              let cellCol = Math.floor(snx / map.grid);
               const code = map.regions[cellRow]?.[cellCol];
               if (!code || !allowed.includes(code)) {
                 const near = nearestAllowedCell(map, cellCol, cellRow, allowed);
@@ -383,6 +411,23 @@ export function StageCanvas(props: Props) {
                   const offX = cw % 2 === 1 ? map.grid / 2 : 0;
                   snx = near.col * map.grid + offX;
                   sny = (near.row + 1) * map.grid;
+                  cellCol = near.col;
+                  cellRow = near.row;
+                }
+              }
+              // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
+              if (def.placement === "floor" && def) {
+                const pick = pickViewForFloorPosition(def, cellCol, cellRow, map);
+                if (pick) {
+                  const target = def.views[pick.view];
+                  if (target && target.src !== el.src) {
+                    const newCells = variantCells(target);
+                    const newScale = containScale(target.nativeW, target.nativeH, newCells);
+                    setObjectView(p().store, scene.id, hitId, target.src, newCells, newScale);
+                  }
+                  if (el.transform.flipX !== pick.flipX) {
+                    updateElementTransform(p().store, scene.id, hitId, { flipX: pick.flipX });
+                  }
                 }
               }
             }

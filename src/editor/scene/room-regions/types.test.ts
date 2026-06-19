@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SAKURA_ROOM_REGIONS } from "./sakura-room.js";
 import {
   ALLOWED_REGIONS_BY_PLACEMENT,
+  floorWallAdjacency,
   nearestAllowedCell,
   regionAtCell,
   regionAtStage,
@@ -44,5 +45,20 @@ describe("room-regions helper", () => {
     expect(ALLOWED_REGIONS_BY_PLACEMENT.floor).toEqual(["F"]);
     expect(ALLOWED_REGIONS_BY_PLACEMENT.wall).toEqual(["L", "B", "R"]);
     expect(ALLOWED_REGIONS_BY_PLACEMENT.ground).toEqual(["F"]);
+  });
+
+  it("floorWallAdjacency: 床セルの壁隣接を判定", () => {
+    // sakura-room の床セル位置例:
+    // row 5: ["L","L","L","F","F",...,"F","R","R","R"]   col 3 が leftBorder, col 12 が rightBorder
+    // row 7: 全 F                                          内側
+    // 奥壁隣接: row 5 col 3 は実は (col=3, row=4)=L で left のみ。backBorder は row 6+ で row-1=B のセル探す。
+    // row 6: ["L","F","F",...,"F","R"]  col=1 は (col=1, row=5)='L' で left! ですらない、行が変わる。
+    // ちゃんと row=6 col=1 の上 (col=1, row=5) を見ると "L"。だから col=1,row=6 は left border(縦境界).
+    // back border の例: row 5 col 4 → 上は (col=4, row=4)='B' → backBorder
+    expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 3, 5)).toBe("leftBorder");   // 左隣が L
+    expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 12, 5)).toBe("rightBorder"); // 右隣が R
+    expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 4, 5)).toBe("backBorder");   // 上隣が B
+    expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 8, 7)).toBe("interior");     // 4 方向すべて F
+    expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 0, 0)).toBe("interior");     // L セルそのもの = 床ではない
   });
 });
