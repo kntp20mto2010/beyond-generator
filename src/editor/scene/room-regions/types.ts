@@ -192,11 +192,14 @@ export function isFootprintValid(
     // 偶数幅は anchor 2 cell の **いずれか** が regions に含まれれば valid (= anchor の一部が
     // 壁領域に食い込むのは許容)。奇数幅は anchor 1 cell がそれを満たす必要あり。
     // 床家具を奥壁/横壁ぎわまで詰められる。
-    // ただし footprint 自体がマップ内に収まることは要求 (= 画面端からはみ出さない)。
-    if (colLeft < 0 || colLeft + cellsW > map.cols) return false;
-    if (rowTop < 0 || rowTop + cellsH > map.rows) return false;
+    // 画面端: anchor cell が全てマップ内に収まる範囲まで許容 (= 非 anchor の左右端 cell が
+    // マップ外にはみ出すのは OK)。縦方向は footprint 全体がマップ内であること。
     const centerCol = colLeft + Math.floor(cellsW / 2);
     const anchorCols = cellsW % 2 === 1 ? [centerCol] : [centerCol - 1, centerCol];
+    const anchorLeft = anchorCols[0]!;
+    const anchorRight = anchorCols[anchorCols.length - 1]!;
+    if (anchorLeft < 0 || anchorRight >= map.cols) return false;
+    if (rowTop < 0 || rowTop + cellsH > map.rows) return false;
     const bottomRow = rowTop + cellsH - 1;
     const anySatisfied = anchorCols.some((c) => {
       const code = map.regions[bottomRow]?.[c];

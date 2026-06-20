@@ -229,12 +229,17 @@ describe("room-regions helper", () => {
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 1080, 4, 2, FLOOR_RULE)).toBe(true);
     });
 
-    it("isFootprintValid: footprint がマップ外にはみ出すと anchor が F でも invalid (画面端からはみ出さない)", () => {
-      // 左はみ出し: snx=120 → colLeft=-1, cols -1..2, colLeft<0 で弾く
-      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 720, 4, 1, FLOOR_RULE)).toBe(false);
-      // 右はみ出し: snx=1800 → colLeft=13, cols 13..16, col 16 = マップ外 (cols=16)。
-      //   sny=1080 → rowTop=8 (1 行) bottom=row8 cols 14,15 = F F → anchor は valid だが colLeft+cw=17>16 で弾く
-      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1800, 1080, 4, 1, FLOOR_RULE)).toBe(false);
+    it("isFootprintValid: anchor が全てマップ内なら valid。非 anchor の左右端 cell は画面外OK", () => {
+      // 左に1セルはみ出し: snx=120 → colLeft=-1, anchor cols=[0, 1] は両方マップ内 → valid
+      //   (sofa の左 cell col -1 は画面外、anchor row 8 cols 0,1 = L, F → SOME で valid)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 1080, 4, 1, FLOOR_RULE)).toBe(true);
+      // 左に2セルはみ出し: snx=0 → colLeft=-2, anchor cols=[-1, 0], anchor 左端 -1 がマップ外 → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 0, 1080, 4, 1, FLOOR_RULE)).toBe(false);
+      // 右に1セルはみ出し: snx=1800 → colLeft=13, anchor cols=[14, 15] は両方マップ内 → valid
+      //   (sofa の右 cell col 16 は画面外、anchor row 8 cols 14,15 = F F → valid)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1800, 1080, 4, 1, FLOOR_RULE)).toBe(true);
+      // 右に2セルはみ出し: snx=1920 → colLeft=14, anchor cols=[15, 16], anchor 右端 16 がマップ外 → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1920, 1080, 4, 1, FLOOR_RULE)).toBe(false);
     });
 
     it("nearestValidSnap: centerAnchorBottom モードで奥壁ぎわ row 5 が valid として返る", () => {
