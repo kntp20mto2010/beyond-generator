@@ -769,10 +769,19 @@ export function StageCanvas(props: Props) {
         const trig = floorFootprintWallAdjacency(map2, colLeft, rowTop, cw2, ch2);
         const triggerColor = 0xef4444;  // 赤 = この壁にトリガー
         const idleColor = 0xfacc15;     // 黄 = 通常の footprint/隣接
-        // footprint cells: 薄い黄枠
+        const anchorColor = 0xa855f7;   // 紫 = snap 判定基準の anchor cell (中央 anchor col × 最下行)
+        // anchor cell (中央 1 / 2 col × 最下行): snap 判定の基準 = footprint 内で別色強調。
+        const centerColF = colLeft + Math.floor(cw2 / 2);
+        const anchorCols = cw2 % 2 === 1 ? [centerColF] : [centerColF - 1, centerColF];
+        const anchorRow = rowTop + ch2 - 1;
+        const isAnchor = (c: number, r: number) => r === anchorRow && anchorCols.includes(c);
+        // footprint cells: anchor は紫太枠 / その他は薄い黄枠
         for (let r = rowTop; r < rowTop + ch2; r++)
           for (let c = colLeft; c < colLeft + cw2; c++)
-            cellRect(c, r, idleColor, 0.55, 2);
+            cellRect(c, r,
+              isAnchor(c, r) ? anchorColor : idleColor,
+              isAnchor(c, r) ? 1 : 0.55,
+              isAnchor(c, r) ? 5 : 2);
         // 左外側 (各 footprint row): leftBorder トリガーなら赤
         for (let r = rowTop; r < rowTop + ch2; r++) {
           const isL = map2.regions[r]?.[colLeft - 1] === "L";
