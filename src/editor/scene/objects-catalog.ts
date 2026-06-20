@@ -282,16 +282,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         projection: "dimetric-2to1-sitting",
         promptFile: "sakura-bed-pink-single-sitting-2to1-l1b-v1-20260619",
       },
-      // side: 左壁這う(2D 回転 hack で生成、Codex は対角 orientation 未対応)
+      // side: moodboard r2 部屋全体保持 → ベッド以外透明化 → crop-alpha-bbox.py で grayscale chromakey + bbox crop
       side: {
         src: "assets/objects/sakura-bed-pink-single-leftwall.png",
         shadowSrc: "assets/objects/sakura-bed-pink-single-leftwall.shadow.png",
-        nativeW: 1362,
-        nativeH: 710,
-        cells: { w: 5, h: 3 },
-        seat: { dx: 0, dy: -460 },
+        nativeW: 765,
+        nativeH: 604,
+        cells: { w: 3, h: 3 },
+        seat: { dx: 0, dy: -391 },
         projection: "wall-aligned-v10",
-        promptFile: "sakura-bed-wall-aligned-v10-r2-20260618",
+        promptFile: "sakura-bed-pink-single-room-anchored-r7-20260620",
       },
     },
   },
