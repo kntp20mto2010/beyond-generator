@@ -393,11 +393,15 @@ export function StageCanvas(props: Props) {
           const rawDy = gy - startStageY;
           // オブジェクト(家具)はグリッド吸着(Shiftで自由配置)。
           if (el.kind === "object" && !me.shiftKey) {
-            const cw = el.cells?.w ?? 2;
+            // 毎フレーム最新の element を引く (drag 中に src/flipX が変わるため closure el は stale)
+            const curScene = p().store.doc.scenes.find((s) => s.id === scene.id);
+            const curEl = curScene?.elements.find((e) => e.id === hitId);
+            const liveEl = curEl?.kind === "object" ? curEl : el;
+            const cw = liveEl.cells?.w ?? 2;
             let [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
             // 配置種別 (floor/wall/ground) で許可された region に制約。
             // 許可外 cell に来たら、Manhattan 最近傍の許可 cell に bottom-center を再吸着。
-            const def = getObjectDef(el.src);
+            const def = getObjectDef(liveEl.src);
             const map = currentRoomMap(scene);
             if (map && def?.placement && (def.placement === "floor" || def.placement === "wall" || def.placement === "ground")) {
               const allowed = ALLOWED_REGIONS_BY_PLACEMENT[def.placement];
@@ -416,16 +420,16 @@ export function StageCanvas(props: Props) {
                 }
               }
               // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
-              if (def.placement === "floor" && def) {
+              if (def.placement === "floor") {
                 const pick = pickViewForFloorPosition(def, cellCol, cellRow, map);
                 if (pick) {
                   const target = def.views[pick.view];
-                  if (target && target.src !== el.src) {
+                  if (target && target.src !== liveEl.src) {
                     const newCells = variantCells(target);
                     const newScale = containScale(target.nativeW, target.nativeH, newCells);
                     setObjectView(p().store, scene.id, hitId, target.src, newCells, newScale);
                   }
-                  if (el.transform.flipX !== pick.flipX) {
+                  if (liveEl.transform.flipX !== pick.flipX) {
                     updateElementTransform(p().store, scene.id, hitId, { flipX: pick.flipX });
                   }
                 }
