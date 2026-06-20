@@ -406,15 +406,17 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         projection: "dimetric-2to1-sitting",
         promptFile: "sakura-bookshelf-sitting-2to1-l1b-v1-20260619",
       },
-      // side: moodboard r2 部屋全体保持 → 本棚以外透明化 (右壁オリエント) → crop + --flip-h で左壁オリエント化
+      // side: moodboard r2 部屋全体保持 → 本棚位置を緑マスクで Codex 依頼 (r7) →
+      //   PIL (apply-green-mask.py) で moodboard 原画から緑領域を切り抜き (from-mask r7) →
+      //   蔦・周辺装飾の余計 pixel を Codex cleanup 依頼 (cleanup r8) で除去
       side: {
         src: "assets/objects/sakura-bookshelf-leftwall.png",
         shadowSrc: "assets/objects/sakura-bookshelf-leftwall.shadow.png",
-        nativeW: 346,
-        nativeH: 852,
-        cells: { w: 2, h: 3 },
+        nativeW: 256,
+        nativeH: 520,
+        cells: { w: 1, h: 2 },
         projection: "wall-aligned-v10",
-        promptFile: "sakura-bookshelf-room-anchored-r1-20260620",
+        promptFile: "sakura-bookshelf-cleanup-r8-20260621",
       },
     },
   },
