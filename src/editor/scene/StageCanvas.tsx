@@ -30,7 +30,8 @@ import { GRID, snapObjectXY } from "./grid.js";
 import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
 import {
   ALLOWED_REGIONS_BY_PLACEMENT,
-  floorWallAdjacency,
+  anchorColsForObject,
+  multiAnchorWallAdjacency,
   nearestAllowedCell,
   type RoomRegionMap,
 } from "./room-regions/types.js";
@@ -184,14 +185,15 @@ export function StageCanvas(props: Props) {
       // 床置きオブジェクトの cell 位置から、最適な view (角度) と flipX を選ぶ。
       // 左壁隣 → side / 右壁隣 → side+flipX / 奥壁隣 → front / 内側 → front-dimetric。
       // 該当 view が def.views に無ければ前段にフォールバック。
+      // anchor は中央 1〜2 セル (cells.w 偶奇による)。multiAnchorWallAdjacency で集約判定する。
       const pickViewForFloorPosition = (
         def: ObjectDef,
-        col: number,
+        anchorCols: number[],
         row: number,
         map: RoomRegionMap,
       ): { view: ObjectViewName; flipX: boolean } | null => {
         if (def.placement !== "floor") return null;
-        const adj = floorWallAdjacency(map, col, row);
+        const adj = multiAnchorWallAdjacency(map, anchorCols, row);
         const has = (v: ObjectViewName) => def.views[v] !== undefined;
         if (adj === "leftBorder"  && has("side"))           return { view: "side",           flipX: false };
         if (adj === "rightBorder" && has("side"))           return { view: "side",           flipX: true  };
@@ -427,7 +429,8 @@ export function StageCanvas(props: Props) {
               }
               // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
               if (def.placement === "floor") {
-                const pick = pickViewForFloorPosition(def, cellCol, cellRow, map);
+                const anchorCols = anchorColsForObject(snx, cw, map.grid);
+                const pick = pickViewForFloorPosition(def, anchorCols, cellRow, map);
                 if (pick) {
                   const target = def.views[pick.view];
                   if (target && target.src !== liveEl.src) {
@@ -707,28 +710,45 @@ export function StageCanvas(props: Props) {
         const def2 = getObjectDef(selEl2.src);
         if (!map2 || def2?.placement !== "floor") return;
         const ax = selEl2.transform.x, ay = selEl2.transform.y;
-        const aCol = Math.floor(ax / map2.grid);
+        const cw2 = selEl2.cells?.w ?? 2;
+        const anchorCols = anchorColsForObject(ax, cw2, map2.grid);
         const aRow = Math.floor(ay / map2.grid) - 1; // bottom-center → セル row
-        const left  = map2.regions[aRow]?.[aCol - 1];
-        const right = map2.regions[aRow]?.[aCol + 1];
-        const top   = map2.regions[aRow - 1]?.[aCol];
-        const trig =
-          left === "L"  ? "left"  :
-          right === "R" ? "right" :
-          top === "B"   ? "back"  : "interior";
+        if (anchorCols.length === 0) return;
+        const leftmost = anchorCols[0]!;
+        const rightmost = anchorCols[anchorCols.length - 1]!;
+        const trig = multiAnchorWallAdjacency(map2, anchorCols, aRow);
         const cellRect = (col: number, row: number, color: number, alpha: number, width: number) => {
           if (col < 0 || row < 0 || col >= map2.cols || row >= map2.rows) return;
-          judgmentLayer.rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6);
-          judgmentLayer.stroke({ color, width, alpha });
+          // Pixi v8: .rect().stroke() chain で path 単位の stroke を確定させる
+          // (連続呼出で前 rect が再 stroke されないように)
+          judgmentLayer
+            .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
+            .stroke({ color, width, alpha });
         };
-        // anchor: 太い黄色枠
-        cellRect(aCol, aRow, 0xfacc15, 1, 5);
-        // 隣接 3: trigger なら赤、それ以外は薄い黄色
+        // anchor cells (1 or 2 個): 太い黄色枠
+        for (const c of anchorCols) cellRect(c, aRow, 0xfacc15, 1, 5);
+        // 隣接: trigger なら赤、それ以外は薄い黄色
         const triggerColor = 0xef4444;
         const idleColor = 0xfacc15;
-        cellRect(aCol - 1, aRow, trig === "left"  ? triggerColor : idleColor, trig === "left"  ? 1 : 0.4, trig === "left"  ? 4 : 2);
-        cellRect(aCol + 1, aRow, trig === "right" ? triggerColor : idleColor, trig === "right" ? 1 : 0.4, trig === "right" ? 4 : 2);
-        cellRect(aCol, aRow - 1, trig === "back"  ? triggerColor : idleColor, trig === "back"  ? 1 : 0.4, trig === "back"  ? 4 : 2);
+        // left neighbor: leftmost anchor の左
+        cellRect(leftmost - 1, aRow,
+          trig === "leftBorder"  ? triggerColor : idleColor,
+          trig === "leftBorder"  ? 1 : 0.4,
+          trig === "leftBorder"  ? 4 : 2);
+        // right neighbor: rightmost anchor の右
+        cellRect(rightmost + 1, aRow,
+          trig === "rightBorder" ? triggerColor : idleColor,
+          trig === "rightBorder" ? 1 : 0.4,
+          trig === "rightBorder" ? 4 : 2);
+        // top neighbors: 各 anchor の上を全て描画 (trigger 時のみ "B" の cell を赤に)
+        for (const c of anchorCols) {
+          const isBackCell = map2.regions[aRow - 1]?.[c] === "B";
+          const isTrigger = trig === "backBorder" && isBackCell;
+          cellRect(c, aRow - 1,
+            isTrigger ? triggerColor : idleColor,
+            isTrigger ? 1 : 0.4,
+            isTrigger ? 4 : 2);
+        }
       };
 
       const drawGrid = () => {

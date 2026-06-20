@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { SAKURA_ROOM_REGIONS } from "./sakura-room.js";
 import {
   ALLOWED_REGIONS_BY_PLACEMENT,
+  anchorColsForObject,
   floorWallAdjacency,
+  multiAnchorWallAdjacency,
   nearestAllowedCell,
   regionAtCell,
   regionAtStage,
@@ -60,5 +62,46 @@ describe("room-regions helper", () => {
     expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 4, 5)).toBe("backBorder");   // 上隣が B
     expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 8, 7)).toBe("interior");     // 4 方向すべて F
     expect(floorWallAdjacency(SAKURA_ROOM_REGIONS, 0, 0)).toBe("interior");     // L セルそのもの = 床ではない
+  });
+
+  it("anchorColsForObject: 偶数幅は中央 2 セル、奇数幅は中央 1 セル", () => {
+    // grid=120, centerX=960 → centerCol = floor(960/120) = 8
+    expect(anchorColsForObject(960, 4, 120)).toEqual([7, 8]); // 偶数 cw=4 → [7, 8]
+    expect(anchorColsForObject(960, 2, 120)).toEqual([7, 8]); // 偶数 cw=2 → [7, 8]
+    // grid=120, centerX=900 → centerCol = floor(900/120) = 7 (half-cell offset)
+    expect(anchorColsForObject(900, 3, 120)).toEqual([7]);    // 奇数 cw=3 → [7]
+    expect(anchorColsForObject(900, 1, 120)).toEqual([7]);    // 奇数 cw=1 → [7]
+  });
+
+  it("anchorColsForObject: 境界・負値でも安全に列を返す", () => {
+    // 範囲外の負/上限超 col を返すが、呼出側は map.regions[row]?.[col] = undefined で safe
+    expect(anchorColsForObject(0, 2, 120)).toEqual([-1, 0]);     // 左端 grid line
+    expect(anchorColsForObject(1920, 2, 120)).toEqual([15, 16]); // 右端 grid line (col 16 は範囲外)
+    expect(anchorColsForObject(-10, 1, 120)).toEqual([-1]);      // 負値
+  });
+
+  it("multiAnchorWallAdjacency: 4 パターンを優先順 left>right>back>interior で判定", () => {
+    // sakura-room row 5: ["L","L","L","F","F","F","F","F","F","F","F","F","F","R","R","R"]
+    // sakura-room row 4: 全 B (cols 4-11)、L/R は両端
+    // sakura-room row 6: ["L","F","F","F","F","F","F","F","F","F","F","F","F","F","F","R"]
+    // sakura-room row 7: 全 F
+
+    // leftBorder: cols=[3, 4], row=5 → leftmost-1 = 2 = "L" → leftBorder
+    expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [3, 4], 5)).toBe("leftBorder");
+
+    // rightBorder: cols=[11, 12], row=5 → rightmost+1 = 13 = "R" → rightBorder
+    expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [11, 12], 5)).toBe("rightBorder");
+
+    // backBorder: cols=[7, 8], row=5 → 左右非該当、上は (4,7)=B / (4,8)=B → backBorder
+    expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [7, 8], 5)).toBe("backBorder");
+
+    // interior: cols=[7, 8], row=7 → 左右上いずれも F
+    expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [7, 8], 7)).toBe("interior");
+
+    // 単一 anchor (奇数幅) でも動く: cols=[7], row=5 → 上=(4,7)=B → backBorder
+    expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [7], 5)).toBe("backBorder");
+
+    // 空配列は interior
+    expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [], 5)).toBe("interior");
   });
 });

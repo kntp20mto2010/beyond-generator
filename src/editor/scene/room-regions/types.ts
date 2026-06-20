@@ -85,6 +85,34 @@ export function floorWallAdjacency(
   return "interior";
 }
 
+// 家具の bottom-center X 座標と cells.w から、判定用 anchor 列 (中央 1 or 2 セル) を返す。
+export function anchorColsForObject(centerX: number, cellsW: number, grid: number): number[] {
+  const centerCol = Math.floor(centerX / grid);
+  return cellsW % 2 === 1 ? [centerCol] : [centerCol - 1, centerCol];
+}
+
+// 複数 anchor cell の壁隣接を集約判定。
+// - leftBorder = leftmost anchor の左隣が L
+// - rightBorder = rightmost anchor の右隣が R
+// - backBorder = いずれかの anchor の上隣が B
+// - 優先順: left > right > back > interior
+export function multiAnchorWallAdjacency(
+  map: RoomRegionMap,
+  anchorCols: number[],
+  row: number,
+): FloorWallAdjacency {
+  if (anchorCols.length === 0) return "interior";
+  const leftmost = anchorCols[0]!;
+  const rightmost = anchorCols[anchorCols.length - 1]!;
+  const left  = map.regions[row]?.[leftmost - 1];
+  const right = map.regions[row]?.[rightmost + 1];
+  const topAny = anchorCols.some((c) => map.regions[row - 1]?.[c] === "B");
+  if (left === "L") return "leftBorder";
+  if (right === "R") return "rightBorder";
+  if (topAny)       return "backBorder";
+  return "interior";
+}
+
 // 最も近い「許可された region」のセル中心 (col, row) を Manhattan 距離で探す。
 // 見つからなければ undefined。
 export function nearestAllowedCell(
