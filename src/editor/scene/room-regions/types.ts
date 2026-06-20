@@ -102,6 +102,40 @@ export function multiAnchorWallAdjacency(
   return "interior";
 }
 
+// 床置き家具の footprint 全体で壁隣接を判定する。
+// 透視で壁が床より上の row でしか映らない部屋 (sakura-room は L/R が row5-6 まで) でも、
+// 「部屋の左右端の床列に置けば side」を実現するため、次の 2 条件を見る:
+//   (a) footprint の左/右外側セルに L/R がある (壁 row に届いている)
+//   (b) footprint が部屋の左端/右端 (col 範囲外) に接している = 最前列の壁ぎわ
+// - leftBorder  = 左外側に L  または colLeft が部屋左端 (colLeft<=0)
+// - rightBorder = 右外側に R  または colRight が部屋右端 (colRight>=cols-1)
+// - backBorder  = 上外側に B
+// - 優先順: left > right > back > interior
+export function floorFootprintWallAdjacency(
+  map: RoomRegionMap,
+  colLeft: number,
+  rowTop: number,
+  cellsW: number,
+  cellsH: number,
+): FloorWallAdjacency {
+  const colRight = colLeft + cellsW - 1;
+  // 左: 部屋左端に接する、または左外側 col に いずれかの footprint row で L
+  if (colLeft <= 0) return "leftBorder";
+  for (let r = rowTop; r < rowTop + cellsH; r++) {
+    if (map.regions[r]?.[colLeft - 1] === "L") return "leftBorder";
+  }
+  // 右: 部屋右端に接する、または右外側 col に R
+  if (colRight >= map.cols - 1) return "rightBorder";
+  for (let r = rowTop; r < rowTop + cellsH; r++) {
+    if (map.regions[r]?.[colRight + 1] === "R") return "rightBorder";
+  }
+  // 上外側に B (奥壁)
+  for (let c = colLeft; c < colLeft + cellsW; c++) {
+    if (map.regions[rowTop - 1]?.[c] === "B") return "backBorder";
+  }
+  return "interior";
+}
+
 // 配置ルール (per-def 細かい制約)。placement-based デフォルトを上書きする。
 //
 // margin* は footprint の外側にも rule.regions のセルが必要な行数/列数。

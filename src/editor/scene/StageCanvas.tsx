@@ -29,9 +29,8 @@ import { computeSnap, type Edges } from "./snap.js";
 import { GRID, snapObjectXY } from "./grid.js";
 import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
 import {
-  anchorColsForObject,
+  floorFootprintWallAdjacency,
   isFootprintValid,
-  multiAnchorWallAdjacency,
   nearestValidSnap,
   type RoomRegionMap,
 } from "./room-regions/types.js";
@@ -183,18 +182,21 @@ export function StageCanvas(props: Props) {
         return undefined;
       };
 
-      // 床置きオブジェクトの cell 位置から、最適な view (角度) と flipX を選ぶ。
+      // 床置きオブジェクトの footprint 位置から、最適な view (角度) と flipX を選ぶ。
       // 左壁隣 → side / 右壁隣 → side+flipX / 奥壁隣 → front / 内側 → front-dimetric。
       // 該当 view が def.views に無ければ前段にフォールバック。
-      // anchor は中央 1〜2 セル (cells.w 偶奇による)。multiAnchorWallAdjacency で集約判定する。
+      // footprint 全体の側面で壁隣接を判定する (floorFootprintWallAdjacency)。
+      // 透視で壁が手前 row に映らない部屋でも footprint が壁 row に届けば side になる。
       const pickViewForFloorPosition = (
         def: ObjectDef,
-        anchorCols: number[],
-        row: number,
+        colLeft: number,
+        rowTop: number,
+        cellsW: number,
+        cellsH: number,
         map: RoomRegionMap,
       ): { view: ObjectViewName; flipX: boolean } | null => {
         if (def.placement !== "floor") return null;
-        const adj = multiAnchorWallAdjacency(map, anchorCols, row);
+        const adj = floorFootprintWallAdjacency(map, colLeft, rowTop, cellsW, cellsH);
         const has = (v: ObjectViewName) => def.views[v] !== undefined;
         if (adj === "leftBorder"  && has("side"))           return { view: "side",           flipX: false };
         if (adj === "rightBorder" && has("side"))           return { view: "side",           flipX: true  };
@@ -424,9 +426,10 @@ export function StageCanvas(props: Props) {
               }
               // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
               if (def.placement === "floor") {
-                const cellRow = Math.floor(sny / map.grid) - 1; // bottom-center が乗っているセル行
-                const anchorCols = anchorColsForObject(snx, cw, map.grid);
-                const pick = pickViewForFloorPosition(def, anchorCols, cellRow, map);
+                const ch2 = liveEl.cells?.h ?? 1;
+                const colLeft = Math.round((snx - (cw * map.grid) / 2) / map.grid);
+                const rowTop = Math.round(sny / map.grid) - ch2;
+                const pick = pickViewForFloorPosition(def, colLeft, rowTop, cw, ch2, map);
                 if (pick) {
                   const target = def.views[pick.view];
                   if (target && target.src !== liveEl.src) {
@@ -740,37 +743,42 @@ export function StageCanvas(props: Props) {
           return;
         }
         if (def2.placement !== "floor") return;
-        const ax = selEl2.transform.x, ay = selEl2.transform.y;
+        // 床置き: footprint 全体の外周セルを表示し、壁隣接 (side/front 判定根拠) を強調。
         const cw2 = selEl2.cells?.w ?? 2;
-        const anchorCols = anchorColsForObject(ax, cw2, map2.grid);
-        const aRow = Math.floor(ay / map2.grid) - 1; // bottom-center → セル row
-        if (anchorCols.length === 0) return;
-        const leftmost = anchorCols[0]!;
-        const rightmost = anchorCols[anchorCols.length - 1]!;
-        const trig = multiAnchorWallAdjacency(map2, anchorCols, aRow);
-        // anchor cells (1 or 2 個): 太い黄色枠
-        for (const c of anchorCols) cellRect(c, aRow, 0xfacc15, 1, 5);
-        // 隣接: trigger なら赤、それ以外は薄い黄色
-        const triggerColor = 0xef4444;
-        const idleColor = 0xfacc15;
-        // left neighbor: leftmost anchor の左
-        cellRect(leftmost - 1, aRow,
-          trig === "leftBorder"  ? triggerColor : idleColor,
-          trig === "leftBorder"  ? 1 : 0.4,
-          trig === "leftBorder"  ? 4 : 2);
-        // right neighbor: rightmost anchor の右
-        cellRect(rightmost + 1, aRow,
-          trig === "rightBorder" ? triggerColor : idleColor,
-          trig === "rightBorder" ? 1 : 0.4,
-          trig === "rightBorder" ? 4 : 2);
-        // top neighbors: 各 anchor の上を全て描画 (trigger 時のみ "B" の cell を赤に)
-        for (const c of anchorCols) {
-          const isBackCell = map2.regions[aRow - 1]?.[c] === "B";
-          const isTrigger = trig === "backBorder" && isBackCell;
-          cellRect(c, aRow - 1,
-            isTrigger ? triggerColor : idleColor,
-            isTrigger ? 1 : 0.4,
-            isTrigger ? 4 : 2);
+        const ch2 = selEl2.cells?.h ?? 1;
+        const colLeft = Math.round((selEl2.transform.x - (cw2 * map2.grid) / 2) / map2.grid);
+        const rowTop = Math.round(selEl2.transform.y / map2.grid) - ch2;
+        const colRight = colLeft + cw2 - 1;
+        const trig = floorFootprintWallAdjacency(map2, colLeft, rowTop, cw2, ch2);
+        const triggerColor = 0xef4444;  // 赤 = この壁にトリガー
+        const idleColor = 0xfacc15;     // 黄 = 通常の footprint/隣接
+        // footprint cells: 薄い黄枠
+        for (let r = rowTop; r < rowTop + ch2; r++)
+          for (let c = colLeft; c < colLeft + cw2; c++)
+            cellRect(c, r, idleColor, 0.55, 2);
+        // 左外側 (各 footprint row): leftBorder トリガーなら赤
+        for (let r = rowTop; r < rowTop + ch2; r++) {
+          const isL = map2.regions[r]?.[colLeft - 1] === "L";
+          cellRect(colLeft - 1, r,
+            trig === "leftBorder" && isL ? triggerColor : idleColor,
+            trig === "leftBorder" && isL ? 1 : 0.4,
+            trig === "leftBorder" && isL ? 4 : 1.5);
+        }
+        // 右外側
+        for (let r = rowTop; r < rowTop + ch2; r++) {
+          const isR = map2.regions[r]?.[colRight + 1] === "R";
+          cellRect(colRight + 1, r,
+            trig === "rightBorder" && isR ? triggerColor : idleColor,
+            trig === "rightBorder" && isR ? 1 : 0.4,
+            trig === "rightBorder" && isR ? 4 : 1.5);
+        }
+        // 上外側
+        for (let c = colLeft; c < colLeft + cw2; c++) {
+          const isB = map2.regions[rowTop - 1]?.[c] === "B";
+          cellRect(c, rowTop - 1,
+            trig === "backBorder" && isB ? triggerColor : idleColor,
+            trig === "backBorder" && isB ? 1 : 0.4,
+            trig === "backBorder" && isB ? 4 : 1.5);
         }
       };
 

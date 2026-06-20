@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SAKURA_ROOM_REGIONS } from "./sakura-room.js";
 import {
   anchorColsForObject,
+  floorFootprintWallAdjacency,
   floorWallAdjacency,
   isFootprintValid,
   multiAnchorWallAdjacency,
@@ -81,6 +82,35 @@ describe("room-regions helper", () => {
 
     // 空配列は interior
     expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [], 5)).toBe("interior");
+  });
+
+  it("floorFootprintWallAdjacency: footprint 全体で壁隣接を判定 (手前 row でも届けば side)", () => {
+    // sakura-room: row5 cols0-2=L cols13-15=R / row6 col0=L col15=R / row7-8 全F
+    //   row4 = 奥壁 B (cols4-11)
+
+    // leftBorder: footprint cols 1-4 rows 5-7 (手前まで届く)。左外側 col0 row5=L → leftBorder
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 1, 5, 4, 3)).toBe("leftBorder");
+
+    // leftBorder: 手前寄り footprint rows 6-8 cols 1-4。左外側 col0 row6=L → leftBorder
+    //   (anchor 1 セル判定なら row8 中央では L 隣接が無く取れなかったケース)
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 1, 6, 4, 3)).toBe("leftBorder");
+
+    // rightBorder: footprint cols 9-12 rows 5-7。右外側 col13 row5=R → rightBorder
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 9, 5, 4, 3)).toBe("rightBorder");
+
+    // backBorder: footprint cols 5-8 rows 5-7。上外側 row4 cols5-8=B、左右は F → backBorder
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 5, 5, 4, 3)).toBe("backBorder");
+
+    // interior: footprint cols 6-9 rows 7-8 (完全手前、壁に届かない)
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 6, 7, 4, 2)).toBe("interior");
+
+    // 優先順: left > back。footprint cols 1-4 rows 5-7 は左(col0 L)も上(row4 col4=B)も該当 → left 優先
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 1, 5, 4, 3)).toBe("leftBorder");
+
+    // 部屋左端の床列 (colLeft=0, 最前列 row7-8): L セルが届かなくても leftBorder
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 0, 7, 2, 2)).toBe("leftBorder");
+    // 部屋右端の床列 (colRight=15): rightBorder
+    expect(floorFootprintWallAdjacency(SAKURA_ROOM_REGIONS, 14, 7, 2, 2)).toBe("rightBorder");
   });
 
   describe("PlacementRule (窓 = B のみ + 上下 1 cell マージン)", () => {
