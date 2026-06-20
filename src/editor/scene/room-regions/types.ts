@@ -158,11 +158,13 @@ export interface PlacementRule {
   rowMin?: number;
   rowMax?: number;
   // regions チェックを適用する範囲。デフォルト "all" (footprint 全 cell)。
-  // "centerAnchorBottom" の場合は footprint の中央 anchor col (cellsW 奇数なら 1, 偶数なら 2)
-  // の最下行 cell のみ regions に含まれることを要求。
-  // 床家具用: anchor (中央) cell の最下行が床であれば、左右端や上端が壁領域に被ってよい
-  // (= 奥壁/横壁ぎわまで詰められる)。角度判定の anchor と整合する。
-  regionsApplyTo?: "all" | "centerAnchorBottom";
+  // "centerAnchorBottom" / "centerAnchorTop" の場合は footprint の中央 anchor col
+  // (cellsW 奇数なら 1, 偶数なら 2) の最下行 / 最上行 cell のみ regions チェック。
+  // - centerAnchorBottom: 床家具用。anchor の最下行 (床接地行) が F いずれかなら valid。
+  // - centerAnchorTop:    天井家具用。anchor の最上行 (天井接触行) が壁領域いずれかなら valid。
+  // 共通仕様: anchor SOME (片方食い込みOK)、anchor 全てがマップ内なら valid (非 anchor の
+  // 左右端 cell は画面外OK)、角度判定の anchor と整合。
+  regionsApplyTo?: "all" | "centerAnchorBottom" | "centerAnchorTop";
 }
 
 // 配置位置 (snap 済 bottom-center) + cells から、footprint と margin が全て
@@ -187,11 +189,12 @@ export function isFootprintValid(
   const mL = rule.marginLeft ?? 0;
   const mR = rule.marginRight ?? 0;
   const applyTo = rule.regionsApplyTo ?? "all";
-  if (applyTo === "centerAnchorBottom") {
-    // 中央 1〜2 col (cellsW 奇数なら 1, 偶数なら 2) の最下行を判定対象とする。
+  if (applyTo === "centerAnchorBottom" || applyTo === "centerAnchorTop") {
+    // 中央 1〜2 col (cellsW 奇数なら 1, 偶数なら 2) の最下行 / 最上行を判定対象とする。
     // 偶数幅は anchor 2 cell の **いずれか** が regions に含まれれば valid (= anchor の一部が
-    // 壁領域に食い込むのは許容)。奇数幅は anchor 1 cell がそれを満たす必要あり。
-    // 床家具を奥壁/横壁ぎわまで詰められる。
+    // 隣接領域に食い込むのは許容)。奇数幅は anchor 1 cell がそれを満たす必要あり。
+    // - centerAnchorBottom: 床家具。anchor の最下行 (床接地行) が F いずれか → 奥壁/横壁ぎわまで詰める。
+    // - centerAnchorTop:    天井家具。anchor の最上行 (天井接触行) が壁領域いずれか → 端まで寄せる。
     // 画面端: anchor cell が全てマップ内に収まる範囲まで許容 (= 非 anchor の左右端 cell が
     // マップ外にはみ出すのは OK)。縦方向は footprint 全体がマップ内であること。
     const centerCol = colLeft + Math.floor(cellsW / 2);
@@ -200,9 +203,9 @@ export function isFootprintValid(
     const anchorRight = anchorCols[anchorCols.length - 1]!;
     if (anchorLeft < 0 || anchorRight >= map.cols) return false;
     if (rowTop < 0 || rowTop + cellsH > map.rows) return false;
-    const bottomRow = rowTop + cellsH - 1;
+    const anchorRow = applyTo === "centerAnchorBottom" ? rowTop + cellsH - 1 : rowTop;
     const anySatisfied = anchorCols.some((c) => {
-      const code = map.regions[bottomRow]?.[c];
+      const code = map.regions[anchorRow]?.[c];
       return !!code && rule.regions.includes(code);
     });
     if (!anySatisfied) return false;

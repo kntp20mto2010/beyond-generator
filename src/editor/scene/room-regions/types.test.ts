@@ -251,6 +251,54 @@ describe("room-regions helper", () => {
     });
   });
 
+  describe("PlacementRule regionsApplyTo: \"centerAnchorTop\" (天井家具 = 中央 anchor の最上行いずれかが L/B/R)", () => {
+    // 天井家具用 rule: anchor の最上行 (天井接触行) が L/B/R いずれかなら valid。
+    // 床家具 (centerAnchorBottom) と上下対称。+ rowMin=rowMax=0 で最上段限定。
+    const CEILING_RULE: PlacementRule = {
+      regions: ["L", "B", "R"],
+      regionsApplyTo: "centerAnchorTop",
+      rowMin: 0,
+      rowMax: 0,
+    };
+
+    it("isFootprintValid: 中央 anchor 最上行が B いずれかなら valid (天井中央)", () => {
+      // 偶数 cw=4 → offX=0, snx=960 → colLeft=6, anchor cols=[7,8], rowTop=0, row 0 cols 7,8 = B B → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 120, 4, 1, CEILING_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: anchor の片方が壁領域なら valid (端寄せ食い込みOK)", () => {
+      // sakura-room row 0: L L L B B B B B B B B B B R R R (左 3 が L、中央 B、右 3 が R)
+      // snx=480 colLeft=2 anchor=[3,4] row0 cols 3,4 = B B → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 480, 120, 4, 1, CEILING_RULE)).toBe(true);
+      // snx=360 colLeft=1 anchor=[2,3] row0 cols 2,3 = L B → SOME 仕様で valid (左 anchor が L 食い込み OK)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 360, 120, 4, 1, CEILING_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: rowTop=0 限定 (rowMin/rowMax=0) なので下にずらせない", () => {
+      // sny=240 → rowTop=1 → rowMax=0 で弾く
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 240, 4, 1, CEILING_RULE)).toBe(false);
+    });
+
+    it("isFootprintValid: anchor が全てマップ内なら valid。非 anchor は画面外OK", () => {
+      // 左1セルはみ出し: snx=120 colLeft=-1 anchor=[0,1] row0 cols 0,1 = L L → valid (両方 L で SOME 満たす)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 120, 4, 1, CEILING_RULE)).toBe(true);
+      // 左2セルはみ出し: snx=0 colLeft=-2 anchor=[-1,0], anchor 左端 -1 マップ外 → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 0, 120, 4, 1, CEILING_RULE)).toBe(false);
+      // 右1セルはみ出し: snx=1800 colLeft=13 anchor=[14,15] row0 cols 14,15 = R R → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1800, 120, 4, 1, CEILING_RULE)).toBe(true);
+      // 右2セルはみ出し: snx=1920 anchor 右端 16 マップ外 → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1920, 120, 4, 1, CEILING_RULE)).toBe(false);
+    });
+
+    it("nearestValidSnap: centerAnchorTop モードで天井 row 0 へ吸着", () => {
+      // 開始 (960, 600) (床側) → 最近傍 valid は sny=120 (rowTop=0)
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 960, 600, 4, 1, CEILING_RULE);
+      expect(got).toBeDefined();
+      expect(got!.sny).toBe(120);
+      expect(got!.snx).toBe(960);
+    });
+  });
+
   describe("PlacementRule rowMin/rowMax (天井 = row 0 のみ)", () => {
     // ceiling rule: 壁 region (L/B/R) のうち rowTop が 0 のみ
     const CEILING_RULE: PlacementRule = {

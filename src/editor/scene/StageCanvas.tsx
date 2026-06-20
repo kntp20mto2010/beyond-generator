@@ -729,18 +729,13 @@ export function StageCanvas(props: Props) {
             (ruleEff.rowMin === undefined || rowTop >= ruleEff.rowMin) &&
             (ruleEff.rowMax === undefined || rowTop <= ruleEff.rowMax);
           const applyTo = ruleEff.regionsApplyTo ?? "all";
-          if (applyTo === "centerAnchorBottom") {
-            // 中央 anchor col の最下行のみが判定対象 (footprint 上行・非 anchor col は描画スキップ)。
-            // margin は通常 0 想定なので外周描画も省略。
+          if (applyTo === "centerAnchorBottom" || applyTo === "centerAnchorTop") {
+            // 中央 anchor col の最下行 (床家具) / 最上行 (天井家具) のみが判定対象。
+            // anchor cell を紫太枠で強調 (床家具 footprint 表示と同色)。margin は 0 想定。
             const centerCol = colLeft + Math.floor(cw3 / 2);
             const anchorCols = cw3 % 2 === 1 ? [centerCol] : [centerCol - 1, centerCol];
-            const bottomRow = rowTop + ch3 - 1;
-            for (const c of anchorCols) {
-              const code = map2.regions[bottomRow]?.[c];
-              const regionOk = !!code && ruleEff.regions.includes(code);
-              const ok = regionOk && rowInRange;
-              cellRect(c, bottomRow, ok ? 0x22c55e : 0xef4444, 1, 5);
-            }
+            const anchorRow = applyTo === "centerAnchorBottom" ? rowTop + ch3 - 1 : rowTop;
+            for (const c of anchorCols) cellRect(c, anchorRow, 0xa855f7, 1, 5);
             return;
           }
           for (let r = rowTop - mT; r < rowTop + ch3 + mB; r++) {
