@@ -69,6 +69,11 @@ def main() -> int:
         default=15,
         help="grayscale chromakey: max-min がこの値未満なら無彩色 = 背景 (default=15)",
     )
+    p.add_argument(
+        "--flip-h",
+        action="store_true",
+        help="保存前に左右反転 (右壁オリエント家具を catalog の左壁オリエントに揃える時に使う)",
+    )
     args = p.parse_args()
 
     img = Image.open(args.input).convert("RGBA")
@@ -87,6 +92,8 @@ def main() -> int:
         return 1
 
     cropped = img.crop(bbox)
+    if args.flip_h:
+        cropped = cropped.transpose(Image.FLIP_LEFT_RIGHT)
     w, h = cropped.size
     cells_w = math.ceil(w / PX_PER_CELL)
     cells_h = math.ceil(h / PX_PER_CELL)
