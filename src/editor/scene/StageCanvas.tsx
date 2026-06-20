@@ -36,7 +36,6 @@ import {
 } from "./room-regions/types.js";
 import {
   containScale,
-  effectivePlacementRule,
   getObjectDef,
   objectScaleForCells,
   variantCells,
@@ -411,17 +410,20 @@ export function StageCanvas(props: Props) {
             const cw = liveEl.cells?.w ?? 2;
             let [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
             // 配置種別の有効ルール (per-def 優先 / 無ければ DEFAULT_PLACEMENT_RULES) で
-            // footprint + margin + rowMin/rowMax を検証。不正なら nearestValidSnap で吸着。
             const def = getObjectDef(liveEl.src);
             const map = currentRoomMap(scene);
-            const rule = def ? effectivePlacementRule(def) : undefined;
-            if (map && def?.placement && rule) {
-              const ch = liveEl.cells?.h ?? 1;
-              if (!isFootprintValid(map, snx, sny, cw, ch, rule)) {
-                const valid = nearestValidSnap(map, snx, sny, cw, ch, rule);
-                if (valid) {
-                  snx = valid.snx;
-                  sny = valid.sny;
+            if (map && def) {
+              // 配置の縛り (snap) は per-def placementRule を明示したもの (= 窓) のみ。
+              // DEFAULT_PLACEMENT_RULES による全 placement の暗黙縛りはかけない
+              // (依頼は「窓を奥壁に」のみ。床家具・壁デコは自由配置)。
+              if (def.placementRule) {
+                const ch = liveEl.cells?.h ?? 1;
+                if (!isFootprintValid(map, snx, sny, cw, ch, def.placementRule)) {
+                  const valid = nearestValidSnap(map, snx, sny, cw, ch, def.placementRule);
+                  if (valid) {
+                    snx = valid.snx;
+                    sny = valid.sny;
+                  }
                 }
               }
               // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
@@ -714,9 +716,9 @@ export function StageCanvas(props: Props) {
             .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
             .stroke({ color, width, alpha });
         };
-        // effective rule (per-def 優先 / 無ければ placement の DEFAULT) で footprint + margin の
-        // valid/invalid を色分けで可視化。床置き以外 (back-wall/side-wall/ceiling/ground) も自動で対応。
-        const ruleEff = effectivePlacementRule(def2);
+        // per-def placementRule を明示したもの (= 窓) のみ footprint + margin の
+        // valid/invalid を色分け可視化。配置の縛りがあるのは窓だけなので。
+        const ruleEff = def2.placementRule;
         if (ruleEff && def2.placement !== "floor") {
           const cw3 = selEl2.cells?.w ?? 1;
           const ch3 = selEl2.cells?.h ?? 1;
