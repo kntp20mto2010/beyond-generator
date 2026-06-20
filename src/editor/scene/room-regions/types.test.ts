@@ -179,38 +179,38 @@ describe("room-regions helper", () => {
     });
   });
 
-  describe("PlacementRule regionsApplyTo: \"centerAnchorBottom\" (床家具 = 中央 anchor の最下行のみ F)", () => {
-    // 床家具用 rule: anchor (中央 1〜2 cell) の最下行さえ床なら、左右端や上行は壁領域に被ってよい。
+  describe("PlacementRule regionsApplyTo: \"centerAnchorBottom\" (床家具 = 中央 anchor の最下行いずれかが F)", () => {
+    // 床家具用 rule: anchor (中央 1〜2 cell) の最下行 **いずれか** が床なら valid。
+    // anchor の一部 cell が壁領域に食い込むのは許容 (中央 2 cell のうち片方が壁でも OK)。
     const FLOOR_RULE: PlacementRule = { regions: ["F"], regionsApplyTo: "centerAnchorBottom" };
 
-    it("isFootprintValid: 奇数幅 (cw=3) で中央 1 col の最下行が F なら valid (左右が壁でも OK)", () => {
+    it("isFootprintValid: 奇数幅 (cw=3) は中央 1 col が F なら valid (左右の cell は壁でも OK)", () => {
       // sakura-room: row 5 = ["L","L","L","F","F","F","F","F","F","F","F","F","F","R","R","R"]
-      // 奇数 cw=3 → offX=grid/2, snx=300 → colLeft = round((300-180)/120) = 1, cols 1-3 row5 = L L F
-      //   中央 anchor col = 1 + floor(3/2) = 2, anchor row 5 col 2 = L → invalid
+      // 奇数 cw=3 → offX=grid/2, snx=300 → colLeft=1, cols 1-3 row5 = L L F
+      //   中央 anchor col=2, row 5 col 2 = L → anchor 1 個しか無く満たさない → invalid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 300, 720, 3, 1, FLOOR_RULE)).toBe(false);
-      // snx=420 → colLeft = round((420-180)/120) = 2, cols 2-4 row5 = L F F
-      //   中央 anchor col = 3, row 5 col 3 = F → valid (左の col 2 = L でも OK)
+      // snx=420 → colLeft=2, cols 2-4 row5 = L F F, 中央 anchor=col 3 = F → valid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 420, 720, 3, 1, FLOOR_RULE)).toBe(true);
     });
 
-    it("isFootprintValid: 偶数幅 (cw=4) で中央 2 col の最下行が F なら valid (左外/右外が L/R でも OK)", () => {
+    it("isFootprintValid: 偶数幅 (cw=4) は anchor 2 cell の **いずれか** が F なら valid (片方壁でも OK)", () => {
       // sakura-room row 5 cols 0-3 = L L L F。
-      // 偶数 cw=4 → offX=0, snx=240 → colLeft=0, cols 0-3 row5 = L L L F
-      //   中央 anchor cols = [1, 2], row 5 col 1 = L → invalid
+      // snx=240 → colLeft=0, anchor cols=[1, 2] row5 = L L → どちらも壁 → invalid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 240, 720, 4, 1, FLOOR_RULE)).toBe(false);
-      // snx=480 → colLeft=2, cols 2-5 row5 = L F F F
-      //   中央 anchor cols = [3, 4], 両方 F → valid (左 col 2 = L でも OK = 壁ぎわに詰められる)
+      // snx=360 → colLeft=1, anchor cols=[2, 3] row5 = L F → 片方 F (一部食い込み許容) → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 360, 720, 4, 1, FLOOR_RULE)).toBe(true);
+      // snx=480 → colLeft=2, anchor cols=[3, 4] row5 = F F → 両方 F → valid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 480, 720, 4, 1, FLOOR_RULE)).toBe(true);
-      // 右端: snx=1440 → colLeft=10, cols 10-13 row5 = F F F R
-      //   中央 anchor cols = [11, 12], 両方 F → valid (右 col 13 = R でも OK)
-      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1440, 720, 4, 1, FLOOR_RULE)).toBe(true);
+      // 右端: snx=1560 → colLeft=11, anchor cols=[12, 13] row5 = F R → 片方 F → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1560, 720, 4, 1, FLOOR_RULE)).toBe(true);
+      // 右端: snx=1680 → colLeft=12, anchor cols=[13, 14] row5 = R R → 両方壁 → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1680, 720, 4, 1, FLOOR_RULE)).toBe(false);
     });
 
-    it("isFootprintValid: anchor 最下行が壁 (L/R) なら invalid", () => {
-      // 奇数 cw=3 で中央が L: snx=180 → colLeft=0, cols 0-2 row5 = L L L, anchor=col 1 = L → invalid
+    it("isFootprintValid: anchor cell が全て壁なら invalid", () => {
+      // 奇数 cw=3 で中央 1 cell が L: snx=180 → colLeft=0, cols 0-2 row5 = L L L, anchor=col 1 = L → invalid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 180, 720, 3, 1, FLOOR_RULE)).toBe(false);
-      // 偶数 cw=4 で右側 anchor が R: snx=1680 → colLeft=12, cols 12-15 row5 = F R R R
-      //   anchor cols = [13, 14], col 13 = R → invalid
+      // 偶数 cw=4 anchor [13, 14] 両方 R: 上の snx=1680 ケース。
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1680, 720, 4, 1, FLOOR_RULE)).toBe(false);
     });
 
@@ -230,12 +230,9 @@ describe("room-regions helper", () => {
     });
 
     it("isFootprintValid: footprint がマップ外にはみ出すと anchor が F でも invalid (画面端からはみ出さない)", () => {
-      // 左はみ出し: snx=120 → colLeft=-1, cols -1..2, anchor cols=[0,1] row5 = L L → 元々 invalid だが
-      //   colLeft<0 のガードでも弾く (anchor が偶々 F のケースも想定)。
+      // 左はみ出し: snx=120 → colLeft=-1, cols -1..2, colLeft<0 で弾く
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 720, 4, 1, FLOOR_RULE)).toBe(false);
       // 右はみ出し: snx=1800 → colLeft=13, cols 13..16, col 16 = マップ外 (cols=16)。
-      //   anchor cols=[14, 15] row 5 = R R → 元々 invalid だが、row 8 (全F行) でも footprint 右端
-      //   col 16 がマップ外なので invalid であるべき (画面端はみ出し防御)。
       //   sny=1080 → rowTop=8 (1 行) bottom=row8 cols 14,15 = F F → anchor は valid だが colLeft+cw=17>16 で弾く
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1800, 1080, 4, 1, FLOOR_RULE)).toBe(false);
     });

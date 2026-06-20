@@ -188,18 +188,21 @@ export function isFootprintValid(
   const mR = rule.marginRight ?? 0;
   const applyTo = rule.regionsApplyTo ?? "all";
   if (applyTo === "centerAnchorBottom") {
-    // 中央 1〜2 col (cellsW 奇数なら 1, 偶数なら 2) の最下行のみ regions チェック。
-    // 左右端の cell や上行が壁領域に被ってよい (= 床家具を奥壁/横壁ぎわまで詰められる)。
+    // 中央 1〜2 col (cellsW 奇数なら 1, 偶数なら 2) の最下行を判定対象とする。
+    // 偶数幅は anchor 2 cell の **いずれか** が regions に含まれれば valid (= anchor の一部が
+    // 壁領域に食い込むのは許容)。奇数幅は anchor 1 cell がそれを満たす必要あり。
+    // 床家具を奥壁/横壁ぎわまで詰められる。
     // ただし footprint 自体がマップ内に収まることは要求 (= 画面端からはみ出さない)。
     if (colLeft < 0 || colLeft + cellsW > map.cols) return false;
     if (rowTop < 0 || rowTop + cellsH > map.rows) return false;
     const centerCol = colLeft + Math.floor(cellsW / 2);
     const anchorCols = cellsW % 2 === 1 ? [centerCol] : [centerCol - 1, centerCol];
     const bottomRow = rowTop + cellsH - 1;
-    for (const c of anchorCols) {
+    const anySatisfied = anchorCols.some((c) => {
       const code = map.regions[bottomRow]?.[c];
-      if (!code || !rule.regions.includes(code)) return false;
-    }
+      return !!code && rule.regions.includes(code);
+    });
+    if (!anySatisfied) return false;
     // margin は床家具では通常 0。指定されていれば footprint 外周を従来通り判定する。
     if (mT) {
       for (let r = rowTop - mT; r < rowTop; r++)
