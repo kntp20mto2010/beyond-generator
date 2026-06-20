@@ -9,7 +9,7 @@ export const SAKURA_ROOM_REGIONS: RoomRegionMap = {
   cols: 16,
   rows: 9,
   regions: [
-  ["L", "L", "L", "L", "B", "B", "B", "B", "B", "B", "B", "B", "B", "R", "R", "R"],
+  ["L", "L", "L", "L", "B", "B", "B", "B", "B", "B", "B", "B", "R", "R", "R", "R"],
   ["L", "L", "L", "L", "B", "B", "B", "B", "B", "B", "B", "B", "R", "R", "R", "R"],
   ["L", "L", "L", "L", "B", "B", "B", "B", "B", "B", "B", "B", "R", "R", "R", "R"],
   ["L", "L", "L", "L", "B", "B", "B", "B", "B", "B", "B", "B", "R", "R", "R", "R"],

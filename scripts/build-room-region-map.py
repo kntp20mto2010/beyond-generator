@@ -58,6 +58,33 @@ def classify(mask_path: Path):
         regions.append(row_arr)
     return regions
 
+def rectangularize_back_wall(regions):
+    """奥壁(B)を矩形に正規化する。
+    透視で B が台形(上で広がる)に出てしまった場合、各 B 行の B 範囲の
+    intersection (max(left) .. min(right)) を取り、その矩形外の B は
+    左右どちらに近いかで L/R に振り直す。
+    """
+    b_rows = [r for r, row in enumerate(regions) if "B" in row]
+    if not b_rows:
+        return regions
+    lefts = []
+    rights = []
+    for r in b_rows:
+        row = regions[r]
+        lefts.append(row.index("B"))
+        rights.append(len(row) - 1 - row[::-1].index("B"))
+    b_left = max(lefts)
+    b_right = min(rights)
+    fixed = 0
+    for r in b_rows:
+        for c in range(len(regions[r])):
+            if regions[r][c] == "B" and not (b_left <= c <= b_right):
+                regions[r][c] = "L" if c < b_left else "R"
+                fixed += 1
+    if fixed:
+        print(f"rectangularized back wall: fixed {fixed} outlier B cell(s) → L/R", file=sys.stderr)
+    return regions
+
 def fmt_json(room_id: str, regions):
     return json.dumps({"room": room_id, "grid": GRID, "cols": COLS, "rows": ROWS,
                        "regions": regions}, ensure_ascii=False, indent=2)
@@ -87,10 +114,14 @@ def main():
     ap.add_argument("--out", type=Path, help="省略時は stdout")
     ap.add_argument("--format", choices=["json","ts"], default="json")
     ap.add_argument("--room", help="room id(省略時はファイル名から抽出)")
+    ap.add_argument("--no-rectangularize", action="store_true",
+                    help="奥壁(B)を矩形化しない(既定は intersection で矩形化)")
     args = ap.parse_args()
 
     room = args.room or args.input.stem.replace("-mask-20260620", "").replace("-mask", "")
     regions = classify(args.input)
+    if not args.no_rectangularize:
+        regions = rectangularize_back_wall(regions)
     out_text = fmt_ts(room, regions) if args.format == "ts" else fmt_json(room, regions)
 
     if args.out:
