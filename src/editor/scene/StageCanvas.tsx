@@ -31,8 +31,10 @@ import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
 import {
   ALLOWED_REGIONS_BY_PLACEMENT,
   anchorColsForObject,
+  isFootprintValid,
   multiAnchorWallAdjacency,
   nearestAllowedCell,
+  nearestValidSnap,
   type RoomRegionMap,
 } from "./room-regions/types.js";
 import {
@@ -427,6 +429,22 @@ export function StageCanvas(props: Props) {
                   cellRow = near.row;
                 }
               }
+              // per-def placementRule (footprint + margin の全セルを rule.regions に制約)。
+              // 不正なら最近傍 valid snap 位置に bottom-center を吸着。
+              if (def?.placementRule) {
+                const rule = def.placementRule;
+                const ch = liveEl.cells?.h ?? 1;
+                if (!isFootprintValid(map, snx, sny, cw, ch, rule)) {
+                  const valid = nearestValidSnap(map, snx, sny, cw, ch, rule);
+                  if (valid) {
+                    snx = valid.snx;
+                    sny = valid.sny;
+                    // cellCol/cellRow を更新 (view 切替判定に影響しないが、念のため)
+                    cellCol = Math.floor(snx / map.grid);
+                    cellRow = Math.floor(sny / map.grid) - 1;
+                  }
+                }
+              }
               // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
               if (def.placement === "floor") {
                 const anchorCols = anchorColsForObject(snx, cw, map.grid);
@@ -708,7 +726,37 @@ export function StageCanvas(props: Props) {
         if (selEl2?.kind !== "object") return;
         const map2 = currentRoomMap(currentScene());
         const def2 = getObjectDef(selEl2.src);
-        if (!map2 || def2?.placement !== "floor") return;
+        if (!map2 || !def2) return;
+        const cellRect = (col: number, row: number, color: number, alpha: number, width: number) => {
+          if (col < 0 || row < 0 || col >= map2.cols || row >= map2.rows) return;
+          judgmentLayer
+            .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
+            .stroke({ color, width, alpha });
+        };
+        // 窓など placementRule 持ちは footprint + margin の valid/invalid を色分けで可視化
+        if (def2.placementRule) {
+          const rule = def2.placementRule;
+          const cw3 = selEl2.cells?.w ?? 1;
+          const ch3 = selEl2.cells?.h ?? 1;
+          const colLeft = Math.round((selEl2.transform.x - (cw3 * map2.grid) / 2) / map2.grid);
+          const rowTop = Math.round(selEl2.transform.y / map2.grid) - ch3;
+          const mT = rule.marginTop ?? 0, mB = rule.marginBottom ?? 0;
+          const mL = rule.marginLeft ?? 0, mR = rule.marginRight ?? 0;
+          for (let r = rowTop - mT; r < rowTop + ch3 + mB; r++) {
+            for (let c = colLeft - mL; c < colLeft + cw3 + mR; c++) {
+              const code = map2.regions[r]?.[c];
+              const ok = !!code && rule.regions.includes(code);
+              const isFootprint = r >= rowTop && r < rowTop + ch3 && c >= colLeft && c < colLeft + cw3;
+              // footprint = 太枠 / margin = 細枠。緑 = valid, 赤 = invalid
+              cellRect(c, r,
+                ok ? 0x22c55e : 0xef4444,
+                isFootprint ? 1 : 0.55,
+                isFootprint ? 5 : 2);
+            }
+          }
+          return;
+        }
+        if (def2.placement !== "floor") return;
         const ax = selEl2.transform.x, ay = selEl2.transform.y;
         const cw2 = selEl2.cells?.w ?? 2;
         const anchorCols = anchorColsForObject(ax, cw2, map2.grid);
@@ -717,14 +765,6 @@ export function StageCanvas(props: Props) {
         const leftmost = anchorCols[0]!;
         const rightmost = anchorCols[anchorCols.length - 1]!;
         const trig = multiAnchorWallAdjacency(map2, anchorCols, aRow);
-        const cellRect = (col: number, row: number, color: number, alpha: number, width: number) => {
-          if (col < 0 || row < 0 || col >= map2.cols || row >= map2.rows) return;
-          // Pixi v8: .rect().stroke() chain で path 単位の stroke を確定させる
-          // (連続呼出で前 rect が再 stroke されないように)
-          judgmentLayer
-            .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
-            .stroke({ color, width, alpha });
-        };
         // anchor cells (1 or 2 個): 太い黄色枠
         for (const c of anchorCols) cellRect(c, aRow, 0xfacc15, 1, 5);
         // 隣接: trigger なら赤、それ以外は薄い黄色

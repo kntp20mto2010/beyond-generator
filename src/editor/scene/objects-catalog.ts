@@ -1,4 +1,5 @@
 import { GRID } from "./grid.js";
+import type { PlacementRule } from "./room-regions/types.js";
 
 // 配置可能オブジェクト(家具/小物)のカタログ。AddPanel のオブジェクト一覧 +
 // グリッド footprint + 座面アンカーに使う。src はリポジトリ相対の透過PNGパス。
@@ -130,6 +131,7 @@ export interface ObjectDef {
   views: Partial<Record<ObjectViewName, ObjectVariant>>;
   kind?: ObjectKind;
   placement?: ObjectPlacement;
+  placementRule?: PlacementRule;
 }
 
 export const OBJECT_CATALOG: ObjectDef[] = [
@@ -258,6 +260,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     defaultView: "front",
     kind: "window",
     placement: "wall",
+    placementRule: { regions: ["B"], marginTop: 1, marginBottom: 1 },
     views: {
       front: {
         src: "assets/objects/sakura-window-curtain.png",

@@ -113,6 +113,80 @@ export function multiAnchorWallAdjacency(
   return "interior";
 }
 
+// 配置ルール (per-def 細かい制約)。placement-based デフォルトを上書きする。
+//
+// margin* は footprint の外側にも rule.regions のセルが必要な行数/列数。
+// 例: 窓 = { regions: ["B"], marginTop: 1, marginBottom: 1 }
+//   → 窓の上下にも 1 行ぶん B (奥壁) が必要 = 壁の最上/最下端には貼れない。
+//   = 「窓は奥壁の中央寄りにしか置けない」という制約になる。
+export interface PlacementRule {
+  // 必要なすべてのセル (footprint + 周囲マージン) で許可される region コード集合
+  regions: ReadonlyArray<RegionCode>;
+  // セル単位のマージン (この cell 数だけ周囲に rule.regions のセルが必要)
+  marginTop?: number;
+  marginBottom?: number;
+  marginLeft?: number;
+  marginRight?: number;
+}
+
+// 配置位置 (snap 済 bottom-center) + cells から、footprint と margin が全て
+// rule.regions に含まれるかを検証する。
+export function isFootprintValid(
+  map: RoomRegionMap,
+  snx: number,
+  sny: number,
+  cellsW: number,
+  cellsH: number,
+  rule: PlacementRule,
+): boolean {
+  const grid = map.grid;
+  // bottom-center → 左上 cell
+  const colLeft = Math.round((snx - (cellsW * grid) / 2) / grid);
+  const rowTop = Math.round(sny / grid) - cellsH;
+  const mT = rule.marginTop ?? 0;
+  const mB = rule.marginBottom ?? 0;
+  const mL = rule.marginLeft ?? 0;
+  const mR = rule.marginRight ?? 0;
+  for (let r = rowTop - mT; r < rowTop + cellsH + mB; r++) {
+    for (let c = colLeft - mL; c < colLeft + cellsW + mR; c++) {
+      const code = map.regions[r]?.[c];
+      if (!code || !rule.regions.includes(code)) return false;
+    }
+  }
+  return true;
+}
+
+// rule を満たす最近傍の snap 位置 (snx, sny) を探す。
+// 候補は cells.w の偶奇に応じた snap 位相のみ。Manhattan 距離で最近を返す。
+// 見つからなければ undefined。
+export function nearestValidSnap(
+  map: RoomRegionMap,
+  startSnx: number,
+  startSny: number,
+  cellsW: number,
+  cellsH: number,
+  rule: PlacementRule,
+): { snx: number; sny: number } | undefined {
+  const grid = map.grid;
+  const offX = cellsW % 2 === 1 ? grid / 2 : 0;
+  // 候補: 全 snap 位置 (col 0..cols, row 1..rows) を走査
+  let best: { snx: number; sny: number } | undefined;
+  let bestDist = Infinity;
+  for (let r = 1; r <= map.rows; r++) {
+    const sny = r * grid;
+    for (let c = 0; c <= map.cols; c++) {
+      const snx = c * grid + offX;
+      if (!isFootprintValid(map, snx, sny, cellsW, cellsH, rule)) continue;
+      const d = Math.abs(snx - startSnx) + Math.abs(sny - startSny);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { snx, sny };
+      }
+    }
+  }
+  return best;
+}
+
 // 最も近い「許可された region」のセル中心 (col, row) を Manhattan 距離で探す。
 // 見つからなければ undefined。
 export function nearestAllowedCell(

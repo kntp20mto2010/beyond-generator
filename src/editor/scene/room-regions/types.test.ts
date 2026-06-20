@@ -4,10 +4,13 @@ import {
   ALLOWED_REGIONS_BY_PLACEMENT,
   anchorColsForObject,
   floorWallAdjacency,
+  isFootprintValid,
   multiAnchorWallAdjacency,
   nearestAllowedCell,
+  nearestValidSnap,
   regionAtCell,
   regionAtStage,
+  type PlacementRule,
 } from "./types.js";
 
 describe("room-regions helper", () => {
@@ -103,5 +106,71 @@ describe("room-regions helper", () => {
 
     // 空配列は interior
     expect(multiAnchorWallAdjacency(SAKURA_ROOM_REGIONS, [], 5)).toBe("interior");
+  });
+
+  describe("PlacementRule (窓 = B のみ + 上下 1 cell マージン)", () => {
+    const WINDOW_RULE: PlacementRule = { regions: ["B"], marginTop: 1, marginBottom: 1 };
+
+    it("isFootprintValid: 窓 4×3 を奥壁中央に置けるか", () => {
+      // sakura-room rows 0-4 は奥壁 B (cols 4-11), row 5 は F (cols 3-12)
+      // snx=960 (col 6-9, even cw=4 → offX=0), sny=600 → row 5 が bottom 行
+      //   footprint = rows 2-4 cols 6-9 (全て B) ✓
+      //   margin: row 1 (B) ✓ / row 5 (F) ✗  → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 600, 4, 3, WINDOW_RULE)).toBe(false);
+      // snx=960, sny=480 → bottom 行 = row 4 (B)
+      //   footprint = rows 1-3 cols 6-9 (全 B) ✓
+      //   margin: row 0 (B) ✓ / row 4 (B) ✓ → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 480, 4, 3, WINDOW_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: 壁範囲外 (col < 4) は invalid", () => {
+      // snx=240 → colLeft = (240-240)/120 = 0. footprint cols 0-3 = L L L L → not B → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 240, 480, 4, 3, WINDOW_RULE)).toBe(false);
+      // snx=480 → colLeft = (480-240)/120 = 2. footprint cols 2-5: row 1 col 2,3=L → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 480, 480, 4, 3, WINDOW_RULE)).toBe(false);
+    });
+
+    it("nearestValidSnap: 不正位置 (960,600) からの最近傍 valid は (960,480)", () => {
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 960, 600, 4, 3, WINDOW_RULE);
+      expect(got).toEqual({ snx: 960, sny: 480 });
+    });
+
+    it("nearestValidSnap: valid 位置はそのまま返る (距離 0)", () => {
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 960, 480, 4, 3, WINDOW_RULE);
+      expect(got).toEqual({ snx: 960, sny: 480 });
+    });
+
+    it("isFootprintValid: 奇数幅 (cw=3) で offX=grid/2 snap も検証", () => {
+      // snx=900 (odd cw=3, col center)、sny=480
+      // colLeft = round((900 - 180)/120) = 6, footprint cols 6-8 rows 1-3 (全 B)
+      // margin: row 0 (6-8) = B, row 4 (6-8) = B → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 900, 480, 3, 3, WINDOW_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: marginLeft/marginRight も検証 (壁端拒否)", () => {
+      const ruleWithSideMargin: PlacementRule = {
+        regions: ["B"], marginTop: 1, marginBottom: 1, marginLeft: 1, marginRight: 1,
+      };
+      // snx=720 → colLeft=4, footprint cols 4-7。marginLeft=1 で col 3 = L → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 720, 480, 4, 3, ruleWithSideMargin)).toBe(false);
+      // snx=960 → colLeft=6, footprint cols 6-9。marginLeft=1 で col 5 = B ✓, marginRight=1 で col 10 = B ✓
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 480, 4, 3, ruleWithSideMargin)).toBe(true);
+    });
+
+    it("nearestValidSnap: valid 位置が存在しなければ undefined", () => {
+      // ground (F のみ) かつ 6×3 (cols 6 必要) を margin=1 で挟む → ほとんど不可能
+      // 床は 16 cols 9 rows のうち rows 7-8 は全 F、rows 5-6 部分的 F
+      // 6×3 + margin 4方向×1 = 6×3 cell + 2 周囲 = 8×5 を全 F で必要 → row 7+1=8 まで埋まる候補が無い
+      const heavyRule: PlacementRule = {
+        regions: ["F"], marginTop: 1, marginBottom: 1, marginLeft: 1, marginRight: 1,
+      };
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 960, 600, 6, 3, heavyRule);
+      expect(got).toBeUndefined();
+    });
+
+    it("isFootprintValid: footprint が部分的にマップ外でも安全に invalid", () => {
+      // snx=120 → colLeft=(120-240)/120=-1, cols -1,0,1,2 → regions[r]?.[-1]=undefined → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 480, 4, 3, WINDOW_RULE)).toBe(false);
+    });
   });
 });
