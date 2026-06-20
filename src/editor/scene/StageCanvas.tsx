@@ -36,7 +36,7 @@ import {
 } from "./room-regions/types.js";
 import {
   containScale,
-  effectivePlacementRule,
+  DEFAULT_PLACEMENT_RULES,
   getObjectDef,
   objectScaleForCells,
   variantCells,
@@ -413,11 +413,13 @@ export function StageCanvas(props: Props) {
             // 配置種別の有効ルール (per-def 優先 / 無ければ DEFAULT_PLACEMENT_RULES) で
             const def = getObjectDef(liveEl.src);
             const map = currentRoomMap(scene);
-            const rule = def ? effectivePlacementRule(def) : undefined;
+            // 配置の縛りは「床家具→床 F」と「窓 (per-def)→奥壁+margin」だけ。
+            // 床家具の角度判定 grid (footprint) が壁にめり込まないよう床に縛る。
+            // 壁デコ等その他は自由配置 (依頼外なので縛らない)。
+            const rule =
+              def?.placementRule ??
+              (def?.placement === "floor" ? DEFAULT_PLACEMENT_RULES.floor : undefined);
             if (map && def) {
-              // 基本領域の縛り (床家具→床F / 壁デコ→壁 / 窓→奥壁+margin)。
-              // 床家具が床を離れて壁にめり込む等を防ぐ。margin/天井 row などの細かい
-              // ルールは per-def placementRule (= 窓) でのみ追加される。
               if (rule) {
                 const ch = liveEl.cells?.h ?? 1;
                 if (!isFootprintValid(map, snx, sny, cw, ch, rule)) {
@@ -718,9 +720,9 @@ export function StageCanvas(props: Props) {
             .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
             .stroke({ color, width, alpha });
         };
-        // 壁系 (back-wall/side-wall/ceiling) は effective rule で footprint + margin の
-        // valid/invalid を色分け可視化 (基本領域 + 窓の per-def margin)。
-        const ruleEff = effectivePlacementRule(def2);
+        // per-def placementRule を明示したもの (= 窓) のみ footprint + margin を可視化。
+        // 縛りがあるのは窓だけ (壁デコ等は自由配置)。
+        const ruleEff = def2.placementRule;
         if (ruleEff && def2.placement !== "floor") {
           const cw3 = selEl2.cells?.w ?? 1;
           const ch3 = selEl2.cells?.h ?? 1;
