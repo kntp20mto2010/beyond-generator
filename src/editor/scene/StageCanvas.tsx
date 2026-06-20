@@ -77,6 +77,8 @@ interface Props {
   showGrid: boolean;
   // 領域オーバーレイ (床/奥壁/左壁/右壁) の色付きセル表示
   showRegions: boolean;
+  // 角度判定セル表示: 選択中オブジェクトの anchor cell + 3 隣接 (左/右/上) を強調
+  showJudgment: boolean;
   // カメラモード(ON中は要素ヒットテスト/ドラッグ/ホバー/ハンドルを無効化しカメラ枠を表示)
   cameraEdit: boolean;
   // 右クリックメニュー要求(clientX/Y, ステージ座標, 対象elementId | null)
@@ -136,6 +138,10 @@ export function StageCanvas(props: Props) {
       // root 内の elLayer の直前に挟む(評価器の絵には含めない編集用レイヤ)。
       const gridLayer = new Graphics();
       root.addChildAt(gridLayer, root.getChildIndex(stack.elLayer));
+
+      // 角度判定セル表示用 (elLayer の上、家具より手前に出して塞がない)
+      const judgmentLayer = new Graphics();
+      root.addChild(judgmentLayer);
 
       // 選択枠は app.stage 直下(zoomしても太さ一定、snapshotにも写らない)
       const selection = new Graphics();
@@ -691,6 +697,40 @@ export function StageCanvas(props: Props) {
         }
       };
 
+      const drawJudgment = () => {
+        judgmentLayer.clear();
+        if (!p().showJudgment) return;
+        const selId2 = p().selectedId;
+        const selEl2 = selId2 ? currentScene()?.elements.find((e) => e.id === selId2) : null;
+        if (selEl2?.kind !== "object") return;
+        const map2 = currentRoomMap(currentScene());
+        const def2 = getObjectDef(selEl2.src);
+        if (!map2 || def2?.placement !== "floor") return;
+        const ax = selEl2.transform.x, ay = selEl2.transform.y;
+        const aCol = Math.floor(ax / map2.grid);
+        const aRow = Math.floor(ay / map2.grid) - 1; // bottom-center → セル row
+        const left  = map2.regions[aRow]?.[aCol - 1];
+        const right = map2.regions[aRow]?.[aCol + 1];
+        const top   = map2.regions[aRow - 1]?.[aCol];
+        const trig =
+          left === "L"  ? "left"  :
+          right === "R" ? "right" :
+          top === "B"   ? "back"  : "interior";
+        const cellRect = (col: number, row: number, color: number, alpha: number, width: number) => {
+          if (col < 0 || row < 0 || col >= map2.cols || row >= map2.rows) return;
+          judgmentLayer.rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6);
+          judgmentLayer.stroke({ color, width, alpha });
+        };
+        // anchor: 太い黄色枠
+        cellRect(aCol, aRow, 0xfacc15, 1, 5);
+        // 隣接 3: trigger なら赤、それ以外は薄い黄色
+        const triggerColor = 0xef4444;
+        const idleColor = 0xfacc15;
+        cellRect(aCol - 1, aRow, trig === "left"  ? triggerColor : idleColor, trig === "left"  ? 1 : 0.4, trig === "left"  ? 4 : 2);
+        cellRect(aCol + 1, aRow, trig === "right" ? triggerColor : idleColor, trig === "right" ? 1 : 0.4, trig === "right" ? 4 : 2);
+        cellRect(aCol, aRow - 1, trig === "back"  ? triggerColor : idleColor, trig === "back"  ? 1 : 0.4, trig === "back"  ? 4 : 2);
+      };
+
       const drawGrid = () => {
         gridLayer.clear();
         // 領域オーバーレイ(床/奥壁/左壁/右壁の色分け)。最背面に重ねる。
@@ -734,6 +774,7 @@ export function StageCanvas(props: Props) {
             gridLayer.stroke({ color: 0x22e24a, width: 3, alpha: 1 });
           }
         }
+        // 角度判定セルは別レイヤで drawJudgment() に分離(下記)
         if (!p().showGrid) return;
         // 3分割線+中央線(細線)
         for (const x of [640, 960, 1280]) {
@@ -769,6 +810,7 @@ export function StageCanvas(props: Props) {
 
         lastCam = stack.renderFrame(p().store.doc, scene, t, pool, { cameraOverride, slidePush });
         drawGrid();
+        drawJudgment();
         drawCameraOverlay();
 
         if (!scene) {

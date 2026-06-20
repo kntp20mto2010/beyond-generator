@@ -103,6 +103,7 @@ export function ScenePage({ store }: Props) {
   const [seekNonce, setSeekNonce] = useState(0);
   const [showGrid, setShowGrid] = useState(false);
   const [showRegions, setShowRegions] = useState(false);
+  const [showJudgment, setShowJudgment] = useState(false);
   const [cameraEdit, setCameraEdit] = useState(false);
   const [rightTab, setRightTab] = useState<"property" | "script">("property");
   // 書き出し: ダイアログ開閉 / 進捗(null=設定中) / エラー。実行中はStageCanvasをアンマウント
@@ -946,6 +947,19 @@ export function ScenePage({ store }: Props) {
           </svg>
         </button>
         <button
+          className={`ui-icon-btn${showJudgment ? " ui-icon-btn--active" : ""}`}
+          onClick={() => setShowJudgment((s) => !s)}
+          title="角度判定セル表示 (anchor + 隣接、選択中オブジェクトの基準セル)"
+        >
+          <svg viewBox="0 0 16 16" width={16} height={16}>
+            {/* 中央 anchor + 3 隣接 (左/上/右) のマーク */}
+            <rect x="6" y="6" width="4" height="4" fill="#facc15" stroke="#000" strokeWidth="0.5" />
+            <rect x="1" y="6" width="4" height="4" fill="none" stroke="#facc15" strokeWidth="0.8" />
+            <rect x="11" y="6" width="4" height="4" fill="none" stroke="#facc15" strokeWidth="0.8" />
+            <rect x="6" y="1" width="4" height="4" fill="none" stroke="#facc15" strokeWidth="0.8" />
+          </svg>
+        </button>
+        <button
           className={`ui-icon-btn${cameraEdit ? " ui-icon-btn--active" : ""}`}
           onClick={() => setCameraEdit((c) => !c)}
           disabled={!scene}
@@ -1033,6 +1047,7 @@ export function ScenePage({ store }: Props) {
               resolverRev={resolverRev}
               showGrid={showGrid}
               showRegions={showRegions}
+              showJudgment={showJudgment}
               cameraEdit={cameraEdit}
               onContextMenu={onContextMenu}
               onQuickAction={(info) => setQuickAction(info)}
