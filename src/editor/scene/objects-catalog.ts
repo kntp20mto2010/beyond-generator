@@ -134,13 +134,14 @@ export const ALLOWED_ANGLES_BY_PLACEMENT: Record<ObjectPlacement, readonly Objec
 
 // 配置種別ごとのデフォルト PlacementRule。
 // per-def の placementRule が指定されていれば、そちらを優先する (effectivePlacementRule)。
-// - floor     : 床セル F のみ。判定は footprint 最下行のみ (image 上端は壁領域に重なってよい)。
+// - floor     : 床セル F のみ。判定は中央 anchor col (中央 1〜2 cell) の最下行のみ
+//               (anchor が床に乗っていれば左右端や上行が壁領域に被ってよい = 奥/横壁ぎわまで詰められる)。
 // - back-wall : 奥壁 B のみ。マージン無し (端寄せ可)。窓など中央寄せが必要なものは per-def で追加。
 // - side-wall : 左壁 L / 右壁 R のみ。
 // - ceiling   : 壁全種 (L/B/R) のうち row 0 のみ = 部屋の最上段。
 // - ground    : 床セル F のみ (ラグ)。
 export const DEFAULT_PLACEMENT_RULES: Record<ObjectPlacement, PlacementRule> = {
-  floor: { regions: ["F"], regionsApplyTo: "bottomRow" },
+  floor: { regions: ["F"], regionsApplyTo: "centerAnchorBottom" },
   "back-wall": { regions: ["B"] },
   "side-wall": { regions: ["L", "R"] },
   ceiling: { regions: ["L", "B", "R"], rowMin: 0, rowMax: 0 },
@@ -150,7 +151,8 @@ export const DEFAULT_PLACEMENT_RULES: Record<ObjectPlacement, PlacementRule> = {
 // def の効力ある PlacementRule。
 // 縛りがあるのは「床家具 (placement=floor)」と「per-def placementRule 指定 (= 窓)」だけ。
 // 壁デコ・天井・地面など他の placement は自由配置 (DEFAULT は持つが適用しない方針)。
-// - 床家具: 角度判定 footprint が壁にめり込まないよう床 F に縛る (bottomRow モード)。
+// - 床家具: 中央 anchor col の最下行のみ F を要求 (centerAnchorBottom モード)。
+//           角度判定 anchor と整合し、壁ぎわまで床家具を寄せられる。
 // - 窓:     per-def の placementRule で 奥壁 B + 上下 1 マス margin。
 export function effectivePlacementRule(def: ObjectDef): PlacementRule | undefined {
   if (def.placementRule) return def.placementRule;

@@ -412,7 +412,7 @@ export function StageCanvas(props: Props) {
             let [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
             const def = getObjectDef(liveEl.src);
             const map = currentRoomMap(scene);
-            // 縛りは床家具 (床F・bottomRow) と窓 (奥壁+margin) だけ。
+            // 縛りは床家具 (床F・centerAnchorBottom) と窓 (奥壁+margin) だけ。
             const rule = def ? effectivePlacementRule(def) : undefined;
             if (map && def) {
               if (rule) {
@@ -728,12 +728,23 @@ export function StageCanvas(props: Props) {
           const rowInRange =
             (ruleEff.rowMin === undefined || rowTop >= ruleEff.rowMin) &&
             (ruleEff.rowMax === undefined || rowTop <= ruleEff.rowMax);
-          // bottomRow モードでは footprint の最下行のみが判定対象。上行は描画スキップ。
           const applyTo = ruleEff.regionsApplyTo ?? "all";
-          const footprintRowMin = applyTo === "bottomRow" ? rowTop + ch3 - 1 : rowTop;
+          if (applyTo === "centerAnchorBottom") {
+            // 中央 anchor col の最下行のみが判定対象 (footprint 上行・非 anchor col は描画スキップ)。
+            // margin は通常 0 想定なので外周描画も省略。
+            const centerCol = colLeft + Math.floor(cw3 / 2);
+            const anchorCols = cw3 % 2 === 1 ? [centerCol] : [centerCol - 1, centerCol];
+            const bottomRow = rowTop + ch3 - 1;
+            for (const c of anchorCols) {
+              const code = map2.regions[bottomRow]?.[c];
+              const regionOk = !!code && ruleEff.regions.includes(code);
+              const ok = regionOk && rowInRange;
+              cellRect(c, bottomRow, ok ? 0x22c55e : 0xef4444, 1, 5);
+            }
+            return;
+          }
           for (let r = rowTop - mT; r < rowTop + ch3 + mB; r++) {
             const inFootprintRows = r >= rowTop && r < rowTop + ch3;
-            if (inFootprintRows && r < footprintRowMin) continue;
             for (let c = colLeft - mL; c < colLeft + cw3 + mR; c++) {
               const code = map2.regions[r]?.[c];
               const regionOk = !!code && ruleEff.regions.includes(code);

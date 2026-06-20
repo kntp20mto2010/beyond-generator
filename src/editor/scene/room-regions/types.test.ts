@@ -179,44 +179,69 @@ describe("room-regions helper", () => {
     });
   });
 
-  describe("PlacementRule regionsApplyTo: \"bottomRow\" (床家具 = 最下行のみ F)", () => {
-    // 床家具用 rule: image の上端は壁領域 (B/L/R) に重なってよい (描画上自然)
-    const FLOOR_RULE: PlacementRule = { regions: ["F"], regionsApplyTo: "bottomRow" };
+  describe("PlacementRule regionsApplyTo: \"centerAnchorBottom\" (床家具 = 中央 anchor の最下行のみ F)", () => {
+    // 床家具用 rule: anchor (中央 1〜2 cell) の最下行さえ床なら、左右端や上行は壁領域に被ってよい。
+    const FLOOR_RULE: PlacementRule = { regions: ["F"], regionsApplyTo: "centerAnchorBottom" };
 
-    it("isFootprintValid: footprint 最下行が全て F なら valid (上行が B でも OK)", () => {
-      // sakura-room: rows 0-4 = B (奥壁) / rows 5-8 = F (床、中央 cols 4-11 はずっと F)
-      // 偶数 cw=4 → offX=0, snx=960 → colLeft=6
-      // sny=720 → rowTop = round(720/120) - 3 = 3, footprint rows 3-5 (上 2 行は B, 最下行 row5 は F)
-      //   従来 (regionsApplyTo "all"): rows 3-4 cols 6-9 が B → invalid
-      //   新仕様 (bottomRow): row 5 cols 6-9 全 F → valid
+    it("isFootprintValid: 奇数幅 (cw=3) で中央 1 col の最下行が F なら valid (左右が壁でも OK)", () => {
+      // sakura-room: row 5 = ["L","L","L","F","F","F","F","F","F","F","F","F","F","R","R","R"]
+      // 奇数 cw=3 → offX=grid/2, snx=300 → colLeft = round((300-180)/120) = 1, cols 1-3 row5 = L L F
+      //   中央 anchor col = 1 + floor(3/2) = 2, anchor row 5 col 2 = L → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 300, 720, 3, 1, FLOOR_RULE)).toBe(false);
+      // snx=420 → colLeft = round((420-180)/120) = 2, cols 2-4 row5 = L F F
+      //   中央 anchor col = 3, row 5 col 3 = F → valid (左の col 2 = L でも OK)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 420, 720, 3, 1, FLOOR_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: 偶数幅 (cw=4) で中央 2 col の最下行が F なら valid (左外/右外が L/R でも OK)", () => {
+      // sakura-room row 5 cols 0-3 = L L L F。
+      // 偶数 cw=4 → offX=0, snx=240 → colLeft=0, cols 0-3 row5 = L L L F
+      //   中央 anchor cols = [1, 2], row 5 col 1 = L → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 240, 720, 4, 1, FLOOR_RULE)).toBe(false);
+      // snx=480 → colLeft=2, cols 2-5 row5 = L F F F
+      //   中央 anchor cols = [3, 4], 両方 F → valid (左 col 2 = L でも OK = 壁ぎわに詰められる)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 480, 720, 4, 1, FLOOR_RULE)).toBe(true);
+      // 右端: snx=1440 → colLeft=10, cols 10-13 row5 = F F F R
+      //   中央 anchor cols = [11, 12], 両方 F → valid (右 col 13 = R でも OK)
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1440, 720, 4, 1, FLOOR_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: anchor 最下行が壁 (L/R) なら invalid", () => {
+      // 奇数 cw=3 で中央が L: snx=180 → colLeft=0, cols 0-2 row5 = L L L, anchor=col 1 = L → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 180, 720, 3, 1, FLOOR_RULE)).toBe(false);
+      // 偶数 cw=4 で右側 anchor が R: snx=1680 → colLeft=12, cols 12-15 row5 = F R R R
+      //   anchor cols = [13, 14], col 13 = R → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1680, 720, 4, 1, FLOOR_RULE)).toBe(false);
+    });
+
+    it("isFootprintValid: 偶数幅 4×3 で奥壁めり込み (rows 3-5) も anchor 最下行 F なら valid", () => {
+      // bottomRow テストの後継: snx=960 → colLeft=6, sny=720 → rowTop = round(720/120) - 3 = 3
+      //   footprint rows 3-5 cols 6-9 (上 2 行は B = 奥壁にめり込み)
+      //   anchor cols = [7, 8], 最下行 row 5 col 7,8 = F F → valid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 720, 4, 3, FLOOR_RULE)).toBe(true);
     });
 
-    it("isFootprintValid: 最下行に L が含まれれば invalid", () => {
-      // sakura-room: row 5 = ["L","L","L","F","F","F","F","F","F","F","F","F","F","R","R","R"]
-      // 偶数 cw=4 → offX=0, snx=240 → colLeft=0, footprint 最下行 row 5 cols 0-3 = L L L F → invalid
-      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 240, 720, 4, 3, FLOOR_RULE)).toBe(false);
+    it("isFootprintValid: 全 col F の素朴ケースも valid (regression check)", () => {
+      // sny=960 → rowTop = 8 - 1 = 7 (1 行), bottom row=8 全 F
+      //   anchor=[7, 8] / row 8 cols 7-8 = F F → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 960, 2, 1, FLOOR_RULE)).toBe(true);
+      // 大型 4×2: sny=1080 → rowTop = 9 - 2 = 7, bottom row=8 全 F、anchor=[7, 8] → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 1080, 4, 2, FLOOR_RULE)).toBe(true);
     });
 
-    it("isFootprintValid: 最下行が部分的に R を含んでも invalid", () => {
-      // row 5 cols 12-15 = F R R R。snx=1680 → colLeft=12, 最下行 row 5 cols 12-15 = F R R R → invalid
-      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1680, 720, 4, 3, FLOOR_RULE)).toBe(false);
+    it("isFootprintValid: footprint がマップ外にはみ出すと anchor が F でも invalid (画面端からはみ出さない)", () => {
+      // 左はみ出し: snx=120 → colLeft=-1, cols -1..2, anchor cols=[0,1] row5 = L L → 元々 invalid だが
+      //   colLeft<0 のガードでも弾く (anchor が偶々 F のケースも想定)。
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 720, 4, 1, FLOOR_RULE)).toBe(false);
+      // 右はみ出し: snx=1800 → colLeft=13, cols 13..16, col 16 = マップ外 (cols=16)。
+      //   anchor cols=[14, 15] row 5 = R R → 元々 invalid だが、row 8 (全F行) でも footprint 右端
+      //   col 16 がマップ外なので invalid であるべき (画面端はみ出し防御)。
+      //   sny=1080 → rowTop=8 (1 行) bottom=row8 cols 14,15 = F F → anchor は valid だが colLeft+cw=17>16 で弾く
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1800, 1080, 4, 1, FLOOR_RULE)).toBe(false);
     });
 
-    it("isFootprintValid: bottomRow モードでも margin は通常通り検証される", () => {
-      // marginBottom=1 を付ければ最下行の下に F が必要 → row 9 のチェック
-      // sny=1080 → rowTop = 6, bottom row = row 8 (最終床行)
-      //   marginBottom=1 で row 9 を要求 → 範囲外 (rows=9) → undefined → invalid
-      const ruleWithBottomMargin: PlacementRule = {
-        regions: ["F"], regionsApplyTo: "bottomRow", marginBottom: 1,
-      };
-      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 1080, 4, 3, ruleWithBottomMargin)).toBe(false);
-    });
-
-    it("nearestValidSnap: bottomRow モードで奥壁ぎわ row 5 が valid として返る", () => {
-      // 開始 (960, 600) は bottom row=4 (B) で invalid。
-      // 旧 "all" モードだと row 5 を bottom にしても footprint 上 2 行が B で invalid だった
-      // (snap が前方に弾かれて壁に押し付けられない)。bottomRow なら row 5 が valid → sny=720。
+    it("nearestValidSnap: centerAnchorBottom モードで奥壁ぎわ row 5 が valid として返る", () => {
+      // 開始 (960, 600) は bottom row=4 (B) で invalid。anchor 最下行 = row 5 col 7,8 = F F → sny=720。
       const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 960, 600, 4, 3, FLOOR_RULE);
       expect(got).toBeDefined();
       expect(got!.sny).toBe(720);
