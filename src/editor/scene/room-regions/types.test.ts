@@ -179,6 +179,51 @@ describe("room-regions helper", () => {
     });
   });
 
+  describe("PlacementRule regionsApplyTo: \"bottomRow\" (床家具 = 最下行のみ F)", () => {
+    // 床家具用 rule: image の上端は壁領域 (B/L/R) に重なってよい (描画上自然)
+    const FLOOR_RULE: PlacementRule = { regions: ["F"], regionsApplyTo: "bottomRow" };
+
+    it("isFootprintValid: footprint 最下行が全て F なら valid (上行が B でも OK)", () => {
+      // sakura-room: rows 0-4 = B (奥壁) / rows 5-8 = F (床、中央 cols 4-11 はずっと F)
+      // 偶数 cw=4 → offX=0, snx=960 → colLeft=6
+      // sny=720 → rowTop = round(720/120) - 3 = 3, footprint rows 3-5 (上 2 行は B, 最下行 row5 は F)
+      //   従来 (regionsApplyTo "all"): rows 3-4 cols 6-9 が B → invalid
+      //   新仕様 (bottomRow): row 5 cols 6-9 全 F → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 720, 4, 3, FLOOR_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: 最下行に L が含まれれば invalid", () => {
+      // sakura-room: row 5 = ["L","L","L","F","F","F","F","F","F","F","F","F","F","R","R","R"]
+      // 偶数 cw=4 → offX=0, snx=240 → colLeft=0, footprint 最下行 row 5 cols 0-3 = L L L F → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 240, 720, 4, 3, FLOOR_RULE)).toBe(false);
+    });
+
+    it("isFootprintValid: 最下行が部分的に R を含んでも invalid", () => {
+      // row 5 cols 12-15 = F R R R。snx=1680 → colLeft=12, 最下行 row 5 cols 12-15 = F R R R → invalid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 1680, 720, 4, 3, FLOOR_RULE)).toBe(false);
+    });
+
+    it("isFootprintValid: bottomRow モードでも margin は通常通り検証される", () => {
+      // marginBottom=1 を付ければ最下行の下に F が必要 → row 9 のチェック
+      // sny=1080 → rowTop = 6, bottom row = row 8 (最終床行)
+      //   marginBottom=1 で row 9 を要求 → 範囲外 (rows=9) → undefined → invalid
+      const ruleWithBottomMargin: PlacementRule = {
+        regions: ["F"], regionsApplyTo: "bottomRow", marginBottom: 1,
+      };
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 960, 1080, 4, 3, ruleWithBottomMargin)).toBe(false);
+    });
+
+    it("nearestValidSnap: bottomRow モードで奥壁ぎわ row 5 が valid として返る", () => {
+      // 開始 (960, 600) は bottom row=4 (B) で invalid。
+      // 旧 "all" モードだと row 5 を bottom にしても footprint 上 2 行が B で invalid だった
+      // (snap が前方に弾かれて壁に押し付けられない)。bottomRow なら row 5 が valid → sny=720。
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 960, 600, 4, 3, FLOOR_RULE);
+      expect(got).toBeDefined();
+      expect(got!.sny).toBe(720);
+      expect(got!.snx).toBe(960);
+    });
+  });
+
   describe("PlacementRule rowMin/rowMax (天井 = row 0 のみ)", () => {
     // ceiling rule: 壁 region (L/B/R) のうち rowTop が 0 のみ
     const CEILING_RULE: PlacementRule = {

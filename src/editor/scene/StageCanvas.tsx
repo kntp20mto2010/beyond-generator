@@ -36,7 +36,7 @@ import {
 } from "./room-regions/types.js";
 import {
   containScale,
-  DEFAULT_PLACEMENT_RULES,
+  effectivePlacementRule,
   getObjectDef,
   objectScaleForCells,
   variantCells,
@@ -410,15 +410,10 @@ export function StageCanvas(props: Props) {
             const liveEl = curEl?.kind === "object" ? curEl : el;
             const cw = liveEl.cells?.w ?? 2;
             let [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
-            // 配置種別の有効ルール (per-def 優先 / 無ければ DEFAULT_PLACEMENT_RULES) で
             const def = getObjectDef(liveEl.src);
             const map = currentRoomMap(scene);
-            // 配置の縛りは「床家具→床 F」と「窓 (per-def)→奥壁+margin」だけ。
-            // 床家具の角度判定 grid (footprint) が壁にめり込まないよう床に縛る。
-            // 壁デコ等その他は自由配置 (依頼外なので縛らない)。
-            const rule =
-              def?.placementRule ??
-              (def?.placement === "floor" ? DEFAULT_PLACEMENT_RULES.floor : undefined);
+            // 縛りは床家具 (床F・bottomRow) と窓 (奥壁+margin) だけ。
+            const rule = def ? effectivePlacementRule(def) : undefined;
             if (map && def) {
               if (rule) {
                 const ch = liveEl.cells?.h ?? 1;
@@ -720,9 +715,9 @@ export function StageCanvas(props: Props) {
             .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
             .stroke({ color, width, alpha });
         };
-        // per-def placementRule を明示したもの (= 窓) のみ footprint + margin を可視化。
-        // 縛りがあるのは窓だけ (壁デコ等は自由配置)。
-        const ruleEff = def2.placementRule;
+        // 床家具は下のブロックで壁隣接トリガー (front/side 切替根拠) を表示する。
+        // それ以外で effective rule がある (= 窓) ケースのみ footprint + margin を可視化。
+        const ruleEff = effectivePlacementRule(def2);
         if (ruleEff && def2.placement !== "floor") {
           const cw3 = selEl2.cells?.w ?? 1;
           const ch3 = selEl2.cells?.h ?? 1;
@@ -733,12 +728,17 @@ export function StageCanvas(props: Props) {
           const rowInRange =
             (ruleEff.rowMin === undefined || rowTop >= ruleEff.rowMin) &&
             (ruleEff.rowMax === undefined || rowTop <= ruleEff.rowMax);
+          // bottomRow モードでは footprint の最下行のみが判定対象。上行は描画スキップ。
+          const applyTo = ruleEff.regionsApplyTo ?? "all";
+          const footprintRowMin = applyTo === "bottomRow" ? rowTop + ch3 - 1 : rowTop;
           for (let r = rowTop - mT; r < rowTop + ch3 + mB; r++) {
+            const inFootprintRows = r >= rowTop && r < rowTop + ch3;
+            if (inFootprintRows && r < footprintRowMin) continue;
             for (let c = colLeft - mL; c < colLeft + cw3 + mR; c++) {
               const code = map2.regions[r]?.[c];
               const regionOk = !!code && ruleEff.regions.includes(code);
               const ok = regionOk && rowInRange;
-              const isFootprint = r >= rowTop && r < rowTop + ch3 && c >= colLeft && c < colLeft + cw3;
+              const isFootprint = inFootprintRows && c >= colLeft && c < colLeft + cw3;
               // footprint = 太枠 / margin = 細枠。緑 = valid, 赤 = invalid
               cellRect(c, r,
                 ok ? 0x22c55e : 0xef4444,

@@ -157,6 +157,10 @@ export interface PlacementRule {
   // footprint 上端 row (rowTop) の許可範囲 (inclusive)。範囲外なら invalid。
   rowMin?: number;
   rowMax?: number;
+  // regions チェックを適用する範囲。デフォルト "all" (footprint 全 cell)。
+  // "bottomRow" の場合は footprint の最下行 cell のみ regions に含まれることを要求。
+  // 床家具用: image の上端が壁領域に重なってよい (描画上自然) ため bottomRow を使う。
+  regionsApplyTo?: "all" | "bottomRow";
 }
 
 // 配置位置 (snap 済 bottom-center) + cells から、footprint と margin が全て
@@ -180,7 +184,14 @@ export function isFootprintValid(
   const mB = rule.marginBottom ?? 0;
   const mL = rule.marginLeft ?? 0;
   const mR = rule.marginRight ?? 0;
+  // footprint 部分は regionsApplyTo に応じて最下行のみ / 全 cell をチェック。
+  // margin (footprint 外側) は規約上 footprint 範囲とは独立にチェックする。
+  const applyTo = rule.regionsApplyTo ?? "all";
+  const footprintRowMin = applyTo === "bottomRow" ? rowTop + cellsH - 1 : rowTop;
   for (let r = rowTop - mT; r < rowTop + cellsH + mB; r++) {
+    // footprint 内の上側行 (bottomRow モード) はスキップ — 床家具の image 上端が壁領域に重なってよい。
+    const inFootprintRows = r >= rowTop && r < rowTop + cellsH;
+    if (inFootprintRows && r < footprintRowMin) continue;
     for (let c = colLeft - mL; c < colLeft + cellsW + mR; c++) {
       const code = map.regions[r]?.[c];
       if (!code || !rule.regions.includes(code)) return false;
