@@ -50,17 +50,6 @@ export function regionAtCell(
   return map.regions[row]?.[col];
 }
 
-// 配置 → 許可される region 集合。
-// floor は床セル、wall は奥/左/右壁、ground は床(ラグは床敷き)。
-export const ALLOWED_REGIONS_BY_PLACEMENT: Record<
-  "floor" | "wall" | "ground",
-  ReadonlyArray<RegionCode>
-> = {
-  floor: ["F"],
-  wall: ["L", "B", "R"],
-  ground: ["F"],
-};
-
 // 床セル (col, row) が壁にどう接しているか分類する。
 // 戻り値: "leftBorder"  = 左隣が左壁(L)
 //        "rightBorder" = 右隣が右壁(R)
@@ -119,6 +108,10 @@ export function multiAnchorWallAdjacency(
 // 例: 窓 = { regions: ["B"], marginTop: 1, marginBottom: 1 }
 //   → 窓の上下にも 1 行ぶん B (奥壁) が必要 = 壁の最上/最下端には貼れない。
 //   = 「窓は奥壁の中央寄りにしか置けない」という制約になる。
+//
+// rowMin/rowMax は footprint 上端 row (rowTop) の許可範囲 (inclusive)。
+// 例: ceiling = { regions: ["L","B","R"], rowMin: 0, rowMax: 0 }
+//   → footprint 上端が必ず row 0 = 「天井=最上段のみ」の制約。
 export interface PlacementRule {
   // 必要なすべてのセル (footprint + 周囲マージン) で許可される region コード集合
   regions: ReadonlyArray<RegionCode>;
@@ -127,6 +120,9 @@ export interface PlacementRule {
   marginBottom?: number;
   marginLeft?: number;
   marginRight?: number;
+  // footprint 上端 row (rowTop) の許可範囲 (inclusive)。範囲外なら invalid。
+  rowMin?: number;
+  rowMax?: number;
 }
 
 // 配置位置 (snap 済 bottom-center) + cells から、footprint と margin が全て
@@ -143,6 +139,9 @@ export function isFootprintValid(
   // bottom-center → 左上 cell
   const colLeft = Math.round((snx - (cellsW * grid) / 2) / grid);
   const rowTop = Math.round(sny / grid) - cellsH;
+  // rowTop が rowMin/rowMax 範囲外なら invalid
+  if (rule.rowMin !== undefined && rowTop < rule.rowMin) return false;
+  if (rule.rowMax !== undefined && rowTop > rule.rowMax) return false;
   const mT = rule.marginTop ?? 0;
   const mB = rule.marginBottom ?? 0;
   const mL = rule.marginLeft ?? 0;
@@ -159,6 +158,7 @@ export function isFootprintValid(
 // rule を満たす最近傍の snap 位置 (snx, sny) を探す。
 // 候補は cells.w の偶奇に応じた snap 位相のみ。Manhattan 距離で最近を返す。
 // 見つからなければ undefined。
+// rule.rowMin/rowMax 指定時は rowTop が範囲内になる sny のみ走査して高速化する。
 export function nearestValidSnap(
   map: RoomRegionMap,
   startSnx: number,
@@ -169,10 +169,13 @@ export function nearestValidSnap(
 ): { snx: number; sny: number } | undefined {
   const grid = map.grid;
   const offX = cellsW % 2 === 1 ? grid / 2 : 0;
-  // 候補: 全 snap 位置 (col 0..cols, row 1..rows) を走査
+  // sny = (rowTop + cellsH) * grid。rowMin/rowMax を bottom row へ変換。
+  // r (bottom row) = rowTop + cellsH なので、許可範囲は [rowMin+cellsH, rowMax+cellsH]。
+  const rLo = Math.max(1, (rule.rowMin ?? -Infinity) + cellsH);
+  const rHi = Math.min(map.rows, (rule.rowMax ?? Infinity) + cellsH);
   let best: { snx: number; sny: number } | undefined;
   let bestDist = Infinity;
-  for (let r = 1; r <= map.rows; r++) {
+  for (let r = rLo; r <= rHi; r++) {
     const sny = r * grid;
     for (let c = 0; c <= map.cols; c++) {
       const snx = c * grid + offX;
@@ -181,30 +184,6 @@ export function nearestValidSnap(
       if (d < bestDist) {
         bestDist = d;
         best = { snx, sny };
-      }
-    }
-  }
-  return best;
-}
-
-// 最も近い「許可された region」のセル中心 (col, row) を Manhattan 距離で探す。
-// 見つからなければ undefined。
-export function nearestAllowedCell(
-  map: RoomRegionMap,
-  startCol: number,
-  startRow: number,
-  allowed: ReadonlyArray<RegionCode>,
-): { col: number; row: number } | undefined {
-  let best: { col: number; row: number } | undefined;
-  let bestDist = Infinity;
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
-      const code = map.regions[r]?.[c];
-      if (!code || !allowed.includes(code)) continue;
-      const d = Math.abs(r - startRow) + Math.abs(c - startCol);
-      if (d < bestDist) {
-        bestDist = d;
-        best = { col: c, row: r };
       }
     }
   }

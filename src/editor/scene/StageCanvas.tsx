@@ -29,16 +29,15 @@ import { computeSnap, type Edges } from "./snap.js";
 import { GRID, snapObjectXY } from "./grid.js";
 import { SAKURA_ROOM_REGIONS } from "./room-regions/sakura-room.js";
 import {
-  ALLOWED_REGIONS_BY_PLACEMENT,
   anchorColsForObject,
   isFootprintValid,
   multiAnchorWallAdjacency,
-  nearestAllowedCell,
   nearestValidSnap,
   type RoomRegionMap,
 } from "./room-regions/types.js";
 import {
   containScale,
+  effectivePlacementRule,
   getObjectDef,
   objectScaleForCells,
   variantCells,
@@ -409,44 +408,23 @@ export function StageCanvas(props: Props) {
             const liveEl = curEl?.kind === "object" ? curEl : el;
             const cw = liveEl.cells?.w ?? 2;
             let [snx, sny] = snapObjectXY(startX + rawDx, startY + rawDy, cw);
-            // 配置種別 (floor/wall/ground) で許可された region に制約。
-            // 許可外 cell に来たら、Manhattan 最近傍の許可 cell に bottom-center を再吸着。
+            // 配置種別の有効ルール (per-def 優先 / 無ければ DEFAULT_PLACEMENT_RULES) で
+            // footprint + margin + rowMin/rowMax を検証。不正なら nearestValidSnap で吸着。
             const def = getObjectDef(liveEl.src);
             const map = currentRoomMap(scene);
-            if (map && def?.placement && (def.placement === "floor" || def.placement === "wall" || def.placement === "ground")) {
-              const allowed = ALLOWED_REGIONS_BY_PLACEMENT[def.placement];
-              let cellRow = Math.floor(sny / map.grid) - 1; // bottom-center が乗っているセル行
-              let cellCol = Math.floor(snx / map.grid);
-              const code = map.regions[cellRow]?.[cellCol];
-              if (!code || !allowed.includes(code)) {
-                const near = nearestAllowedCell(map, cellCol, cellRow, allowed);
-                if (near) {
-                  // セル中心 X (奇数幅は半セルずらし) + bottom Y = (row+1)*GRID
-                  const offX = cw % 2 === 1 ? map.grid / 2 : 0;
-                  snx = near.col * map.grid + offX;
-                  sny = (near.row + 1) * map.grid;
-                  cellCol = near.col;
-                  cellRow = near.row;
-                }
-              }
-              // per-def placementRule (footprint + margin の全セルを rule.regions に制約)。
-              // 不正なら最近傍 valid snap 位置に bottom-center を吸着。
-              if (def?.placementRule) {
-                const rule = def.placementRule;
-                const ch = liveEl.cells?.h ?? 1;
-                if (!isFootprintValid(map, snx, sny, cw, ch, rule)) {
-                  const valid = nearestValidSnap(map, snx, sny, cw, ch, rule);
-                  if (valid) {
-                    snx = valid.snx;
-                    sny = valid.sny;
-                    // cellCol/cellRow を更新 (view 切替判定に影響しないが、念のため)
-                    cellCol = Math.floor(snx / map.grid);
-                    cellRow = Math.floor(sny / map.grid) - 1;
-                  }
+            const rule = def ? effectivePlacementRule(def) : undefined;
+            if (map && def?.placement && rule) {
+              const ch = liveEl.cells?.h ?? 1;
+              if (!isFootprintValid(map, snx, sny, cw, ch, rule)) {
+                const valid = nearestValidSnap(map, snx, sny, cw, ch, rule);
+                if (valid) {
+                  snx = valid.snx;
+                  sny = valid.sny;
                 }
               }
               // 床置きは壁隣接で view を自動切替 (左→side / 右→side flipX / 奥→front / 内側→front-dimetric)
               if (def.placement === "floor") {
+                const cellRow = Math.floor(sny / map.grid) - 1; // bottom-center が乗っているセル行
                 const anchorCols = anchorColsForObject(snx, cw, map.grid);
                 const pick = pickViewForFloorPosition(def, anchorCols, cellRow, map);
                 if (pick) {
@@ -733,19 +711,24 @@ export function StageCanvas(props: Props) {
             .rect(col * map2.grid + 3, row * map2.grid + 3, map2.grid - 6, map2.grid - 6)
             .stroke({ color, width, alpha });
         };
-        // 窓など placementRule 持ちは footprint + margin の valid/invalid を色分けで可視化
-        if (def2.placementRule) {
-          const rule = def2.placementRule;
+        // effective rule (per-def 優先 / 無ければ placement の DEFAULT) で footprint + margin の
+        // valid/invalid を色分けで可視化。床置き以外 (back-wall/side-wall/ceiling/ground) も自動で対応。
+        const ruleEff = effectivePlacementRule(def2);
+        if (ruleEff && def2.placement !== "floor") {
           const cw3 = selEl2.cells?.w ?? 1;
           const ch3 = selEl2.cells?.h ?? 1;
           const colLeft = Math.round((selEl2.transform.x - (cw3 * map2.grid) / 2) / map2.grid);
           const rowTop = Math.round(selEl2.transform.y / map2.grid) - ch3;
-          const mT = rule.marginTop ?? 0, mB = rule.marginBottom ?? 0;
-          const mL = rule.marginLeft ?? 0, mR = rule.marginRight ?? 0;
+          const mT = ruleEff.marginTop ?? 0, mB = ruleEff.marginBottom ?? 0;
+          const mL = ruleEff.marginLeft ?? 0, mR = ruleEff.marginRight ?? 0;
+          const rowInRange =
+            (ruleEff.rowMin === undefined || rowTop >= ruleEff.rowMin) &&
+            (ruleEff.rowMax === undefined || rowTop <= ruleEff.rowMax);
           for (let r = rowTop - mT; r < rowTop + ch3 + mB; r++) {
             for (let c = colLeft - mL; c < colLeft + cw3 + mR; c++) {
               const code = map2.regions[r]?.[c];
-              const ok = !!code && rule.regions.includes(code);
+              const regionOk = !!code && ruleEff.regions.includes(code);
+              const ok = regionOk && rowInRange;
               const isFootprint = r >= rowTop && r < rowTop + ch3 && c >= colLeft && c < colLeft + cw3;
               // footprint = 太枠 / margin = 細枠。緑 = valid, 赤 = invalid
               cellRect(c, r,

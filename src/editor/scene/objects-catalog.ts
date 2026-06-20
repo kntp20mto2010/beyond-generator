@@ -104,24 +104,56 @@ export const KIND_LABEL: Record<ObjectKind, string> = {
 };
 
 // 配置方法。Scene 上の Z 並びやスナップ規則を将来分けるためにも使う。
-export type ObjectPlacement = "floor" | "wall" | "ground";
+// - floor     : 床置き家具 (3 視点)
+// - back-wall : 奥壁に貼る (額絵・時計・窓 etc、正面のみ)
+// - side-wall : 左右壁に貼る (将来用、正面のみ)
+// - ceiling   : 天井 = 壁の最上段 row 0 のみ (フェアリーライト・ペナント、正面のみ)
+// - ground    : 床に敷く (ラグ、正面のみ)
+export type ObjectPlacement = "floor" | "back-wall" | "side-wall" | "ceiling" | "ground";
 
 export const PLACEMENT_LABEL: Record<ObjectPlacement, string> = {
   floor: "床置き",
-  wall: "壁掛け",
+  "back-wall": "奥壁",
+  "side-wall": "左右壁",
+  ceiling: "天井",
   ground: "床敷き",
 };
 
 // 配置ごとに使う角度 (view) の許可リスト。
-// - floor : 全 3 角度(AC 風配置で正面/斜め/壁付け全部使う)
-// - wall  : 正面のみ(壁にぴったり貼る平面画)
-// - ground: 正面のみ(ラグは正面 or 上面のみ、立体だと模様が歪む)
+// - floor                     : 全 3 角度(AC 風配置で正面/斜め/壁付け全部使う)
+// - back-wall/side-wall/ceiling: 正面のみ(壁/天井にぴったり貼る平面画)
+// - ground                    : 正面のみ(ラグは正面 or 上面のみ、立体だと模様が歪む)
 // テストでカタログ整合性を保証する(grid-object.test.ts)。
 export const ALLOWED_ANGLES_BY_PLACEMENT: Record<ObjectPlacement, readonly ObjectViewName[]> = {
   floor: ["front", "front-dimetric", "side"],
-  wall: ["front"],
+  "back-wall": ["front"],
+  "side-wall": ["front"],
+  ceiling: ["front"],
   ground: ["front"],
 };
+
+// 配置種別ごとのデフォルト PlacementRule。
+// per-def の placementRule が指定されていれば、そちらを優先する (effectivePlacementRule)。
+// - floor     : 床セル F のみ。
+// - back-wall : 奥壁 B のみ。マージン無し (端寄せ可)。窓など中央寄せが必要なものは per-def で追加。
+// - side-wall : 左壁 L / 右壁 R のみ。
+// - ceiling   : 壁全種 (L/B/R) のうち row 0 のみ = 部屋の最上段。
+// - ground    : 床セル F のみ (ラグ)。
+export const DEFAULT_PLACEMENT_RULES: Record<ObjectPlacement, PlacementRule> = {
+  floor: { regions: ["F"] },
+  "back-wall": { regions: ["B"] },
+  "side-wall": { regions: ["L", "R"] },
+  ceiling: { regions: ["L", "B", "R"], rowMin: 0, rowMax: 0 },
+  ground: { regions: ["F"] },
+};
+
+// def の効力ある PlacementRule。per-def 指定があればそれを返し、無ければ
+// DEFAULT_PLACEMENT_RULES[def.placement] を返す。placement 未指定なら undefined。
+export function effectivePlacementRule(def: ObjectDef): PlacementRule | undefined {
+  if (def.placementRule) return def.placementRule;
+  if (def.placement) return DEFAULT_PLACEMENT_RULES[def.placement];
+  return undefined;
+}
 
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
@@ -259,7 +291,9 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "窓+カーテン",
     defaultView: "front",
     kind: "window",
-    placement: "wall",
+    placement: "back-wall",
+    // 窓は端寄せ厳禁(壁の天井/床境界に貼らないため上下 1 cell マージン)。
+    // 額絵などは default rule (margin 無し) に従って端寄せ自由。
     placementRule: { regions: ["B"], marginTop: 1, marginBottom: 1 },
     views: {
       front: {
@@ -421,7 +455,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "額絵(花柄)",
     defaultView: "front",
     kind: "wall-decor",
-    placement: "wall",
+    placement: "back-wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-frame-floral.png",
@@ -436,7 +470,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "壁掛け時計",
     defaultView: "front",
     kind: "wall-decor",
-    placement: "wall",
+    placement: "back-wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-clock.png",
@@ -451,7 +485,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ドライフラワー束",
     defaultView: "front",
     kind: "wall-decor",
-    placement: "wall",
+    placement: "back-wall",
     views: {
       front: {
         src: "assets/objects/sakura-wall-dried-bouquet.png",
@@ -466,7 +500,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ペナント(5旗)",
     defaultView: "front",
     kind: "wall-decor",
-    placement: "wall",
+    placement: "ceiling",
     views: {
       front: {
         src: "assets/objects/sakura-wall-pennant.png",
@@ -481,7 +515,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "フェアリーライト",
     defaultView: "front",
     kind: "wall-decor",
-    placement: "wall",
+    placement: "ceiling",
     views: {
       front: {
         src: "assets/objects/sakura-wall-fairy-lights.png",

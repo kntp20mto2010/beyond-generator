@@ -581,7 +581,7 @@ function evaluateElement(
 // 描画 z を「配置種別 + Y 位置」で計算する。
 //
 // レイヤ構造(上に来るほど手前):
-//   壁掛け  : -10000 + el.z (常に最背面、壁デコ・窓カーテン等)
+//   壁/天井 : -10000 + el.z (常に最背面、back-wall/side-wall/ceiling = 壁デコ・窓カーテン・ライト等)
 //   床敷き  :  -5000 + el.z (ラグ等)
 //   床置き  :  el.y  + el.z (家具・キャラ。Y が大きいほど手前)
 //   その他  :  el.z         (text / balloon は UI overlay として従来通り)
@@ -590,9 +590,10 @@ function evaluateElement(
 function effectiveZ(el: SceneElement): number {
   if (el.kind === "object") {
     const def = getObjectDef(el.src);
-    if (def?.placement === "wall")   return -10000 + el.z;
-    if (def?.placement === "ground") return -5000 + el.z;
-    if (def?.placement === "floor")  return el.transform.y + el.z;
+    const p = def?.placement;
+    if (p === "back-wall" || p === "side-wall" || p === "ceiling") return -10000 + el.z;
+    if (p === "ground") return -5000 + el.z;
+    if (p === "floor")  return el.transform.y + el.z;
     return el.z;
   }
   if (el.kind === "character") {

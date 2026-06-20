@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SAKURA_ROOM_REGIONS } from "./sakura-room.js";
 import {
-  ALLOWED_REGIONS_BY_PLACEMENT,
   anchorColsForObject,
   floorWallAdjacency,
   isFootprintValid,
   multiAnchorWallAdjacency,
-  nearestAllowedCell,
   nearestValidSnap,
   regionAtCell,
   regionAtStage,
@@ -27,29 +25,6 @@ describe("room-regions helper", () => {
     expect(regionAtStage(SAKURA_ROOM_REGIONS, 60, 60)).toBe("L"); // (col=0, row=0)
     expect(regionAtStage(SAKURA_ROOM_REGIONS, 960, 1020)).toBe("F"); // (col=8, row=8)
     expect(regionAtStage(SAKURA_ROOM_REGIONS, -10, 0)).toBeUndefined();
-  });
-
-  it("nearestAllowedCell: 床セル中の中央 → 同セル", () => {
-    const near = nearestAllowedCell(SAKURA_ROOM_REGIONS, 8, 8, ["F"]);
-    expect(near).toEqual({ col: 8, row: 8 });
-  });
-
-  it("nearestAllowedCell: 壁セルから floor を探すと最寄り床に着地", () => {
-    // (col=8, row=0) は奥壁。floor の最近傍は (8, 5)(マンハッタン 5)
-    const near = nearestAllowedCell(SAKURA_ROOM_REGIONS, 8, 0, ["F"]);
-    expect(near).toEqual({ col: 8, row: 5 });
-  });
-
-  it("nearestAllowedCell: 床セルから wall を探すと最寄り壁に着地", () => {
-    // (col=8, row=8) は床。wall (L/B/R) の最近傍は奥壁 row=4
-    const near = nearestAllowedCell(SAKURA_ROOM_REGIONS, 8, 8, ["L", "B", "R"]);
-    expect(near?.row).toBeLessThanOrEqual(4);
-  });
-
-  it("ALLOWED_REGIONS_BY_PLACEMENT: 配置ごとに正しい region 集合", () => {
-    expect(ALLOWED_REGIONS_BY_PLACEMENT.floor).toEqual(["F"]);
-    expect(ALLOWED_REGIONS_BY_PLACEMENT.wall).toEqual(["L", "B", "R"]);
-    expect(ALLOWED_REGIONS_BY_PLACEMENT.ground).toEqual(["F"]);
   });
 
   it("floorWallAdjacency: 床セルの壁隣接を判定", () => {
@@ -171,6 +146,58 @@ describe("room-regions helper", () => {
     it("isFootprintValid: footprint が部分的にマップ外でも安全に invalid", () => {
       // snx=120 → colLeft=(120-240)/120=-1, cols -1,0,1,2 → regions[r]?.[-1]=undefined → invalid
       expect(isFootprintValid(SAKURA_ROOM_REGIONS, 120, 480, 4, 3, WINDOW_RULE)).toBe(false);
+    });
+  });
+
+  describe("PlacementRule rowMin/rowMax (天井 = row 0 のみ)", () => {
+    // ceiling rule: 壁 region (L/B/R) のうち rowTop が 0 のみ
+    const CEILING_RULE: PlacementRule = {
+      regions: ["L", "B", "R"],
+      rowMin: 0,
+      rowMax: 0,
+    };
+
+    it("isFootprintValid: ceiling 3×1 を奥壁 row 0 中央に置けるか", () => {
+      // sakura-room row 0: 全 B (cols 4-11)。奇数 cw=3 → offX=grid/2
+      // snx=900 (col center 7) → colLeft = round((900 - 180)/120) = 6, cols 6-8
+      // sny=120 → rowTop = round(120/120) - 1 = 0 ✓ in [0,0]
+      // footprint cols 6-8 row 0 = B B B → valid
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 900, 120, 3, 1, CEILING_RULE)).toBe(true);
+    });
+
+    it("isFootprintValid: rowMin/rowMax 範囲外 (row 1 以降) は invalid", () => {
+      // sny=240 → rowTop = round(240/120) - 1 = 1 ✗ rowMax=0
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 900, 240, 3, 1, CEILING_RULE)).toBe(false);
+      // sny=480 → rowTop = 3 ✗
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 900, 480, 3, 1, CEILING_RULE)).toBe(false);
+    });
+
+    it("isFootprintValid: region は OK でも rowTop が範囲外なら invalid", () => {
+      // sny=600 → rowTop = 4 (床側) ✗ rowMax=0
+      expect(isFootprintValid(SAKURA_ROOM_REGIONS, 900, 600, 3, 1, CEILING_RULE)).toBe(false);
+    });
+
+    it("nearestValidSnap: 範囲外 (row 4) から始めても row 0 の最近傍へ吸着", () => {
+      // 開始 (900, 600) = row 4 相当の不正位置 → 最近傍 valid は row 0
+      // 偶数 / 奇数 snap は cellsW で決まる (cw=3 → offX=60)
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 900, 600, 3, 1, CEILING_RULE);
+      expect(got).toBeDefined();
+      // sny = 120 = (rowTop=0 + cellsH=1) * grid
+      expect(got!.sny).toBe(120);
+      // cols 4-11 が B。snx 候補は { snx = c*120+60 | c in cols }、open: footprint cols c..c+2 全 B
+      //   c=4 → cols 4-6 (B B B) ✓ snx = 540
+      //   c=5 → cols 5-7 ✓ snx = 660
+      //   ... c=9 → cols 9-11 ✓ snx = 1140
+      // 開始 snx=900 → 最近傍は snx=900 (c=7, cols 7-9 全 B) ✓
+      expect(got!.snx).toBe(900);
+    });
+
+    it("nearestValidSnap: rowMin/rowMax で走査範囲を絞っても valid が見つかる", () => {
+      // (840, 480) → 偶数 cw=2 で offX=0, cols=7-8 row 0 = B B → valid
+      // sny=120 expected (rowTop=0 へ吸着)
+      const got = nearestValidSnap(SAKURA_ROOM_REGIONS, 840, 480, 2, 1, CEILING_RULE);
+      expect(got).toBeDefined();
+      expect(got!.sny).toBe(120);
     });
   });
 });
