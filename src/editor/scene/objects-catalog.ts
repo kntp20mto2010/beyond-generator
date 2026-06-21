@@ -296,6 +296,28 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     },
   },
   {
+    id: "sakura-sofa-green-floor",
+    label: "ソファ(緑フロア)",
+    defaultView: "front-dimetric",
+    kind: "sofa",
+    placement: "floor",
+    views: {
+      // front-dimetric: moodboard r2 中央 sage green クラウドソファ
+      // pipeline: 緑マスク r1 → apply-green-mask (padding 0.1) →
+      //   Codex cleanup (虫食い補完 prompt 厳格版 r5b)
+      "front-dimetric": {
+        src: "assets/objects/sakura-sofa-green-floor-dimetric.png",
+        shadowSrc: "assets/objects/sakura-sofa-green-floor-dimetric.shadow.png",
+        nativeW: 508,
+        nativeH: 393,
+        cells: { w: 2, h: 2 },
+        seat: { dx: 0, dy: -260 },
+        projection: "dimetric-2to1-sitting",
+        promptFile: "sakura-sofa-fillin-bugbites-r5b-20260621",
+      },
+    },
+  },
+  {
     id: "sakura-window-curtain",
     label: "窓+カーテン",
     defaultView: "front",
