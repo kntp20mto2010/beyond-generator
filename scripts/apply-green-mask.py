@@ -35,9 +35,27 @@ def main() -> int:
         help="緑判定: G - max(R,B) >= 該当値 なら緑 (default=80)",
     )
     p.add_argument(
+        "--exclude-blue",
+        action="store_true",
+        help="青領域 (B - max(R,G) >= blue-tolerance) を緑マスクから除外 (2 色マスク用、対象の境界を tighten)",
+    )
+    p.add_argument(
+        "--blue-tolerance",
+        type=int,
+        default=80,
+        help="青判定: B - max(R,G) >= 該当値 なら青 (default=80)",
+    )
+    p.add_argument(
         "--flip-h",
         action="store_true",
         help="保存前に左右反転 (右壁オリエント家具を catalog の左壁オリエントに揃える時)",
+    )
+    p.add_argument(
+        "--padding-ratio",
+        type=float,
+        default=0.0,
+        help="crop 後に透明余白を追加する比率 (= max(cw, ch) * ratio 分を四方に追加)。 "
+             "Codex cleanup などの後段で家具を「商品撮影風中央余白」に解釈変換されるのを防ぐ目的で 0.1 等を指定 (default=0.0)",
     )
     args = p.parse_args()
 
@@ -52,6 +70,13 @@ def main() -> int:
 
     # 緑判定: G - max(R, B) >= tolerance
     g_mask = (mk_a[..., 1] - np.maximum(mk_a[..., 0], mk_a[..., 2])) >= args.green_tolerance
+
+    if args.exclude_blue:
+        # 青判定: B - max(R, G) >= tolerance
+        b_mask = (mk_a[..., 2] - np.maximum(mk_a[..., 0], mk_a[..., 1])) >= args.blue_tolerance
+        # 緑 ∧ ¬青 (青に被ってる緑は除外、対象の境界 tighten)
+        g_mask = g_mask & ~b_mask
+        print(f"info     : excluded blue pixels from green mask ({int(b_mask.sum())} blue px)")
 
     if not g_mask.any():
         print("error: no green pixels found in mask", file=sys.stderr)
@@ -70,6 +95,12 @@ def main() -> int:
     cropped = full.crop(bbox)
     if args.flip_h:
         cropped = cropped.transpose(Image.FLIP_LEFT_RIGHT)
+    if args.padding_ratio > 0:
+        cw0, ch0 = cropped.size
+        pad = int(max(cw0, ch0) * args.padding_ratio)
+        canvas = Image.new("RGBA", (cw0 + pad * 2, ch0 + pad * 2), (0, 0, 0, 0))
+        canvas.paste(cropped, (pad, pad))
+        cropped = canvas
     cw, ch = cropped.size
     cells_w = math.ceil(cw / PX_PER_CELL)
     cells_h = math.ceil(ch / PX_PER_CELL)

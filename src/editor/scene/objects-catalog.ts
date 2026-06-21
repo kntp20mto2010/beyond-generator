@@ -379,15 +379,17 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         projection: "dimetric-2to1-sitting",
         promptFile: "sakura-wardrobe-sitting-2to1-l1b-v1-20260619",
       },
-      // side: v10 (Eye 160 / Rotation -65° / Lateral 10° / Depth 30°)
+      // side: moodboard r2 部屋全体保持 → ワードローブ位置 緑マスク (r8, 緑のみ tight) →
+      //   PIL apply-green-mask.py で moodboard 原画から切り抜き → 「補完」表現で
+      //   Codex cleanup (complete r9) で隣の本棚断片除去
       side: {
         src: "assets/objects/sakura-wardrobe-leftwall.png",
         shadowSrc: "assets/objects/sakura-wardrobe-leftwall.shadow.png",
-        nativeW: 665,
-        nativeH: 1380,
-        cells: { w: 3, h: 5 },
+        nativeW: 410,
+        nativeH: 732,
+        cells: { w: 2, h: 3 },
         projection: "wall-aligned-v10",
-        promptFile: "sakura-wardrobe-wall-aligned-v10-20260618",
+        promptFile: "sakura-wardrobe-complete-r9-20260621",
       },
     },
   },
