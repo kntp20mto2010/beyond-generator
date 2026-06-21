@@ -327,11 +327,14 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     // 額絵などは default rule (margin 無し) に従って端寄せ自由。
     placementRule: { regions: ["B"], marginTop: 1, marginBottom: 1 },
     views: {
+      // front: moodboard r2 奥壁中央の窓+カーテン → 緑マスク r1c → apply-green-mask
+      //   (padding 0.1) → 補完 cleanup r2 (下端の植物/ランプ/机断片を除去)
       front: {
         src: "assets/objects/sakura-window-curtain.png",
-        nativeW: 1040,
-        nativeH: 823,
-        cells: { w: 4, h: 3 },
+        nativeW: 540,
+        nativeH: 419,
+        cells: { w: 2, h: 2 },
+        promptFile: "sakura-window-curtain-complete-r2-20260621",
       },
     },
   },
