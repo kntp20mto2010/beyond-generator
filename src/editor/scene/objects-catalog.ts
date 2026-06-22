@@ -634,6 +634,27 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     },
   },
   {
+    id: "sakura-plant-floor-large",
+    label: "観葉植物(床置き)",
+    defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
+    kind: "plant",
+    placement: "floor",
+    views: {
+      // front: r2 部屋から緑マスク (view_image→edit 強制、r1 は別部屋を再生成したため破棄、
+      //   r2 で本物の r2 を編集 = 目視確認済) → apply-green-mask → strip。
+      //   OCCLUDERS: none・虫食いなしのクリーンな鉢植えだったため cleanup 不要。
+      front: {
+        src: "assets/objects/sakura-plant-floor-large-front.png",
+        nativeW: 114,
+        nativeH: 232,
+        cells: { w: 1, h: 1 },
+        source: SAKURA_ROOM_MOODBOARD,
+      },
+    },
+  },
+  {
     id: "sakura-pouf-pink",
     label: "プーフ(丸スツール・ピンク)",
     defaultView: "front",

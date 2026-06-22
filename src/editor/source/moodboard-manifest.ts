@@ -131,8 +131,7 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     labelJa: "観葉植物 (床置き・大)",
     group: "床家具",
     location: "右壁ぎわ床・本棚右脇",
-    catalogId: null,
-    note: "白鉢の床置き大型グリーン。plant kind の床置き entry が未作成。",
+    catalogId: "sakura-plant-floor-large",
   },
 
   // ── 床敷き ──
