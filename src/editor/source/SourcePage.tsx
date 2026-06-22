@@ -12,61 +12,7 @@ import {
   type ViewExtractionCell,
 } from "./moodboard-manifest.js";
 import { OBJECT_CATALOG, VIEW_LABEL, type ObjectVariant, type ObjectViewName } from "../scene/objects-catalog.js";
-
-interface MaskBbox {
-  file: string;
-  stem: string;
-  canvasW: number;
-  canvasH: number;
-  bbox: { x: number; y: number; w: number; h: number };
-  mtime: number;
-}
-
-// variant.src "assets/objects/sakura-bookshelf-front.png" から stem を引き出す
-function stemFromVariantSrc(src: string): string {
-  return src.replace(/^assets\/objects\//, "").replace(/\.png$/, "");
-}
-
-// 視点 suffix (catalog の variant src で使われる) を剥がすと「家具本体の stem」が出る。
-// "sakura-bookshelf-dimetric" → "sakura-bookshelf"
-// "sakura-bed-pink-single-leftwall" → "sakura-bed-pink-single"
-const VIEW_SUFFIXES = ["front-dimetric", "dimetric", "leftwall", "rightwall", "front"];
-
-function stemCandidates(src: string): string[] {
-  const base = stemFromVariantSrc(src);
-  const out = [base];
-  for (const suf of VIEW_SUFFIXES) {
-    if (base.endsWith(`-${suf}`)) {
-      out.push(base.slice(0, -(suf.length + 1)));
-      break;
-    }
-  }
-  return out;
-}
-
-// stem マッチ: 完全一致 or "-" 境界で片方が他方のプレフィックスなら OK。
-// 「sakura-sofa-green」(mask) ⊂ 「sakura-sofa-green-floor」(catalog) は OK。
-// 「sakura-bed-altlayout」(mask) と「sakura-bed-pink-single」(catalog) は NG (互いに prefix でない)。
-function stemMatches(maskStem: string, candidate: string): boolean {
-  if (maskStem === candidate) return true;
-  if (maskStem.startsWith(candidate + "-")) return true;
-  if (candidate.startsWith(maskStem + "-")) return true;
-  return false;
-}
-
-function findBboxForVariant(
-  variant: ObjectVariant,
-  expectCanvasW: number,
-  expectCanvasH: number,
-  bySource: MaskBbox[],
-): MaskBbox | null {
-  const candidates = bySource.filter((m) => m.canvasW === expectCanvasW && m.canvasH === expectCanvasH);
-  for (const stem of stemCandidates(variant.src)) {
-    const hit = candidates.find((m) => stemMatches(m.stem, stem));
-    if (hit) return hit;
-  }
-  return null;
-}
+import { findBboxForVariant, type MaskBbox } from "./mask-match.js";
 
 const STATUS_COLOR: Record<ItemStatus, string> = {
   extracted: "var(--ok, #3a6)",
