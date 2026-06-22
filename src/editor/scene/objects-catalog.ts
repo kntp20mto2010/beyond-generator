@@ -358,6 +358,18 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     kind: "sofa",
     placement: "floor",
     views: {
+      // front: altlayout-r5 head-on 部屋 (4 家具集中版) から緑マスク pipeline で抽出。
+      //   緑マスク → apply-green-mask (padding 0.1) → prep-fillin (margin 0.08) →
+      //   crop-mask-with-roomctx (margin 0.30) → Codex cleanup-minimal (OCCLUDERS: none)
+      //   → strip-fake-transparency (tight-crop, pad 12)。
+      //   silhouette が完全に見えていたため補完不要、ほぼ input pixel そのまま出た。
+      front: {
+        src: "assets/objects/sakura-sofa-green-floor-front.png",
+        nativeW: 594,
+        nativeH: 303,
+        cells: { w: 2, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R3,
+      },
       // front-dimetric: moodboard r2 中央 sage green クラウドソファ
       // pipeline: 緑マスク r1 → apply-green-mask (padding 0.1) →
       //   Codex cleanup (虫食い補完 prompt 厳格版 r5b)
