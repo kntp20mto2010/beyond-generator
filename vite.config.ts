@@ -1,6 +1,10 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { writeFile, mkdir, readFile } from "node:fs/promises";
+import { writeFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const pExecFile = promisify(execFile);
 
 // 新キャラタブのスナップ機能専用 middleware。
 // POST /__pose-snapshot { name, dataUrl } → tmp/pose-snapshots/<ts>-<name>.png に保存し
@@ -140,7 +144,184 @@ function objectFlipPlugin(): Plugin {
   };
 }
 
+// assets/generated/*.png をリスト化して返す。
+// GET /__generated-list?limit=30
+// 各エントリ: { src, basename, size, mtime, importedAs? }
+// importedAs は同名の assets/objects/<basename>.png が存在すれば、その相対パス。
+function generatedListPlugin(): Plugin {
+  return {
+    name: "generated-list",
+    configureServer(server) {
+      server.middlewares.use("/__generated-list", async (req, res) => {
+        if (req.method && req.method !== "GET") {
+          res.statusCode = 405; res.end("GET only"); return;
+        }
+        try {
+          const dir = "assets/generated";
+          const url = new URL(req.url ?? "/", "http://localhost");
+          const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 60)));
+          const filter = (url.searchParams.get("filter") ?? "").toLowerCase();
+          const names = await readdir(dir);
+          const pngs = names.filter((n) => n.toLowerCase().endsWith(".png"));
+          const stats = await Promise.all(
+            pngs.map(async (n) => {
+              const s = await stat(`${dir}/${n}`);
+              return { name: n, size: s.size, mtime: s.mtimeMs };
+            }),
+          );
+          // newest first
+          stats.sort((a, b) => b.mtime - a.mtime);
+          const filtered = filter ? stats.filter((s) => s.name.toLowerCase().includes(filter)) : stats;
+          const slice = filtered.slice(0, limit);
+          // import 状態: 同名(タイムスタンプ除いた basename)の assets/objects/<name>.png が存在するか
+          // 単純化のため、basename を完全一致でチェックする(将来的に「-20260618」等の suffix 除去を入れてもよい)
+          const objectNames = new Set(
+            (await readdir("assets/objects").catch(() => [] as string[])).filter((n) => n.toLowerCase().endsWith(".png")),
+          );
+          const entries = slice.map((s) => ({
+            src: `${dir}/${s.name}`,
+            basename: s.name,
+            size: s.size,
+            mtime: s.mtime,
+            importedAs: objectNames.has(s.name) ? `assets/objects/${s.name}` : null,
+          }));
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ entries, total: filtered.length }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(String((e as Error)?.message ?? e));
+        }
+      });
+    },
+  };
+}
+
+// Codex 生成物 → 透過 PNG への chroma-key+クロップ取り込み。
+// POST /__object-import { src, outputName, brightThresh?, satThresh?, largestOnly?, noCrop? }
+// - src: "assets/generated/..." のみ許可
+// - outputName: 安全なファイル名(英数とハイフン/アンダースコアのみ、拡張子なし)
+// 内部で `python3 scripts/chromakey-import.py` を実行。
+function objectImportPlugin(): Plugin {
+  return {
+    name: "object-import",
+    configureServer(server) {
+      server.middlewares.use("/__object-import", async (req, res) => {
+        if (req.method !== "POST") { res.statusCode = 405; res.end("POST only"); return; }
+        try {
+          let body = "";
+          for await (const chunk of req) body += chunk as string;
+          const params = JSON.parse(body) as {
+            src?: string; outputName?: string;
+            brightThresh?: number; satThresh?: number;
+            largestOnly?: boolean; noCrop?: boolean;
+          };
+          const { src, outputName } = params;
+          if (typeof src !== "string" || !src.startsWith("assets/generated/") || src.includes("..")) {
+            res.statusCode = 400; res.end("bad src (must be under assets/generated/)"); return;
+          }
+          if (typeof outputName !== "string" || !/^[a-zA-Z0-9_-]+$/.test(outputName)) {
+            res.statusCode = 400; res.end("bad outputName (only [a-zA-Z0-9_-])"); return;
+          }
+          const output = `assets/objects/${outputName}.png`;
+          const bright = Number.isFinite(params.brightThresh) ? Number(params.brightThresh) : 235;
+          const sat = Number.isFinite(params.satThresh) ? Number(params.satThresh) : 10;
+          const largestOnly = params.largestOnly !== false; // default true
+          const noCrop = params.noCrop === true;
+          const args = [
+            "scripts/chromakey-import.py", src, output,
+            "--bright", String(bright),
+            "--saturation", String(sat),
+            ...(largestOnly ? ["--largest-only"] : []),
+            ...(noCrop ? ["--no-crop"] : []),
+          ];
+          await mkdir("assets/objects", { recursive: true });
+          const { stdout, stderr } = await pExecFile("python3", args, { maxBuffer: 4 * 1024 * 1024 });
+          // stdout 例: "INPUT (WxH) -> OUTPUT (WxH, X.X% transparent)"
+          const m = stdout.match(/->\s*\S+\s*\((\d+)x(\d+),\s*([\d.]+)% transparent\)/);
+          const result = m
+            ? { width: Number(m[1]), height: Number(m[2]), transparentPct: Number(m[3]) }
+            : null;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ ok: true, output, result, stdout, stderr }));
+        } catch (e) {
+          const err = e as { message?: string; stderr?: string };
+          res.statusCode = 500;
+          res.end(JSON.stringify({ ok: false, error: err.message, stderr: err.stderr }));
+        }
+      });
+    },
+  };
+}
+
+// assets/objects/*.png の alpha 透過状況を報告。GET /__object-alpha
+// scripts/object-alpha-report.py の JSON {files:[{src,w,h,transparentPct,opaque}]} をそのまま返す。
+// ObjectPage が「透過済/要透過」バッジ・フィルタ・件数に使う。
+function objectAlphaPlugin(): Plugin {
+  return {
+    name: "object-alpha",
+    configureServer(server) {
+      server.middlewares.use("/__object-alpha", async (req, res) => {
+        if (req.method && req.method !== "GET") { res.statusCode = 405; res.end("GET only"); return; }
+        try {
+          const { stdout } = await pExecFile("python3", ["scripts/object-alpha-report.py"], { maxBuffer: 8 * 1024 * 1024 });
+          res.setHeader("Content-Type", "application/json");
+          res.end(stdout);
+        } catch (e) {
+          const err = e as { message?: string; stderr?: string };
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message, stderr: err.stderr }));
+        }
+      });
+    },
+  };
+}
+
+// 既存カタログ画像を「その場で」透過化する。POST /__object-make-transparent { src, brightThresh?, satThresh?, largestOnly? }
+// - src: "assets/objects/..." の .png のみ許可(他パスへの書き込み防止)
+// - chromakey-import.py を --no-crop で in-place 実行 = 寸法を変えない(catalog の nativeW/H が崩れない)。
+//   端からの flood-fill で外周の白系背景だけを alpha=0 にし、内部の白系ディテールは維持する。
+function objectMakeTransparentPlugin(): Plugin {
+  return {
+    name: "object-make-transparent",
+    configureServer(server) {
+      server.middlewares.use("/__object-make-transparent", async (req, res) => {
+        if (req.method !== "POST") { res.statusCode = 405; res.end("POST only"); return; }
+        try {
+          let body = "";
+          for await (const chunk of req) body += chunk as string;
+          const params = JSON.parse(body) as {
+            src?: string; brightThresh?: number; satThresh?: number; largestOnly?: boolean;
+          };
+          const { src } = params;
+          if (typeof src !== "string" || !src.startsWith("assets/objects/") || src.includes("..") || !src.endsWith(".png")) {
+            res.statusCode = 400; res.end("bad src (must be a .png under assets/objects/)"); return;
+          }
+          const bright = Number.isFinite(params.brightThresh) ? Number(params.brightThresh) : 235;
+          const sat = Number.isFinite(params.satThresh) ? Number(params.satThresh) : 10;
+          const largestOnly = params.largestOnly === true; // 既定 false: in-place は全成分維持が安全
+          const args = [
+            "scripts/chromakey-import.py", src, src,
+            "--bright", String(bright),
+            "--saturation", String(sat),
+            "--no-crop",
+            ...(largestOnly ? ["--largest-only"] : []),
+          ];
+          const { stdout, stderr } = await pExecFile("python3", args, { maxBuffer: 4 * 1024 * 1024 });
+          const m = stdout.match(/->\s*\S+\s*\((\d+)x(\d+),\s*([\d.]+)% transparent\)/);
+          const result = m ? { width: Number(m[1]), height: Number(m[2]), transparentPct: Number(m[3]) } : null;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ ok: true, src, result, stdout, stderr }));
+        } catch (e) {
+          const err = e as { message?: string; stderr?: string };
+          res.statusCode = 500;
+          res.end(JSON.stringify({ ok: false, error: err.message, stderr: err.stderr }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin()],
+  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin(), generatedListPlugin(), objectImportPlugin(), objectAlphaPlugin(), objectMakeTransparentPlugin()],
   server: { port: 5273, strictPort: true },
 });

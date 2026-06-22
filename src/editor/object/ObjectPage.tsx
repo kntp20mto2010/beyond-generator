@@ -56,7 +56,7 @@ async function flipImageHorizontally(url: string): Promise<string> {
   return canvas.toDataURL("image/png");
 }
 
-export function ObjectPage() {
+export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: string) => void }) {
   // 各 def の各 view を1タイルとして並べる。家具によっては 1 view、2 view 両方を持つ。
   const allTiles: { def: ObjectDef; view: ObjectViewName; variant: ObjectVariant }[] = [];
   for (const def of OBJECT_CATALOG) {
@@ -75,9 +75,18 @@ export function ObjectPage() {
   const anglesUsed = Array.from(
     new Set(allTiles.map((t) => t.view)),
   );
+  // 抽出元 (moodboard から切り出した家具) が一つでもあればフィルタ行を出す
+  const hasAnySource = OBJECT_CATALOG.some((d) => !!d.source);
   const [selectedKinds, setSelectedKinds] = useState<Set<ObjectKind>>(new Set());
   const [selectedPlacements, setSelectedPlacements] = useState<Set<ObjectPlacement>>(new Set());
   const [selectedAngles, setSelectedAngles] = useState<Set<ObjectViewName>>(new Set());
+  const [selectedSources, setSelectedSources] = useState<Set<"yes" | "no">>(new Set());
+  // 透過状況: src -> { transparentPct, opaque }。/__object-alpha から取得。alphaVersion を上げると再取得。
+  const [alphaMap, setAlphaMap] = useState<Record<string, { transparentPct: number; opaque: boolean }> | null>(null);
+  const [alphaVersion, setAlphaVersion] = useState(0);
+  const [selectedTrans, setSelectedTrans] = useState<Set<"done" | "todo">>(new Set());
+  // 不足角度フィルタ (floor 家具で未生成の view を絞る)
+  const [selectedMissing, setSelectedMissing] = useState<Set<ObjectViewName>>(new Set());
   const toggleKind = (k: ObjectKind) =>
     setSelectedKinds((prev) => {
       const next = new Set(prev);
@@ -106,10 +115,79 @@ export function ObjectPage() {
       next.has(a) ? next.delete(a) : next.add(a);
       return next;
     });
-  const tiles = allTiles.filter(({ def, view }) => {
+  const toggleSource = (s: "yes" | "no") =>
+    setSelectedSources((prev) => {
+      const next = new Set(prev);
+      next.has(s) ? next.delete(s) : next.add(s);
+      return next;
+    });
+  const toggleTrans = (t: "done" | "todo") =>
+    setSelectedTrans((prev) => {
+      const next = new Set(prev);
+      next.has(t) ? next.delete(t) : next.add(t);
+      return next;
+    });
+
+  // 透過状況をサーバから取得 (alphaVersion で再取得)
+  useEffect(() => {
+    let live = true;
+    fetch(`/__object-alpha`)
+      .then((r) => r.json())
+      .then((data: { files?: { src: string; transparentPct?: number; opaque?: boolean }[] }) => {
+        if (!live) return;
+        const map: Record<string, { transparentPct: number; opaque: boolean }> = {};
+        for (const f of data.files ?? []) {
+          if (typeof f.transparentPct === "number") {
+            map[f.src] = { transparentPct: f.transparentPct, opaque: !!f.opaque };
+          }
+        }
+        setAlphaMap(map);
+      })
+      .catch(() => { if (live) setAlphaMap({}); });
+    return () => { live = false; };
+  }, [alphaVersion]);
+
+  // src の透過状態: done(透過済) / todo(要透過) / unknown(未取得)
+  const transOf = (src: string): "done" | "todo" | "unknown" => {
+    if (!alphaMap) return "unknown";
+    const e = alphaMap[src];
+    if (!e) return "unknown";
+    return e.opaque ? "todo" : "done";
+  };
+  const opaqueCount = alphaMap ? allTiles.filter((t) => transOf(t.variant.src) === "todo").length : 0;
+
+  // def が持てる角度のうち未生成のもの (floor 家具のみ対象。front 専用 placement は空)
+  const missingAnglesOf = (def: ObjectDef): ObjectViewName[] => {
+    if (!def.placement) return [];
+    const allowed = ALLOWED_ANGLES_BY_PLACEMENT[def.placement];
+    if (allowed.length <= 1) return [];
+    return allowed.filter((a) => !def.views[a]);
+  };
+  const toggleMissing = (a: ObjectViewName) =>
+    setSelectedMissing((prev) => {
+      const next = new Set(prev);
+      next.has(a) ? next.delete(a) : next.add(a);
+      return next;
+    });
+  // 不足角度ごとの家具数 (def 単位)
+  const missingCounts: Record<ObjectViewName, number> = { front: 0, "front-dimetric": 0, side: 0 };
+  for (const def of OBJECT_CATALOG) {
+    for (const a of missingAnglesOf(def)) missingCounts[a] += 1;
+  }
+
+  const tiles = allTiles.filter(({ def, view, variant }) => {
     if (selectedKinds.size > 0 && (!def.kind || !selectedKinds.has(def.kind))) return false;
     if (selectedPlacements.size > 0 && (!def.placement || !selectedPlacements.has(def.placement))) return false;
     if (selectedAngles.size > 0 && !selectedAngles.has(view)) return false;
+    if (selectedSources.size > 0 && !selectedSources.has(def.source ? "yes" : "no")) return false;
+    if (selectedTrans.size > 0 && alphaMap) {
+      const st = transOf(variant.src);
+      if (st === "unknown" || !selectedTrans.has(st)) return false;
+    }
+    if (selectedMissing.size > 0) {
+      const miss = missingAnglesOf(def);
+      if (![...selectedMissing].some((a) => miss.includes(a))) return false;
+    }
     return true;
   });
 
@@ -117,7 +195,8 @@ export function ObjectPage() {
     <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "var(--bg-app)", color: "var(--text)" }}>
       <div style={{ fontWeight: 700, marginBottom: "12px", fontSize: "14px" }}>
         オブジェクト({OBJECT_CATALOG.length} 家具 / {allTiles.length} 視点バリアント
-        {tiles.length !== allTiles.length ? ` ・ 表示中 ${tiles.length}` : ""})
+        {tiles.length !== allTiles.length ? ` ・ 表示中 ${tiles.length}` : ""}
+        {opaqueCount > 0 ? <span style={{ color: "var(--err, #c44)" }}> ・ 要透過 {opaqueCount}</span> : ""})
       </div>
       <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "12px" }}>
         カタログの全オブジェクト。各家具は front / side の 2 視点を持てる。
@@ -157,6 +236,46 @@ export function ObjectPage() {
         }
         disabledTitle="選択中の配置では使われない角度"
       />
+      {hasAnySource && (
+        <FilterChipRow
+          label="抽出元"
+          items={[
+            { key: "yes", label: "あり" },
+            { key: "no", label: "なし" },
+          ]}
+          selected={selectedSources as Set<string>}
+          onToggle={(s) => toggleSource(s as "yes" | "no")}
+          onClear={() => setSelectedSources(new Set())}
+        />
+      )}
+      <FilterChipRow
+        label="透過"
+        items={[
+          { key: "todo", label: "要透過" },
+          { key: "done", label: "透過済" },
+        ]}
+        selected={selectedTrans as Set<string>}
+        onToggle={(t) => toggleTrans(t as "done" | "todo")}
+        onClear={() => setSelectedTrans(new Set())}
+      />
+      <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "10px" }}>
+        「要透過」= 背景が透過されていない (alpha 全面不透明)。各タイルの「透過する」で
+        chromakey(端から白系背景を flood-fill 除去)を in-place 実行する(寸法は維持)。
+      </div>
+      <FilterChipRow
+        label="不足角度"
+        items={(["front", "front-dimetric", "side"] as ObjectViewName[]).map((a) => ({
+          key: a,
+          label: `${VIEW_LABEL[a]}なし${missingCounts[a] ? ` (${missingCounts[a]})` : ""}`,
+        }))}
+        selected={selectedMissing as Set<string>}
+        onToggle={(a) => toggleMissing(a as ObjectViewName)}
+        onClear={() => setSelectedMissing(new Set())}
+      />
+      <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "10px" }}>
+        floor 家具は <b>正面 / 立体 / 壁付</b> の 3 角度を持てる。各タイルの「角度:」行で充足
+        (✓) / 不足 (—) を確認できる。moodboard は主に「立体」を供給するため、多くは「正面」が穴。
+      </div>
       <div
         style={{
           display: "grid",
@@ -166,7 +285,15 @@ export function ObjectPage() {
         }}
       >
         {tiles.map(({ def, view, variant }) => (
-          <ObjectTile key={`${def.id}|${view}`} def={def} view={view} variant={variant} />
+          <ObjectTile
+            key={`${def.id}|${view}`}
+            def={def}
+            view={view}
+            variant={variant}
+            trans={transOf(variant.src)}
+            onAfterTransparent={() => setAlphaVersion((v) => v + 1)}
+            onJumpToSource={onJumpToSource}
+          />
         ))}
       </div>
       <GeneratedImportSection />
@@ -594,13 +721,47 @@ function ProjectionPromptSection({ variant }: { variant: ObjectVariant }) {
 
 // ─── 既存カタログタイル ──────────────────────────────
 
-function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewName; variant: ObjectVariant }) {
+function ObjectTile({
+  def,
+  view,
+  variant,
+  trans,
+  onAfterTransparent,
+  onJumpToSource,
+}: {
+  def: ObjectDef;
+  view: ObjectViewName;
+  variant: ObjectVariant;
+  trans: "done" | "todo" | "unknown";
+  onAfterTransparent: () => void;
+  onJumpToSource: (sourcePath: string) => void;
+}) {
   const cells = variantCells(variant);
   const scale = containScale(variant.nativeW, variant.nativeH, cells);
   const [version, setVersion] = useState(0);
   const [url, setUrl] = useState<string | undefined>();
   const [flip, setFlip] = useState<FlipState>({ status: "idle" });
+  const [transp, setTransp] = useState<FlipState>({ status: "idle" });
   const isDefault = def.defaultView === view;
+
+  const handleMakeTransparent = async () => {
+    setTransp({ status: "running" });
+    try {
+      const res = await fetch("/__object-make-transparent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ src: variant.src }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || data.stderr || `server ${res.status}`);
+      const pct = data.result?.transparentPct;
+      setTransp({ status: "ok", message: `透過化済み${typeof pct === "number" ? ` (${pct.toFixed(1)}% 透過)` : ""}` });
+      setVersion((v) => v + 1); // 画像再読込
+      onAfterTransparent(); // 親の透過マップ再取得
+    } catch (e) {
+      setTransp({ status: "error", message: String((e as Error)?.message ?? e) });
+    }
+  };
 
   useEffect(() => {
     let live = true;
@@ -701,8 +862,30 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
           <span style={{ fontSize: "9px", color: "var(--text-dim)", fontWeight: 400 }}>(default)</span>
         )}
       </div>
-      {(def.kind || def.placement) && (
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {trans !== "unknown" && (
+          <span
+            style={{
+              fontSize: "10px",
+              padding: "1px 6px",
+              borderRadius: 10,
+              background: trans === "done" ? "var(--ok, #3a6)" : "var(--err, #c44)",
+              color: "white",
+              border: "1px solid var(--border)",
+              fontWeight: 600,
+            }}
+            title={trans === "done" ? "背景が透過済み" : "背景が透過されていない (alpha 全面不透明)"}
+          >
+            {trans === "done" ? "透過済" : "要透過"}
+          </span>
+        )}
+        {trans === "unknown" && (
+          <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: 10, background: "var(--bg-elev)", color: "var(--text-dim)", border: "1px solid var(--border)" }}>
+            透過 判定中…
+          </span>
+        )}
+        {(def.kind || def.placement || def.source) && (
+          <>
           {def.kind && (
             <span
               style={{
@@ -733,6 +916,47 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
               {PLACEMENT_LABEL[def.placement]}
             </span>
           )}
+          {def.source && (
+            <button
+              type="button"
+              onClick={() => onJumpToSource(def.source!)}
+              style={{
+                fontSize: "10px",
+                padding: "1px 6px",
+                borderRadius: 10,
+                background: "var(--ok, #3a6)",
+                color: "white",
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+              title={`抽出元タブへジャンプ: ${def.source}`}
+            >
+              抽出元あり ⤴
+            </button>
+          )}
+          </>
+        )}
+      </div>
+      {def.placement === "floor" && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: "10px" }}>
+          <span style={{ color: "var(--text-dim)" }}>角度:</span>
+          {(["front", "front-dimetric", "side"] as ObjectViewName[]).map((a) => {
+            const has = !!def.views[a];
+            return (
+              <span
+                key={a}
+                style={{
+                  color: has ? "var(--ok, #3a6)" : "var(--text-dim)",
+                  fontWeight: has ? 600 : 400,
+                  opacity: has ? 1 : 0.7,
+                }}
+                title={has ? `${VIEW_LABEL[a]} あり` : `${VIEW_LABEL[a]} なし (要生成)`}
+              >
+                {VIEW_LABEL[a]}{has ? "✓" : "—"}
+              </span>
+            );
+          })}
         </div>
       )}
       <div style={{ fontFamily: "monospace", fontSize: "10px", color: "var(--text-dim)", lineHeight: 1.5 }}>
@@ -740,6 +964,9 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
         <div>src: {variant.src.replace(/^assets\/objects\//, "")}</div>
         <div>native: {variant.nativeW} × {variant.nativeH}</div>
         <div>cells: {cells.w} × {cells.h} (scale {scale.toFixed(3)})</div>
+        {def.source && (
+          <div title={def.source}>抽出元: {def.source.replace(/^assets\/generated\//, "")}</div>
+        )}
         {variant.seat && (
           <div>
             seat: dx={variant.seat.dx}, dy={variant.seat.dy}
@@ -751,10 +978,36 @@ function ObjectTile({ def, view, variant }: { def: ObjectDef; view: ObjectViewNa
 
       <button
         className="ui-btn"
+        onClick={handleMakeTransparent}
+        disabled={transp.status === "running"}
+        title="chromakey(端から白系背景を flood-fill 除去)を in-place 実行して背景を透過します。寸法は維持。"
+        style={{
+          marginTop: "auto",
+          fontSize: "11px",
+          ...(trans === "todo"
+            ? { background: "var(--err, #c44)", color: "white", fontWeight: 600 }
+            : {}),
+        }}
+      >
+        {transp.status === "running" ? "透過中..." : trans === "todo" ? "透過する (要透過)" : "透過する"}
+      </button>
+      {transp.message && (
+        <div
+          style={{
+            fontSize: "10px",
+            color: transp.status === "error" ? "var(--err, #c44)" : "var(--ok, #3a6)",
+            wordBreak: "break-all",
+          }}
+        >
+          {transp.message}
+        </div>
+      )}
+      <button
+        className="ui-btn"
         onClick={handleFlip}
         disabled={!url || flip.status === "running"}
         title="画像を左右反転して assets/objects/ の同じファイルに上書きします"
-        style={{ marginTop: "auto", fontSize: "11px" }}
+        style={{ fontSize: "11px" }}
       >
         {flip.status === "running" ? "反転中..." : "水平反転して上書き"}
       </button>

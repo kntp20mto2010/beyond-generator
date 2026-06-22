@@ -7,6 +7,7 @@ import { ContactSheetPage } from "./editor/character/ContactSheetPage.js";
 import { ClipSheetPage } from "./editor/character/ClipSheetPage.js";
 import { SpriteRigPage } from "./editor/newchar/SpriteRigPage.js";
 import { ObjectPage } from "./editor/object/ObjectPage.js";
+import { SourcePage } from "./editor/source/SourcePage.js";
 import { useUiStore } from "./editor/ui-store.js";
 
 const store = new DocStore(createEmptyProject());
@@ -16,7 +17,7 @@ if (import.meta.env.DEV) {
   (globalThis as unknown as { __byondStore?: unknown }).__byondStore = store;
 }
 
-type Tab = "scene" | "character" | "newchar" | "object";
+type Tab = "scene" | "character" | "newchar" | "object" | "source";
 
 // ハッシュルートは初回判定のみ(リアクティブルーティング不要)
 const IS_CONTACT_SHEET = location.hash === "#contact-sheet";
@@ -27,7 +28,7 @@ const TAB_KEY = "byond.activeTab";
 function loadTab(): Tab {
   try {
     const v = localStorage.getItem(TAB_KEY);
-    if (v === "scene" || v === "character" || v === "newchar" || v === "object") return v;
+    if (v === "scene" || v === "character" || v === "newchar" || v === "object" || v === "source") return v;
   } catch {
     /* localStorage 不可環境は既定へ */
   }
@@ -36,6 +37,8 @@ function loadTab(): Tab {
 
 function App() {
   const [tab, setTabState] = useState<Tab>(loadTab);
+  // 抽出元タブへジャンプする際、スクロール先の moodboard パスを一時保持する
+  const [jumpToSource, setJumpToSource] = useState<string | null>(null);
   const setTab = (t: Tab) => {
     setTabState(t);
     try {
@@ -43,6 +46,11 @@ function App() {
     } catch {
       /* 保存不可でも遷移は続行 */
     }
+  };
+  // オブジェクトの「抽出元あり ⤴」から呼ばれる: 抽出元タブへ遷移し、該当 moodboard へスクロール
+  const goToSource = (sourcePath: string) => {
+    setJumpToSource(sourcePath);
+    setTab("source");
   };
   const fs = useUiStore((s) => s.fs);
 
@@ -81,6 +89,12 @@ function App() {
         >
           オブジェクト
         </button>
+        <button
+          className={`app-tab${tab === "source" ? " app-tab--active" : ""}`}
+          onClick={() => setTab("source")}
+        >
+          抽出元
+        </button>
       </nav>
       {tab === "character" ? (
         <CharacterEditorPage fs={fs} />
@@ -88,8 +102,10 @@ function App() {
         <ScenePage store={store} />
       ) : tab === "newchar" ? (
         <SpriteRigPage />
+      ) : tab === "object" ? (
+        <ObjectPage onJumpToSource={goToSource} />
       ) : (
-        <ObjectPage />
+        <SourcePage jumpTarget={jumpToSource} onJumpHandled={() => setJumpToSource(null)} />
       )}
     </div>
   );

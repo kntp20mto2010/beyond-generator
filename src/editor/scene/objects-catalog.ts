@@ -164,6 +164,11 @@ export function effectivePlacementRule(def: ObjectDef): PlacementRule | undefine
   return undefined;
 }
 
+// 緑マスク pipeline で個別家具を切り出した「抽出元」moodboard (部屋全体絵)。
+// この出自を持つ家具は ObjectDef.source に設定する。ObjectPage の「抽出元」フィルタで使う。
+export const SAKURA_ROOM_MOODBOARD =
+  "assets/generated/sakura-room-ideal-layout-ken-style-r2-20260620.png";
+
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
   id: string;
@@ -173,6 +178,9 @@ export interface ObjectDef {
   kind?: ObjectKind;
   placement?: ObjectPlacement;
   placementRule?: PlacementRule;
+  // 抽出元 moodboard のパス(リポジトリ相対)。緑マスクで部屋全体絵から切り出した家具に設定。
+  // 未設定 = ゼロから(プロンプト)生成。ObjectPage の「抽出元 あり/なし」フィルタで使う。
+  source?: string;
 }
 
 export const OBJECT_CATALOG: ObjectDef[] = [
@@ -272,15 +280,14 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     kind: "bed",
     placement: "floor",
     views: {
-      // front-dimetric: dimetric 2:1 + sitting eye-level + L1b 無アウトライン
+      // front-dimetric: altlayout-r1 部屋から緑マスク → apply-green-mask → prep-fillin-canvas →
+      //   crop-mask-with-roomctx + Codex cleanup (2 参照, OCCLUDERS: none) → strip-fake-transparency。
+      //   旧版 (moodboard r2 dimetric 1253x644 側面 3/4 view) を foot-forward 3/4 view で置き換え。
       "front-dimetric": {
         src: "assets/objects/sakura-bed-pink-single-dimetric.png",
-        nativeW: 1253,
-        nativeH: 644,
-        cells: { w: 5, h: 3 },
-        seat: { dx: 0, dy: -432 },
-        projection: "dimetric-2to1-sitting",
-        promptFile: "sakura-bed-pink-single-sitting-2to1-l1b-v1-20260619",
+        nativeW: 546,
+        nativeH: 564,
+        cells: { w: 2, h: 2 },
       },
       // side: moodboard r2 部屋全体保持 → ベッド以外透明化 → crop-alpha-bbox.py で grayscale chromakey + bbox crop
       side: {
@@ -299,6 +306,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-sofa-green-floor",
     label: "ソファ(緑フロア)",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "sofa",
     placement: "floor",
     views: {
@@ -321,6 +329,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-window-curtain",
     label: "窓+カーテン",
     defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "window",
     placement: "back-wall",
     // 窓は端寄せ厳禁(壁の天井/床境界に貼らないため上下 1 cell マージン)。
@@ -393,9 +402,17 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wardrobe",
     label: "ワードローブ",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "storage",
     placement: "floor",
     views: {
+      // front: altlayout-r1 部屋から緑マスク → apply-green-mask → step4 r5b 厳格版補完 → strip
+      front: {
+        src: "assets/objects/sakura-wardrobe-front.png",
+        nativeW: 281,
+        nativeH: 479,
+        cells: { w: 1, h: 2 },
+      },
       "front-dimetric": {
         src: "assets/objects/sakura-wardrobe-dimetric.png",
         nativeW: 553,
@@ -422,9 +439,18 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-bookshelf",
     label: "本棚",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "storage",
     placement: "floor",
     views: {
+      // front: altlayout-r1 部屋から緑マスク → apply-green-mask → step4 r7 (単独依頼で
+      //   パース維持指示あり, KEN 肯定評価) → strip-fake-transparency。フロー2 (KEN 評価済み版を凍結) 採用。
+      front: {
+        src: "assets/objects/sakura-bookshelf-front.png",
+        nativeW: 233,
+        nativeH: 395,
+        cells: { w: 1, h: 2 },
+      },
       "front-dimetric": {
         src: "assets/objects/sakura-bookshelf-dimetric.png",
         nativeW: 424,
@@ -485,6 +511,22 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 1401,
         nativeH: 545,
         cells: { w: 5, h: 3 },
+      },
+    },
+  },
+  {
+    id: "sakura-rug-cloud",
+    label: "ラグ(雲)",
+    defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
+    kind: "rug",
+    placement: "ground",
+    views: {
+      front: {
+        src: "assets/objects/sakura-rug-cloud.png",
+        nativeW: 1360,
+        nativeH: 347,
+        cells: { w: 5, h: 2 },
       },
     },
   },
