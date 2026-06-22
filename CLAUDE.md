@@ -25,6 +25,13 @@ KEN ルール: 「ファイルは残置、UI 側で hidden 化」。
 ### 4. Hidden 物を議論に混ぜない
 catalog-hidden に入っているものは「無いものとして」扱う。進捗表・統計・推薦・提案の対象外。
 
+### 5. Codex の緑マスク/編集出力は「本物の moodboard か」必ず目視確認してから次工程へ
+Codex は references に画像を渡し、プロンプトで view_image 強制・「読めなければ fail」と書いても、**flakily 参照を無視して部屋ごと新規生成する** (写実的な別部屋になり、OCCLUDERS テキストまで画像に焼き込まれることもある)。これは過去に何度も起きている (デスクチェア mask r1・ベッド edgepolish・床植物 mask r1)。
+
+- 緑マスク生成後は、**必ず Read で開いて「本物の sakura room (KEN フラット画風・正しいレイアウト) を編集したものか」を目視確認**してから apply-green-mask に進む。再生成された別部屋なら**即捨てて新 id でリトライ**。apply してから「なんか変」と気づくのでは遅い。
+- 「references に渡した」「validation が pass と言ってる」は信用しない (Codex の自己申告は嘘をつく)。自分の目で出力画像を見て確認する。
+- cleanup/edgepolish 出力も同様に、別物生成されてないか目視確認してから strip/登録する。
+
 ---
 
 ## Codexへの画像生成依頼
