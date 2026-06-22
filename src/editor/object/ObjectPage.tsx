@@ -775,6 +775,14 @@ function ObjectTile({
   onToggleHidden: () => void;
 }) {
   const isHidden = hiddenByDef || hiddenByVariant;
+  // 削除ボタンの確認状態。null = idle、"variant"/"def" = その scope で確認待ち
+  const [confirmScope, setConfirmScope] = useState<"variant" | "def" | null>(null);
+  // 確認状態は 4 秒で自動キャンセル
+  useEffect(() => {
+    if (!confirmScope) return;
+    const t = setTimeout(() => setConfirmScope(null), 4000);
+    return () => clearTimeout(t);
+  }, [confirmScope]);
   const cells = variantCells(variant);
   const scale = containScale(variant.nativeW, variant.nativeH, cells);
   const [version, setVersion] = useState(0);
@@ -784,13 +792,17 @@ function ObjectTile({
   const isDefault = def.defaultView === view;
 
   // scope: "def" = 家具ごと、"variant" = この視点だけ
+  // 非表示化は 2 段階クリック (idle → confirming → 実行)。復元は即実行。
   const toggleHidden = async (scope: "def" | "variant", currentlyHidden: boolean) => {
+    if (!currentlyHidden && confirmScope !== scope) {
+      // 1 段階目: 確認状態に入る (もう一度クリックすると実行)
+      setConfirmScope(scope);
+      return;
+    }
+    // 2 段階目 (もしくは復元): 実行
+    setConfirmScope(null);
     const id = scope === "def" ? def.id : `${def.id}|${view}`;
     const action = currentlyHidden ? "unhide" : "hide";
-    const verb = currentlyHidden
-      ? (scope === "def" ? "家具ごと復元" : "この視点の復元")
-      : (scope === "def" ? `家具ごと削除 (${def.label} の全視点を非表示)` : `この視点だけ削除 (${def.label} / ${VIEW_LABEL[view]})`);
-    if (!currentlyHidden && !confirm(`${verb} しますか？\n(ファイルは消えず UI から非表示になるだけ。catalog-hidden.json で管理。「非表示も表示」ON で復元ボタン)`)) return;
     try {
       const res = await fetch("/__catalog-hidden", {
         method: "POST",
@@ -801,7 +813,7 @@ function ObjectTile({
       if (!res.ok || !data.ok) throw new Error(data.error || `server ${res.status}`);
       onToggleHidden();
     } catch (e) {
-      alert(`${verb} 失敗: ${String((e as Error)?.message ?? e)}`);
+      alert(`削除/復元 失敗: ${String((e as Error)?.message ?? e)}`);
     }
   };
 
@@ -1084,41 +1096,68 @@ function ObjectTile({
         </div>
       )}
       <div style={{ display: "flex", gap: 4 }}>
-        <button
-          type="button"
-          onClick={() => toggleHidden("variant", hiddenByVariant)}
-          title={hiddenByVariant ? "この視点だけの非表示を解除" : `この視点 (${VIEW_LABEL[view]}) のタイルだけを非表示にする`}
-          style={{
-            flex: 1,
-            fontSize: "10px",
-            padding: "3px 6px",
-            background: "transparent",
-            color: hiddenByVariant ? "var(--ok, #3a6)" : "var(--text-dim)",
-            border: "1px dashed var(--border)",
-            borderRadius: 3,
-            cursor: "pointer",
-          }}
-        >
-          {hiddenByVariant ? "↩ 視点復元" : "✕ この視点だけ"}
-        </button>
-        <button
-          type="button"
-          onClick={() => toggleHidden("def", hiddenByDef)}
-          title={hiddenByDef ? "家具ごとの非表示を解除 (全視点)" : `家具ごと非表示 (${def.label} の全視点をまとめて隠す)`}
-          style={{
-            flex: 1,
-            fontSize: "10px",
-            padding: "3px 6px",
-            background: "transparent",
-            color: hiddenByDef ? "var(--ok, #3a6)" : "var(--text-dim)",
-            border: "1px dashed var(--border)",
-            borderRadius: 3,
-            cursor: "pointer",
-          }}
-        >
-          {hiddenByDef ? "↩ 家具復元" : "✕ 家具ごと"}
-        </button>
+        {(() => {
+          const isConfirm = confirmScope === "variant";
+          const label = hiddenByVariant
+            ? "↩ 視点復元"
+            : isConfirm
+              ? "もう一度押して削除"
+              : "✕ この視点だけ";
+          return (
+            <button
+              type="button"
+              onClick={() => toggleHidden("variant", hiddenByVariant)}
+              title={hiddenByVariant ? "この視点だけの非表示を解除" : `この視点 (${VIEW_LABEL[view]}) のタイルだけを非表示にする`}
+              style={{
+                flex: 1,
+                fontSize: "10px",
+                padding: "3px 6px",
+                background: isConfirm ? "var(--err, #c44)" : "transparent",
+                color: isConfirm ? "white" : hiddenByVariant ? "var(--ok, #3a6)" : "var(--text-dim)",
+                border: isConfirm ? "1px solid var(--err, #c44)" : "1px dashed var(--border)",
+                borderRadius: 3,
+                cursor: "pointer",
+                fontWeight: isConfirm ? 600 : 400,
+              }}
+            >
+              {label}
+            </button>
+          );
+        })()}
+        {(() => {
+          const isConfirm = confirmScope === "def";
+          const label = hiddenByDef
+            ? "↩ 家具復元"
+            : isConfirm
+              ? "もう一度押して全削除"
+              : "✕ 家具ごと";
+          return (
+            <button
+              type="button"
+              onClick={() => toggleHidden("def", hiddenByDef)}
+              title={hiddenByDef ? "家具ごとの非表示を解除 (全視点)" : `家具ごと非表示 (${def.label} の全視点をまとめて隠す)`}
+              style={{
+                flex: 1,
+                fontSize: "10px",
+                padding: "3px 6px",
+                background: isConfirm ? "var(--err, #c44)" : "transparent",
+                color: isConfirm ? "white" : hiddenByDef ? "var(--ok, #3a6)" : "var(--text-dim)",
+                border: isConfirm ? "1px solid var(--err, #c44)" : "1px dashed var(--border)",
+                borderRadius: 3,
+                cursor: "pointer",
+                fontWeight: isConfirm ? 600 : 400,
+              }}
+            >
+              {label}
+            </button>
+          );
+        })()}
       </div>
+      {confirmScope && (
+        <div style={{ fontSize: "10px", color: "var(--err, #c44)", textAlign: "center", marginTop: 2 }}>
+          確認待ち (4秒後にキャンセル)
+        </div>
+      )}
     </div>
   );
 }
