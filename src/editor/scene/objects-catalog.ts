@@ -277,6 +277,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-bed-pink-single",
     label: "ベッド(ピンク シングル)",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "bed",
     placement: "floor",
     views: {

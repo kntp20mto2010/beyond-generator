@@ -19,10 +19,18 @@ export interface MoodboardItem {
   note?: string;
 }
 
+// 1 つの moodboard 画像 (部屋を別レイアウト/別角度で再生成したバリエーション)。
+// 同じ部屋を別レイアウトで作り直して角度を増やす運用なので、複数枚で 1 source を構成する。
+export interface MoodboardImage {
+  path: string; // assets/generated/... リポジトリ相対
+  labelJa?: string; // 例 "理想レイアウト r2"、"別レイアウト r1 (足元 3/4 視点)"
+  contributes?: string; // この画像から取れる視点を任意で説明。例 "立体 (側面寄り 3/4)"
+}
+
 export interface MoodboardSource {
   id: string;
   labelJa: string;
-  imagePath: string; // リポジトリ相対の moodboard PNG
+  imagePaths: MoodboardImage[]; // 複数の room image を縦に並べる
   items: MoodboardItem[];
 }
 
@@ -32,11 +40,11 @@ export interface MoodboardSource {
 // - todo      : 対応する catalog entry がまだ無い (= 未作成)
 export type ItemStatus = "extracted" | "made" | "todo";
 
-export function itemStatus(item: MoodboardItem, moodboardPath: string): ItemStatus {
+export function itemStatus(item: MoodboardItem, moodboardPaths: string[]): ItemStatus {
   if (!item.catalogId) return "todo";
   const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
   if (!def) return "todo";
-  return def.source === moodboardPath ? "extracted" : "made";
+  return def.source && moodboardPaths.includes(def.source) ? "extracted" : "made";
 }
 
 export const STATUS_LABEL: Record<ItemStatus, string> = {
@@ -136,11 +144,25 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
   },
 ];
 
+// altlayout-r1: 同じ部屋を別の家具配置/向きで作り直したバリエーション (足元 3/4 視点等の角度補強用)
+const SAKURA_ROOM_ALTLAYOUT_R1 = "assets/generated/sakura-room-altlayout-r1-20260621.png";
+
 export const MOODBOARD_SOURCES: MoodboardSource[] = [
   {
-    id: "sakura-room-ideal-r2",
-    labelJa: "サクラルーム (理想レイアウト r2)",
-    imagePath: SAKURA_ROOM_MOODBOARD,
+    id: "sakura-room",
+    labelJa: "サクラルーム",
+    imagePaths: [
+      {
+        path: SAKURA_ROOM_MOODBOARD,
+        labelJa: "理想レイアウト r2",
+        contributes: "立体 (側面寄り 3/4) 中心、窓+カーテン・ラグ・ソファ・ワードローブ・本棚 など多くの家具の最初の moodboard",
+      },
+      {
+        path: SAKURA_ROOM_ALTLAYOUT_R1,
+        labelJa: "別レイアウト r1 (足元 3/4 視点)",
+        contributes: "正面寄り 3/4 (足元/前面向き) を補強。ベッド・学習デスク・ワードローブ・本棚 などの front を抽出可能",
+      },
+    ],
     items: SAKURA_ROOM_ITEMS,
   },
 ];

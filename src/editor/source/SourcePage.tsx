@@ -41,7 +41,7 @@ export function SourcePage({
   // 消灯タイマーは別 effect(highlightId 依存)に分離する(ここで持つと null 復帰の再実行でタイマーが消える)。
   useEffect(() => {
     if (!jumpTarget) return;
-    const target = MOODBOARD_SOURCES.find((s) => s.imagePath === jumpTarget);
+    const target = MOODBOARD_SOURCES.find((s) => s.imagePaths.some((im) => im.path === jumpTarget));
     onJumpHandled?.();
     if (!target) return;
     setHighlightId(target.id);
@@ -74,11 +74,12 @@ export function SourcePage({
 }
 
 function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: boolean }) {
+  const paths = useMemo(() => src.imagePaths.map((im) => im.path), [src]);
   const counts = useMemo(() => {
     const c: Record<ItemStatus, number> = { extracted: 0, made: 0, todo: 0 };
-    for (const it of src.items) c[itemStatus(it, src.imagePath)] += 1;
+    for (const it of src.items) c[itemStatus(it, paths)] += 1;
     return c;
-  }, [src]);
+  }, [src, paths]);
   const total = src.items.length;
 
   // group 見出しごとにまとめる(出現順を保持)
@@ -107,19 +108,38 @@ function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: bool
         boxShadow: highlight ? "0 0 0 3px color-mix(in srgb, var(--ok, #3a6) 35%, transparent)" : "none",
       }}
     >
-      <div style={{ fontWeight: 700, fontSize: "13px", marginBottom: "2px" }}>{src.labelJa}</div>
-      <div style={{ fontFamily: "monospace", fontSize: "10px", color: "var(--text-dim)", marginBottom: "10px" }}>
-        {src.imagePath}
+      <div style={{ fontWeight: 700, fontSize: "13px", marginBottom: "2px" }}>
+        {src.labelJa}
+        <span style={{ fontSize: "11px", color: "var(--text-dim)", fontWeight: 400, marginLeft: 6 }}>
+          ({src.imagePaths.length} 画像)
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" }}>
-        {/* 左: moodboard 画像 */}
-        <div style={{ flex: "1 1 360px", minWidth: "280px", maxWidth: "560px" }}>
-          <img
-            src={`/${src.imagePath}`}
-            alt={src.labelJa}
-            style={{ width: "100%", borderRadius: "6px", border: "1px solid var(--border)", display: "block" }}
-          />
+        {/* 左: moodboard 画像 (複数枚を縦に並べる) */}
+        <div style={{ flex: "1 1 360px", minWidth: "280px", maxWidth: "560px", display: "flex", flexDirection: "column", gap: "10px" }}>
+          {src.imagePaths.map((im, idx) => (
+            <div key={im.path}>
+              {im.labelJa && (
+                <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text)", marginBottom: "2px" }}>
+                  {idx + 1}. {im.labelJa}
+                </div>
+              )}
+              {im.contributes && (
+                <div style={{ fontSize: "10px", color: "var(--text-dim)", marginBottom: "4px", fontStyle: "italic" }}>
+                  {im.contributes}
+                </div>
+              )}
+              <img
+                src={`/${im.path}`}
+                alt={im.labelJa ?? im.path}
+                style={{ width: "100%", borderRadius: "6px", border: "1px solid var(--border)", display: "block" }}
+              />
+              <div style={{ fontFamily: "monospace", fontSize: "9.5px", color: "var(--text-dim)", marginTop: "2px" }}>
+                {im.path}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* 右: サマリ + チェックリスト */}
@@ -141,7 +161,7 @@ function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: bool
                   {group}
                 </div>
                 {items.map((it) => (
-                  <ChecklistRow key={it.labelJa} item={it} status={itemStatus(it, src.imagePath)} />
+                  <ChecklistRow key={it.labelJa} item={it} status={itemStatus(it, paths)} />
                 ))}
               </div>
             ))}
