@@ -351,9 +351,19 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-study-desk",
     label: "学習デスク",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "desk",
     placement: "floor",
     views: {
+      // front: altlayout-r1 部屋から緑マスク → apply-green-mask → prep-fillin-canvas →
+      //   Codex cleanup r2-ctx (緑マスクを 2nd 参照に追加した最初の成功版、aspect 1.009 vs input 1.019) →
+      //   strip-fake-transparency。
+      front: {
+        src: "assets/objects/sakura-study-desk-front.png",
+        nativeW: 454,
+        nativeH: 450,
+        cells: { w: 2, h: 2 },
+      },
       "front-dimetric": {
         src: "assets/objects/sakura-study-desk-dimetric.png",
         nativeW: 1041,
