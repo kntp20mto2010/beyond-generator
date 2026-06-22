@@ -105,7 +105,7 @@ export function resolveSideFlipX(variant: ObjectVariant, targetWall: "left" | "r
 // 家具のカテゴリ(種類)。AddPanel / ObjectPage のフィルタチップで使う。
 export type ObjectKind =
   | "sofa" | "chair" | "desk" | "bed"
-  | "storage" | "vanity"
+  | "storage" | "vanity" | "table" | "stool" | "plant"
   | "window" | "rug" | "wall-decor";
 
 export const KIND_LABEL: Record<ObjectKind, string> = {
@@ -115,6 +115,9 @@ export const KIND_LABEL: Record<ObjectKind, string> = {
   bed: "ベッド",
   storage: "収納",
   vanity: "ドレッサー",
+  table: "テーブル",
+  stool: "スツール",
+  plant: "植物",
   window: "窓",
   rug: "ラグ",
   "wall-decor": "壁飾り",
@@ -627,6 +630,27 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 1401,
         nativeH: 545,
         cells: { w: 5, h: 3 },
+      },
+    },
+  },
+  {
+    id: "sakura-coffee-table",
+    label: "コーヒーテーブル(円形ロー)",
+    defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
+    kind: "table",
+    placement: "floor",
+    views: {
+      // front: r2 部屋から緑マスク (sakura-table-mask-tight-r1) → apply-green-mask →
+      //   prep-fillin → roomctx-crop → Codex cleanup (view_image 強制、天板上の小物の虫食いを
+      //   木色で埋めて空の天板に) → strip-fake-transparency。
+      front: {
+        src: "assets/objects/sakura-coffee-table-front.png",
+        nativeW: 303,
+        nativeH: 171,
+        cells: { w: 2, h: 1 },
+        source: SAKURA_ROOM_MOODBOARD,
       },
     },
   },

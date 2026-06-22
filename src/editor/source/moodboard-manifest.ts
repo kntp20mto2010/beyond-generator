@@ -117,8 +117,7 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     labelJa: "コーヒーテーブル (円形ロー)",
     group: "床家具",
     location: "中央・ラグ上",
-    catalogId: null,
-    note: "table kind の catalog entry が未作成。",
+    catalogId: "sakura-coffee-table",
   },
   {
     labelJa: "プーフ (丸スツール・ピンク)",
