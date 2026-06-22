@@ -54,11 +54,15 @@ export function itemStatus(item: MoodboardItem, moodboardPaths: string[], hidden
   // def 自体が hidden なら todo 扱い (= UI から消えてるので未作成と同じ意味)
   if (isHidden(hiddenIds, def.id)) return "todo";
   // 可視 variant の source がこの source group の画像に一致すれば抽出済
+  let hasVisibleView = false;
   for (const [view, v] of Object.entries(def.views)) {
     if (!v) continue;
     if (isHidden(hiddenIds, def.id, view)) continue; // hidden variant は無視
+    hasVisibleView = true;
     if (v.source && moodboardPaths.includes(v.source)) return "extracted";
   }
+  // 全 view が hidden / 未定義なら、def.source フォールバックは使わず todo 扱い
+  if (!hasVisibleView) return "todo";
   return def.source && moodboardPaths.includes(def.source) ? "extracted" : "made";
 }
 
