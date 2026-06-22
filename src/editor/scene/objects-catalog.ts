@@ -75,6 +75,10 @@ export interface ObjectVariant {
   shadowSrc?: string;
   projection?: ProjectionPresetKey;   // 投影プリセット参照
   promptFile?: string;                // assets/objects/prompts/<promptFile>.md
+  // この variant が抽出された moodboard 画像のパス。def.source の上書き。
+  // 同じ家具でも視点ごとに異なる moodboard 画像から取った場合に明示する。
+  // 未設定なら def.source にフォールバック。SourcePage のテーブルで「何番目の画像から取ったか」表示に使う。
+  source?: string;
 }
 
 export type ObjectViewName = "front" | "front-dimetric" | "side";
@@ -168,6 +172,10 @@ export function effectivePlacementRule(def: ObjectDef): PlacementRule | undefine
 // この出自を持つ家具は ObjectDef.source に設定する。ObjectPage の「抽出元」フィルタで使う。
 export const SAKURA_ROOM_MOODBOARD =
   "assets/generated/sakura-room-ideal-layout-ken-style-r2-20260620.png";
+// 同じサクラルームを別レイアウト/別角度で再生成した 2 枚目 (足元 3/4 視点等の角度補強用)。
+// 一部の variant (ベッド dimetric, 学習デスク front 等) はこちらから抽出した。
+export const SAKURA_ROOM_ALTLAYOUT_R1 =
+  "assets/generated/sakura-room-altlayout-r1-20260621.png";
 
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
@@ -289,6 +297,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 546,
         nativeH: 564,
         cells: { w: 2, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R1,
       },
       // side: moodboard r2 部屋全体保持 → ベッド以外透明化 → crop-alpha-bbox.py で grayscale chromakey + bbox crop
       side: {
@@ -364,6 +373,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 454,
         nativeH: 450,
         cells: { w: 2, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R1,
       },
       "front-dimetric": {
         src: "assets/objects/sakura-study-desk-dimetric.png",
@@ -387,6 +397,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-desk-chair-pink",
     label: "デスクチェア(ピンク)",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "chair",
     placement: "floor",
     views: {
@@ -423,6 +434,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 281,
         nativeH: 479,
         cells: { w: 1, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R1,
       },
       "front-dimetric": {
         src: "assets/objects/sakura-wardrobe-dimetric.png",
@@ -461,6 +473,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         nativeW: 233,
         nativeH: 395,
         cells: { w: 1, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R1,
       },
       "front-dimetric": {
         src: "assets/objects/sakura-bookshelf-dimetric.png",
@@ -488,6 +501,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-vanity-dresser-with-pouf",
     label: "ドレッサー+鏡+プフ",
     defaultView: "front-dimetric",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "vanity",
     placement: "floor",
     views: {
@@ -547,6 +561,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-frame-floral",
     label: "額絵(花柄)",
     defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "wall-decor",
     placement: "back-wall",
     views: {
@@ -562,6 +577,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-clock",
     label: "壁掛け時計",
     defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "wall-decor",
     placement: "back-wall",
     views: {
@@ -577,6 +593,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-dried-bouquet",
     label: "ドライフラワー束",
     defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "wall-decor",
     placement: "back-wall",
     views: {
@@ -592,6 +609,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-pennant",
     label: "ペナント(5旗)",
     defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "wall-decor",
     placement: "ceiling",
     views: {
@@ -607,6 +625,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-wall-fairy-lights",
     label: "フェアリーライト",
     defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
     kind: "wall-decor",
     placement: "ceiling",
     views: {

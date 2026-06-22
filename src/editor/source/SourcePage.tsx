@@ -8,6 +8,8 @@ import {
   type ItemStatus,
   type MoodboardItem,
   type MoodboardSource,
+  viewExtractionCell,
+  type ViewExtractionCell,
 } from "./moodboard-manifest.js";
 
 const STATUS_COLOR: Record<ItemStatus, string> = {
@@ -160,9 +162,12 @@ function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: bool
                 >
                   {group}
                 </div>
-                {items.map((it) => (
-                  <ChecklistRow key={it.labelJa} item={it} status={itemStatus(it, paths)} />
-                ))}
+                <FurnitureTable items={items} paths={paths} />
+                {/* 隠しデバッグ用: ChecklistRow を残しておきたければここに */}
+                {false &&
+                  items.map((it) => (
+                    <ChecklistRow key={it.labelJa} item={it} status={itemStatus(it, paths)} />
+                  ))}
               </div>
             ))}
           </div>
@@ -212,6 +217,87 @@ function StatusBadge({ status }: { status: ItemStatus }) {
     >
       {STATUS_MARK[status]} {STATUS_LABEL[status]}
     </span>
+  );
+}
+
+// 家具テーブル: 1 行 = 1 家具、列 = 正面 / 立体 / 壁付。セル値は何番目の画像から抽出したかの index (1-based)。
+function FurnitureTable({ items, paths }: { items: MoodboardItem[]; paths: string[] }) {
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+      <thead>
+        <tr style={{ borderBottom: "1px solid var(--border)" }}>
+          <th style={{ textAlign: "left", padding: "3px 4px", color: "var(--text-dim)", fontWeight: 600 }}>家具</th>
+          <th style={{ width: "40px", padding: "3px 4px", color: "var(--text-dim)", fontWeight: 600 }}>正面</th>
+          <th style={{ width: "40px", padding: "3px 4px", color: "var(--text-dim)", fontWeight: 600 }}>立体</th>
+          <th style={{ width: "40px", padding: "3px 4px", color: "var(--text-dim)", fontWeight: 600 }}>壁付</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((it) => {
+          const status = itemStatus(it, paths);
+          const front = viewExtractionCell(it, "front", paths);
+          const dimetric = viewExtractionCell(it, "front-dimetric", paths);
+          const side = viewExtractionCell(it, "side", paths);
+          return (
+            <tr key={it.labelJa} style={{ borderBottom: "1px solid var(--border)" }}>
+              <td style={{ padding: "4px", verticalAlign: "top" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <StatusBadge status={status} />
+                  <span style={{ color: status === "todo" ? "var(--text-dim)" : "var(--text)", fontWeight: 500 }}>
+                    {it.labelJa}
+                  </span>
+                </div>
+                <div style={{ fontSize: "9.5px", color: "var(--text-dim)", marginTop: 2, marginLeft: 2 }}>
+                  · {it.location}
+                  {it.catalogId && <span style={{ fontFamily: "monospace", marginLeft: 6 }}>id: {it.catalogId}</span>}
+                  {!it.catalogId && <span style={{ marginLeft: 6 }}>(catalog 未登録)</span>}
+                </div>
+                {it.note && (
+                  <div style={{ fontSize: "9.5px", color: "var(--text-dim)", fontStyle: "italic", marginLeft: 2 }}>{it.note}</div>
+                )}
+              </td>
+              <CellTd cell={front} paths={paths} />
+              <CellTd cell={dimetric} paths={paths} />
+              <CellTd cell={side} paths={paths} />
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function CellTd({ cell, paths }: { cell: ViewExtractionCell; paths: string[] }) {
+  if (cell === "—") {
+    return (
+      <td style={{ textAlign: "center", padding: "4px", color: "var(--text-dim)", verticalAlign: "top" }}>
+        —
+      </td>
+    );
+  }
+  if (cell === "?") {
+    return (
+      <td style={{ textAlign: "center", padding: "4px", color: "var(--warn, #c98a2b)", verticalAlign: "top" }} title="catalog にあるが source 未設定 / 別 source 由来">
+        ?
+      </td>
+    );
+  }
+  // number: image index (1-based)
+  return (
+    <td
+      style={{
+        textAlign: "center",
+        padding: "4px",
+        color: "white",
+        background: "var(--ok, #3a6)",
+        fontWeight: 700,
+        verticalAlign: "top",
+        borderRadius: 3,
+      }}
+      title={paths[cell - 1]?.split("/").pop() ?? `画像 ${cell}`}
+    >
+      {cell}
+    </td>
   );
 }
 

@@ -7,7 +7,7 @@
 // ステータスは **manifest にハードコードしない**。catalogId と OBJECT_CATALOG.source から
 // 実行時に導出する (itemStatus)。これにより catalog に source を足したり新 entry を登録すると
 // チェックリストが自動で更新され、drift しない。
-import { OBJECT_CATALOG, SAKURA_ROOM_MOODBOARD } from "../scene/objects-catalog.js";
+import { OBJECT_CATALOG, SAKURA_ROOM_MOODBOARD, SAKURA_ROOM_ALTLAYOUT_R1 } from "../scene/objects-catalog.js";
 
 // moodboard 上の1アイテム = チェックリスト1行。
 export interface MoodboardItem {
@@ -44,7 +44,33 @@ export function itemStatus(item: MoodboardItem, moodboardPaths: string[]): ItemS
   if (!item.catalogId) return "todo";
   const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
   if (!def) return "todo";
+  // どれかの variant の source がこの source group の画像に一致すれば抽出済
+  for (const v of Object.values(def.views)) {
+    if (v?.source && moodboardPaths.includes(v.source)) return "extracted";
+  }
   return def.source && moodboardPaths.includes(def.source) ? "extracted" : "made";
+}
+
+// 各 view の variant がどの moodboard 画像 (sourcePaths 配列) から抽出されたかを 1-based index で返す。
+// "—" = その view の variant が catalog に存在しない (未生成)
+// number = sourcePaths[index-1] から抽出 (variant.source または def.source が一致)
+// "?" = variant 存在するが source 未設定または別 source 由来
+export type ViewExtractionCell = number | "—" | "?";
+
+export function viewExtractionCell(
+  item: MoodboardItem,
+  view: "front" | "front-dimetric" | "side",
+  moodboardPaths: string[],
+): ViewExtractionCell {
+  if (!item.catalogId) return "—";
+  const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
+  if (!def) return "—";
+  const v = def.views[view];
+  if (!v) return "—";
+  const path = v.source ?? def.source;
+  if (!path) return "?";
+  const idx = moodboardPaths.indexOf(path);
+  return idx >= 0 ? idx + 1 : "?";
 }
 
 export const STATUS_LABEL: Record<ItemStatus, string> = {
@@ -143,9 +169,6 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     note: "各所の小型鉢植えをまとめて1行。plant entry 群が未作成。",
   },
 ];
-
-// altlayout-r1: 同じ部屋を別の家具配置/向きで作り直したバリエーション (足元 3/4 視点等の角度補強用)
-const SAKURA_ROOM_ALTLAYOUT_R1 = "assets/generated/sakura-room-altlayout-r1-20260621.png";
 
 export const MOODBOARD_SOURCES: MoodboardSource[] = [
   {
