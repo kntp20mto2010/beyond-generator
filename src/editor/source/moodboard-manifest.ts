@@ -206,8 +206,8 @@ export const MOODBOARD_SOURCES: MoodboardSource[] = [
       },
       {
         path: SAKURA_ROOM_ALTLAYOUT_R3,
-        labelJa: "別レイアウト r3 (head-on 視点)",
-        contributes: "真正面 (head-on) を補強。ベッド・ソファ・ドレッサー・デスクチェア の front を抽出可能。OCCLUDERS: ベッド前=雲ラグ / ソファ前=なし / デスクチェア前=デスク天板 / ドレッサー前=なし",
+        labelJa: "別レイアウト r3 (head-on 視点・4 家具集中)",
+        contributes: "真正面 (head-on) を補強。ベッド・ソファ・ドレッサー+プフ・デスクチェア の front を抽出可能。ワードローブ/本棚/学習机は別 source で取得済のため画面から省略。OCCLUDERS: 全 4 家具とも none",
       },
     ],
     items: SAKURA_ROOM_ITEMS,
