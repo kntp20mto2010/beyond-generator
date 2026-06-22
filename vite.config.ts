@@ -341,7 +341,8 @@ function catalogHiddenPlugin(): Plugin {
           let body = "";
           for await (const chunk of req) body += chunk as string;
           const { id, action } = JSON.parse(body) as { id?: string; action?: "hide" | "unhide" };
-          if (typeof id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+          // id は "def-id" または "def-id|view" 形式 (パイプ区切りで視点単位非表示)
+          if (typeof id !== "string" || !/^[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)?$/.test(id)) {
             res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: "bad id" })); return;
           }
           const op = action === "unhide" ? "unhide" : "hide";

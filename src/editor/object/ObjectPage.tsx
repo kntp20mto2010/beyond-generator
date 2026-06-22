@@ -193,8 +193,9 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
   }
 
   const tiles = allTiles.filter(({ def, view, variant }) => {
-    // hidden 判定: showHidden が false なら hidden id は除外
-    if (!showHidden && hiddenIds.has(def.id)) return false;
+    // hidden 判定: showHidden が false なら hidden は除外
+    // hiddenIds に "<id>" があれば家具ごと、"<id>|<view>" があれば視点ごと非表示
+    if (!showHidden && (hiddenIds.has(def.id) || hiddenIds.has(`${def.id}|${view}`))) return false;
     if (selectedKinds.size > 0 && (!def.kind || !selectedKinds.has(def.kind))) return false;
     if (selectedPlacements.size > 0 && (!def.placement || !selectedPlacements.has(def.placement))) return false;
     if (selectedAngles.size > 0 && !selectedAngles.has(view)) return false;
@@ -321,7 +322,8 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
             trans={transOf(variant.src)}
             onAfterTransparent={() => setAlphaVersion((v) => v + 1)}
             onJumpToSource={onJumpToSource}
-            isHidden={hiddenIds.has(def.id)}
+            hiddenByDef={hiddenIds.has(def.id)}
+            hiddenByVariant={hiddenIds.has(`${def.id}|${view}`)}
             onToggleHidden={() => setHiddenVersion((v) => v + 1)}
           />
         ))}
@@ -758,7 +760,8 @@ function ObjectTile({
   trans,
   onAfterTransparent,
   onJumpToSource,
-  isHidden,
+  hiddenByDef,
+  hiddenByVariant,
   onToggleHidden,
 }: {
   def: ObjectDef;
@@ -767,9 +770,11 @@ function ObjectTile({
   trans: "done" | "todo" | "unknown";
   onAfterTransparent: () => void;
   onJumpToSource: (sourcePath: string) => void;
-  isHidden: boolean;
+  hiddenByDef: boolean;
+  hiddenByVariant: boolean;
   onToggleHidden: () => void;
 }) {
+  const isHidden = hiddenByDef || hiddenByVariant;
   const cells = variantCells(variant);
   const scale = containScale(variant.nativeW, variant.nativeH, cells);
   const [version, setVersion] = useState(0);
@@ -778,21 +783,25 @@ function ObjectTile({
   const [transp, setTransp] = useState<FlipState>({ status: "idle" });
   const isDefault = def.defaultView === view;
 
-  const handleToggleHidden = async () => {
-    const action = isHidden ? "unhide" : "hide";
-    const verb = isHidden ? "復元" : "削除 (非表示化)";
-    if (!isHidden && !confirm(`${def.label} を ${verb} しますか？\n(ファイルは消えず、UI から非表示になるだけ。catalog-hidden.json で管理。復元は「非表示も表示」→「復元」ボタン or JSON 編集で可能)`)) return;
+  // scope: "def" = 家具ごと、"variant" = この視点だけ
+  const toggleHidden = async (scope: "def" | "variant", currentlyHidden: boolean) => {
+    const id = scope === "def" ? def.id : `${def.id}|${view}`;
+    const action = currentlyHidden ? "unhide" : "hide";
+    const verb = currentlyHidden
+      ? (scope === "def" ? "家具ごと復元" : "この視点の復元")
+      : (scope === "def" ? `家具ごと削除 (${def.label} の全視点を非表示)` : `この視点だけ削除 (${def.label} / ${VIEW_LABEL[view]})`);
+    if (!currentlyHidden && !confirm(`${verb} しますか？\n(ファイルは消えず UI から非表示になるだけ。catalog-hidden.json で管理。「非表示も表示」ON で復元ボタン)`)) return;
     try {
       const res = await fetch("/__catalog-hidden", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: def.id, action }),
+        body: JSON.stringify({ id, action }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `server ${res.status}`);
       onToggleHidden();
     } catch (e) {
-      alert(`${verb}失敗: ${String((e as Error)?.message ?? e)}`);
+      alert(`${verb} 失敗: ${String((e as Error)?.message ?? e)}`);
     }
   };
 
@@ -1074,22 +1083,42 @@ function ObjectTile({
           {flip.message}
         </div>
       )}
-      <button
-        type="button"
-        onClick={handleToggleHidden}
-        title={isHidden ? "非表示を解除して再び一覧に表示する" : "オブジェクトタブから非表示にする (ファイルは消さず catalog-hidden.json に id を追加)"}
-        style={{
-          fontSize: "10px",
-          padding: "3px 6px",
-          background: "transparent",
-          color: isHidden ? "var(--ok, #3a6)" : "var(--text-dim)",
-          border: "1px dashed var(--border)",
-          borderRadius: 3,
-          cursor: "pointer",
-        }}
-      >
-        {isHidden ? "↩ 復元" : "✕ 削除 (非表示化)"}
-      </button>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          type="button"
+          onClick={() => toggleHidden("variant", hiddenByVariant)}
+          title={hiddenByVariant ? "この視点だけの非表示を解除" : `この視点 (${VIEW_LABEL[view]}) のタイルだけを非表示にする`}
+          style={{
+            flex: 1,
+            fontSize: "10px",
+            padding: "3px 6px",
+            background: "transparent",
+            color: hiddenByVariant ? "var(--ok, #3a6)" : "var(--text-dim)",
+            border: "1px dashed var(--border)",
+            borderRadius: 3,
+            cursor: "pointer",
+          }}
+        >
+          {hiddenByVariant ? "↩ 視点復元" : "✕ この視点だけ"}
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleHidden("def", hiddenByDef)}
+          title={hiddenByDef ? "家具ごとの非表示を解除 (全視点)" : `家具ごと非表示 (${def.label} の全視点をまとめて隠す)`}
+          style={{
+            flex: 1,
+            fontSize: "10px",
+            padding: "3px 6px",
+            background: "transparent",
+            color: hiddenByDef ? "var(--ok, #3a6)" : "var(--text-dim)",
+            border: "1px dashed var(--border)",
+            borderRadius: 3,
+            cursor: "pointer",
+          }}
+        >
+          {hiddenByDef ? "↩ 家具復元" : "✕ 家具ごと"}
+        </button>
+      </div>
     </div>
   );
 }
