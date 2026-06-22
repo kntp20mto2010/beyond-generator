@@ -325,6 +325,18 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     kind: "bed",
     placement: "floor",
     views: {
+      // front: altlayout-r5 head-on 部屋 (4 家具集中版) から緑マスク pipeline で抽出 (長辺 head-on)。
+      //   OCCLUDERS: none だが Codex edgepolish はベッドの stock-photo prior が強すぎて 2 連続で
+      //   別物を生成 (青ブランケット / グレー布張り) したため、決定論フォールバック
+      //   scripts/smooth-silhouette-edges.py --mode shape (blur+threshold で輪郭だけ smooth、
+      //   内部 RGB 100% 保持) を採用。apply → shape-smooth → strip-fake-transparency。
+      front: {
+        src: "assets/objects/sakura-bed-pink-single-front.png",
+        nativeW: 586,
+        nativeH: 454,
+        cells: { w: 2, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R3,
+      },
       // front-dimetric: altlayout-r1 部屋から緑マスク → apply-green-mask → prep-fillin-canvas →
       //   crop-mask-with-roomctx + Codex cleanup (2 参照, OCCLUDERS: none) → strip-fake-transparency。
       //   旧版 (moodboard r2 dimetric 1253x644 側面 3/4 view) を foot-forward 3/4 view で置き換え。
