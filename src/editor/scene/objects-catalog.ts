@@ -326,14 +326,15 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     placement: "floor",
     views: {
       // front: altlayout-r5 head-on 部屋 (4 家具集中版) から緑マスク pipeline で抽出 (長辺 head-on)。
-      //   OCCLUDERS: none だが Codex edgepolish はベッドの stock-photo prior が強すぎて 2 連続で
-      //   別物を生成 (青ブランケット / グレー布張り) したため、決定論フォールバック
-      //   scripts/smooth-silhouette-edges.py --mode shape (blur+threshold で輪郭だけ smooth、
-      //   内部 RGB 100% 保持) を採用。apply → shape-smooth → strip-fake-transparency。
+      //   OCCLUDERS: none のため cleanup ではなく edgepolish フロー (輪郭外周のみ整形) を採用。
+      //   ベッドは Codex の stock-photo prior が強く、参照を view_image でロードさせず generate に
+      //   逃げると別物 (青ブランケット等) を生成する。対策として edgepolish プロンプト冒頭で
+      //   「view_image で参照ロード → edit モード → generate 禁止 → ロード失敗なら fail」を強制 (r5 で成功)。
+      //   read-only sandbox の書き出しは flaky で数回 GENERATION_FAILED するが id を変えて再試行で当たる。
       front: {
         src: "assets/objects/sakura-bed-pink-single-front.png",
-        nativeW: 586,
-        nativeH: 454,
+        nativeW: 553,
+        nativeH: 455,
         cells: { w: 2, h: 2 },
         source: SAKURA_ROOM_ALTLAYOUT_R3,
       },
