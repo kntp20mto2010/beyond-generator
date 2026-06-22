@@ -438,12 +438,13 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         projection: "dimetric-2to1-sitting",
         promptFile: "sakura-study-desk-sitting-2to1-l1b-v1-20260619",
       },
-      // side (壁付): altlayout-r1 部屋から抽出した壁付寄り 3/4 view。元は front slot に
-      //   誤登録されていた (実際は壁に寄せた時の見え方 = 壁付) ため KEN 指示で side に移動。
+      // side (壁付): altlayout-r1 部屋から抽出した壁付寄り 3/4 view (正面寄りに壁付した見え方)。
+      //   元は front slot に誤登録されていた (実際は壁に寄せた時の見え方 = 壁付) ため KEN 指示で
+      //   side に移動し、ファイルも -front → -frontwall にリネーム。
       //   旧 leftwall v10 side (sakura-study-desk-leftwall.png、急角度で潰れ気味) を置換、
-      //   旧ファイルは disk に残置。注: src ファイル名は -front だが view は side。
+      //   旧ファイルは disk に残置。
       side: {
-        src: "assets/objects/sakura-study-desk-front.png",
+        src: "assets/objects/sakura-study-desk-frontwall.png",
         nativeW: 454,
         nativeH: 450,
         cells: { w: 2, h: 2 },
