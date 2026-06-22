@@ -39,6 +39,7 @@ import {
   effectivePlacementRule,
   getObjectDef,
   objectScaleForCells,
+  resolveSideFlipX,
   variantCells,
   type ObjectDef,
   type ObjectViewName,
@@ -183,7 +184,8 @@ export function StageCanvas(props: Props) {
       };
 
       // 床置きオブジェクトの footprint 位置から、最適な view (角度) と flipX を選ぶ。
-      // 左壁隣 → side / 右壁隣 → side+flipX / 奥壁隣 → front / 内側 → front-dimetric。
+      // 左壁隣 / 右壁隣 → side (variant.wallOrigin と配置壁が異なれば flipX)
+      // 奥壁隣 → front / 内側 → front-dimetric。
       // 該当 view が def.views に無ければ前段にフォールバック。
       // footprint 全体の側面で壁隣接を判定する (floorFootprintWallAdjacency)。
       // 透視で壁が手前 row に映らない部屋でも footprint が壁 row に届けば side になる。
@@ -198,8 +200,10 @@ export function StageCanvas(props: Props) {
         if (def.placement !== "floor") return null;
         const adj = floorFootprintWallAdjacency(map, colLeft, rowTop, cellsW, cellsH);
         const has = (v: ObjectViewName) => def.views[v] !== undefined;
-        if (adj === "leftBorder"  && has("side"))           return { view: "side",           flipX: false };
-        if (adj === "rightBorder" && has("side"))           return { view: "side",           flipX: true  };
+        if ((adj === "leftBorder" || adj === "rightBorder") && has("side")) {
+          const targetWall = adj === "leftBorder" ? "left" : "right";
+          return { view: "side", flipX: resolveSideFlipX(def.views.side!, targetWall) };
+        }
         if (adj === "backBorder"  && has("front"))          return { view: "front",          flipX: false };
         if (has("front-dimetric"))                          return { view: "front-dimetric", flipX: false };
         if (has("front"))                                   return { view: "front",          flipX: false };

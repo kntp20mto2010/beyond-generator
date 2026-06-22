@@ -7,7 +7,8 @@ import type { PlacementRule } from "./room-regions/types.js";
 // 各家具は最大 **3 視点(views: front / front-dimetric / side)** を持てる。
 //   - front          : 真正面 elevation(orthographic, no perspective, no top visible)
 //   - front-dimetric : dimetric 2:1 + sitting eye-level(L1b、AC 風配置)
-//   - side           : 左壁這う(v10 wall-aligned)。右壁は side + flipX
+//   - side           : 壁這う(v10 wall-aligned)。元 PNG の向き(左壁正本 / 右壁正本)は
+//                      variant.wallOrigin で宣言し、配置先の壁と異なれば render 時に自動 flipX。
 // 配置時の view 選択で見た目を切り替える(どうぶつの森方式)。
 //
 // サイズはグリッドの n×m セルで定義し(全体の統一感のため)、scale は
@@ -79,6 +80,11 @@ export interface ObjectVariant {
   // 同じ家具でも視点ごとに異なる moodboard 画像から取った場合に明示する。
   // 未設定なら def.source にフォールバック。SourcePage のテーブルで「何番目の画像から取ったか」表示に使う。
   source?: string;
+  // side / front-dimetric の元 PNG が「どちらの壁ぎわ」を向いて描かれているかを宣言する。
+  // 配置先の壁と異なる場合、scene 描画時に自動 flipX。未指定なら "left" 扱い (既存 PNG は
+  // 全て leftwall.png ファイル名で左壁正本のため)。"right" を入れると右壁正本扱いになり、
+  // 左壁配置時に自動反転する。front / wall 系 view にも将来同じ仕組みを拡張可能。
+  wallOrigin?: "left" | "right";
 }
 
 export type ObjectViewName = "front" | "front-dimetric" | "side";
@@ -88,6 +94,13 @@ export const VIEW_LABEL: Record<ObjectViewName, string> = {
   "front-dimetric": "立体",
   side: "壁付",
 };
+
+// side variant を配置壁に合わせるための flipX を返す。
+// variant.wallOrigin が targetWall と一致しなければ反転。未指定は "left" 既定。
+export function resolveSideFlipX(variant: ObjectVariant, targetWall: "left" | "right"): boolean {
+  const origin = variant.wallOrigin ?? "left";
+  return origin !== targetWall;
+}
 
 // 家具のカテゴリ(種類)。AddPanel / ObjectPage のフィルタチップで使う。
 export type ObjectKind =
@@ -236,6 +249,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 4, h: 3 },
         projection: "wall-aligned-v10",
         promptFile: "sofa-navy-leftwall-v10-l1b-20260619",
+        wallOrigin: "left",
       },
     },
   },
@@ -263,6 +277,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 2, h: 3 },
         projection: "wall-aligned-v10",
         promptFile: "school-chair-leftwall-v10-l1b-20260619",
+        wallOrigin: "left",
       },
     },
   },
@@ -289,6 +304,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 3, h: 3 },
         projection: "wall-aligned-v10",
         promptFile: "school-desk-front-leftwall-v10-l1b-20260619",
+        wallOrigin: "left",
       },
     },
   },
@@ -323,6 +339,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         seat: { dx: 0, dy: -391 },
         projection: "wall-aligned-v10",
         promptFile: "sakura-bed-pink-single-room-anchored-r7-20260620",
+        wallOrigin: "left",
       },
     },
   },
@@ -407,6 +424,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 4, h: 3 },
         projection: "wall-aligned-v10",
         promptFile: "sakura-study-desk-leftwall-v10-l1b-20260619",
+        wallOrigin: "left",
       },
     },
   },
@@ -435,6 +453,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 2, h: 3 },
         projection: "wall-aligned-v10",
         promptFile: "sakura-desk-chair-pink-leftwall-v10-l1b-20260619",
+        wallOrigin: "left",
       },
     },
   },
@@ -474,6 +493,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 2, h: 3 },
         projection: "wall-aligned-v10",
         promptFile: "sakura-wardrobe-complete-r9-20260621",
+        wallOrigin: "left",
       },
     },
   },
@@ -514,6 +534,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 1, h: 2 },
         projection: "wall-aligned-v10",
         promptFile: "sakura-bookshelf-cleanup-r8-20260621",
+        wallOrigin: "left",
       },
     },
   },
@@ -542,6 +563,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         cells: { w: 4, h: 4 },
         projection: "wall-aligned-v10",
         promptFile: "sakura-vanity-dresser-with-pouf-leftwall-v10-l1b-20260619",
+        wallOrigin: "left",
       },
     },
   },
