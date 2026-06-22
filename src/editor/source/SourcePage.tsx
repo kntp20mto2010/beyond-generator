@@ -11,7 +11,13 @@ import {
   viewExtractionCell,
   type ViewExtractionCell,
 } from "./moodboard-manifest.js";
-import { OBJECT_CATALOG, VIEW_LABEL, type ObjectVariant, type ObjectViewName } from "../scene/objects-catalog.js";
+import {
+  OBJECT_CATALOG,
+  VIEW_LABEL,
+  resolveSideFlipX,
+  type ObjectVariant,
+  type ObjectViewName,
+} from "../scene/objects-catalog.js";
 import { findBboxForVariant, type MaskBbox } from "./mask-match.js";
 
 const STATUS_COLOR: Record<ItemStatus, string> = {
@@ -205,7 +211,7 @@ const MOODBOARD_H = 1080;
 function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: string; masks: MaskBbox[]; hiddenIds: Set<string> }) {
   // この source 画像と一致する catalog variant + その bbox を集める (hidden は除外)
   const placements = useMemo(() => {
-    const out: { defLabel: string; view: ObjectViewName; src: string; bbox: MaskBbox["bbox"] }[] = [];
+    const out: { defLabel: string; view: ObjectViewName; src: string; bbox: MaskBbox["bbox"]; flipX: boolean }[] = [];
     for (const def of OBJECT_CATALOG) {
       if (hiddenIds.has(def.id)) continue;
       for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, ObjectVariant | undefined][]) {
@@ -215,7 +221,15 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
         if (path !== sourceImagePath) continue;
         const mask = findBboxForVariant(variant, MOODBOARD_W, MOODBOARD_H, masks);
         if (!mask) continue;
-        out.push({ defLabel: def.label, view, src: variant.src, bbox: mask.bbox });
+        // wallOrigin を持つ asset (side 等) は左/右壁の正本。moodboard 上で逆の壁に置かれていれば
+        // xflip して見た目を合わせる。置かれている壁は mask bbox の中心 x で判定 (画像中心より左=左壁)。
+        let flipX = false;
+        if (variant.wallOrigin) {
+          const centerX = mask.bbox.x + mask.bbox.w / 2;
+          const targetWall = centerX < MOODBOARD_W / 2 ? "left" : "right";
+          flipX = resolveSideFlipX(variant, targetWall);
+        }
+        out.push({ defLabel: def.label, view, src: variant.src, bbox: mask.bbox, flipX });
       }
     }
     return out;
@@ -251,7 +265,7 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
             key={p.src}
             src={`/${p.src}`}
             alt={`${p.defLabel}/${p.view}`}
-            title={`${p.defLabel} (${VIEW_LABEL[p.view]})`}
+            title={`${p.defLabel} (${VIEW_LABEL[p.view]})${p.flipX ? " ⟲flip" : ""}`}
             style={{
               position: "absolute",
               left: `${(p.bbox.x / MOODBOARD_W) * 100}%`,
@@ -260,6 +274,7 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
               height: `${(p.bbox.h / MOODBOARD_H) * 100}%`,
               objectFit: "contain",
               objectPosition: "center",
+              transform: p.flipX ? "scaleX(-1)" : undefined,
             }}
           />
         ))}
