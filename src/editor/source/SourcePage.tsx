@@ -11,7 +11,62 @@ import {
   viewExtractionCell,
   type ViewExtractionCell,
 } from "./moodboard-manifest.js";
-import { OBJECT_CATALOG, VIEW_LABEL, type ObjectViewName } from "../scene/objects-catalog.js";
+import { OBJECT_CATALOG, VIEW_LABEL, type ObjectVariant, type ObjectViewName } from "../scene/objects-catalog.js";
+
+interface MaskBbox {
+  file: string;
+  stem: string;
+  canvasW: number;
+  canvasH: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  mtime: number;
+}
+
+// variant.src "assets/objects/sakura-bookshelf-front.png" から stem を引き出す
+function stemFromVariantSrc(src: string): string {
+  return src.replace(/^assets\/objects\//, "").replace(/\.png$/, "");
+}
+
+// 視点 suffix (catalog の variant src で使われる) を剥がすと「家具本体の stem」が出る。
+// "sakura-bookshelf-dimetric" → "sakura-bookshelf"
+// "sakura-bed-pink-single-leftwall" → "sakura-bed-pink-single"
+const VIEW_SUFFIXES = ["front-dimetric", "dimetric", "leftwall", "rightwall", "front"];
+
+function stemCandidates(src: string): string[] {
+  const base = stemFromVariantSrc(src);
+  const out = [base];
+  for (const suf of VIEW_SUFFIXES) {
+    if (base.endsWith(`-${suf}`)) {
+      out.push(base.slice(0, -(suf.length + 1)));
+      break;
+    }
+  }
+  return out;
+}
+
+// stem マッチ: 完全一致 or "-" 境界で片方が他方のプレフィックスなら OK。
+// 「sakura-sofa-green」(mask) ⊂ 「sakura-sofa-green-floor」(catalog) は OK。
+// 「sakura-bed-altlayout」(mask) と「sakura-bed-pink-single」(catalog) は NG (互いに prefix でない)。
+function stemMatches(maskStem: string, candidate: string): boolean {
+  if (maskStem === candidate) return true;
+  if (maskStem.startsWith(candidate + "-")) return true;
+  if (candidate.startsWith(maskStem + "-")) return true;
+  return false;
+}
+
+function findBboxForVariant(
+  variant: ObjectVariant,
+  expectCanvasW: number,
+  expectCanvasH: number,
+  bySource: MaskBbox[],
+): MaskBbox | null {
+  const candidates = bySource.filter((m) => m.canvasW === expectCanvasW && m.canvasH === expectCanvasH);
+  for (const stem of stemCandidates(variant.src)) {
+    const hit = candidates.find((m) => stemMatches(m.stem, stem));
+    if (hit) return hit;
+  }
+  return null;
+}
 
 const STATUS_COLOR: Record<ItemStatus, string> = {
   extracted: "var(--ok, #3a6)",
@@ -38,6 +93,17 @@ export function SourcePage({
   onJumpHandled?: () => void;
 }) {
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [masks, setMasks] = useState<MaskBbox[]>([]);
+  useEffect(() => {
+    let live = true;
+    fetch("/__moodboard-positions")
+      .then((r) => r.json())
+      .then((data: { masks?: MaskBbox[] }) => {
+        if (live && data.masks) setMasks(data.masks);
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   // オブジェクトタブの「抽出元あり ⤴」から jumpTarget(moodboard パス)が来たら、
   // 該当カードへスクロール + ハイライト点灯。jumpTarget は消費後すぐ null に戻されるため、
@@ -70,13 +136,13 @@ export function SourcePage({
         <span style={{ marginLeft: 6 }}>□ 未作成</span>= catalog 未登録。
       </div>
       {MOODBOARD_SOURCES.map((src) => (
-        <SourceCard key={src.id} src={src} highlight={highlightId === src.id} />
+        <SourceCard key={src.id} src={src} highlight={highlightId === src.id} masks={masks} />
       ))}
     </div>
   );
 }
 
-function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: boolean }) {
+function SourceCard({ src, highlight, masks }: { src: MoodboardSource; highlight?: boolean; masks: MaskBbox[] }) {
   const paths = useMemo(() => src.imagePaths.map((im) => im.path), [src]);
   const counts = useMemo(() => {
     const c: Record<ItemStatus, number> = { extracted: 0, made: 0, todo: 0 };
@@ -141,6 +207,7 @@ function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: bool
               <div style={{ fontFamily: "monospace", fontSize: "9.5px", color: "var(--text-dim)", marginTop: "2px" }}>
                 {im.path}
               </div>
+              <QCLayout sourceImagePath={im.path} masks={masks} />
             </div>
           ))}
         </div>
@@ -172,6 +239,76 @@ function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: bool
 
       {/* QC ストリップ: この source 配下で抽出済の家具を全部サムネで並べてスタイル一貫性を目視判定 */}
       <QCStrip paths={paths} />
+    </div>
+  );
+}
+
+// QC プレビュー Step2: 空背景 + 抽出済家具を moodboard 元配置で並べる。
+// 各 variant の bbox を mask スキャン結果から引いて、空背景の上に絶対座標で配置する。
+const EMPTY_BG = "/assets/backgrounds/sakura-room-empty.png";
+const MOODBOARD_W = 1920;
+const MOODBOARD_H = 1080;
+
+function QCLayout({ sourceImagePath, masks }: { sourceImagePath: string; masks: MaskBbox[] }) {
+  // この source 画像と一致する catalog variant + その bbox を集める
+  const placements = useMemo(() => {
+    const out: { defLabel: string; view: ObjectViewName; src: string; bbox: MaskBbox["bbox"] }[] = [];
+    for (const def of OBJECT_CATALOG) {
+      for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, ObjectVariant | undefined][]) {
+        if (!variant) continue;
+        const path = variant.source ?? def.source;
+        if (path !== sourceImagePath) continue;
+        const mask = findBboxForVariant(variant, MOODBOARD_W, MOODBOARD_H, masks);
+        if (!mask) continue;
+        out.push({ defLabel: def.label, view, src: variant.src, bbox: mask.bbox });
+      }
+    }
+    return out;
+  }, [sourceImagePath, masks]);
+
+  if (placements.length === 0) {
+    return (
+      <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--text-dim)", fontStyle: "italic" }}>
+        QC レイアウト: この画像に紐付く mask が見つからず自動配置できません
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: "8px" }}>
+      <div style={{ fontSize: "10px", color: "var(--text-dim)", marginBottom: "2px" }}>
+        ↓ QC レイアウト ({placements.length} 家具を空背景に moodboard 元配置で重ねたもの)
+      </div>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          aspectRatio: `${MOODBOARD_W} / ${MOODBOARD_H}`,
+          borderRadius: "6px",
+          border: "1px solid var(--border)",
+          overflow: "hidden",
+          backgroundImage: `url(${EMPTY_BG})`,
+          backgroundSize: "100% 100%",
+        }}
+      >
+        {placements.map((p) => (
+          <img
+            key={p.src}
+            src={`/${p.src}`}
+            alt={`${p.defLabel}/${p.view}`}
+            title={`${p.defLabel} (${VIEW_LABEL[p.view]})`}
+            style={{
+              position: "absolute",
+              left: `${(p.bbox.x / MOODBOARD_W) * 100}%`,
+              top: `${(p.bbox.y / MOODBOARD_H) * 100}%`,
+              width: `${(p.bbox.w / MOODBOARD_W) * 100}%`,
+              height: `${(p.bbox.h / MOODBOARD_H) * 100}%`,
+              objectFit: "contain",
+              objectPosition: "center",
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

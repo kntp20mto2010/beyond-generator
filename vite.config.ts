@@ -362,7 +362,29 @@ function catalogHiddenPlugin(): Plugin {
   };
 }
 
+// assets/generated/sakura-*mask*.png をスキャンして緑領域 bbox を返す。GET /__moodboard-positions。
+// SourcePage の QC プレビュー Step2 で「空背景 + moodboard 元配置」をレンダする時に使う。
+function moodboardPositionsPlugin(): Plugin {
+  return {
+    name: "moodboard-positions",
+    configureServer(server) {
+      server.middlewares.use("/__moodboard-positions", async (req, res) => {
+        if (req.method && req.method !== "GET") { res.statusCode = 405; res.end("GET only"); return; }
+        try {
+          const { stdout } = await pExecFile("python3", ["scripts/moodboard-positions.py"], { maxBuffer: 8 * 1024 * 1024 });
+          res.setHeader("Content-Type", "application/json");
+          res.end(stdout);
+        } catch (e) {
+          const err = e as { message?: string; stderr?: string };
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: err.message, stderr: err.stderr }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin(), generatedListPlugin(), objectImportPlugin(), objectAlphaPlugin(), objectMakeTransparentPlugin(), catalogHiddenPlugin()],
+  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin(), generatedListPlugin(), objectImportPlugin(), objectAlphaPlugin(), objectMakeTransparentPlugin(), catalogHiddenPlugin(), moodboardPositionsPlugin()],
   server: { port: 5273, strictPort: true },
 });
