@@ -565,6 +565,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     kind: "vanity",
     placement: "floor",
     views: {
+      // front: altlayout-r5 head-on 部屋 (4 家具集中版) から緑マスク pipeline で抽出。
+      //   ドレッサー本体 + 鏡 + プフ を一体として緑塗り、天板上の小物 (鉢植え・ボトル) も
+      //   一体保持。silhouette 完全可視 (OCCLUDERS: none) で input pixel ほぼそのまま完成。
+      front: {
+        src: "assets/objects/sakura-vanity-dresser-with-pouf-front.png",
+        nativeW: 340,
+        nativeH: 366,
+        cells: { w: 2, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R3,
+      },
       "front-dimetric": {
         src: "assets/objects/sakura-vanity-dresser-with-pouf-dimetric.png",
         nativeW: 1092,
