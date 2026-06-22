@@ -189,6 +189,16 @@ export interface ObjectDef {
   // 抽出元 moodboard のパス(リポジトリ相対)。緑マスクで部屋全体絵から切り出した家具に設定。
   // 未設定 = ゼロから(プロンプト)生成。ObjectPage の「抽出元 あり/なし」フィルタで使う。
   source?: string;
+  // この家具が想定する人物像のタグ群 (年代・性別・属性など)。
+  // 単一所有者ではなく「この家具がフィットしそうな人物属性」を列挙する。
+  // - "shared" = moodboard 横断で使える汎用家具 (観葉植物・本・カップ等)
+  // - "teen" / "child" / "adult" / "senior" 等 = 年代
+  // - "female" / "male" / "neutral" 等 = 性別
+  // - "student" / "office" / "kawaii" / "japanese" 等 = 属性・テイスト
+  // 例: ピンクのシングルベッド = ["teen", "female", "kawaii"]
+  //     観葉植物 (大型) = ["shared"]
+  //     学習机 = ["student", "child", "teen"]
+  persona?: string[];
 }
 
 export const OBJECT_CATALOG: ObjectDef[] = [
@@ -197,6 +207,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sofa-navy",
     label: "ソファ",
     defaultView: "front-dimetric",
+    persona: ["shared", "adult"],
     kind: "sofa",
     placement: "floor",
     views: {
@@ -232,6 +243,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-chair",
     label: "学校椅子",
     defaultView: "front-dimetric",
+    persona: ["school", "student"],
     kind: "chair",
     placement: "floor",
     views: {
@@ -258,6 +270,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "school-desk-front",
     label: "学校机(対面)",
     defaultView: "front-dimetric",
+    persona: ["school", "student"],
     kind: "desk",
     placement: "floor",
     views: {
@@ -286,6 +299,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ベッド(ピンク シングル)",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "bed",
     placement: "floor",
     views: {
@@ -317,6 +331,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ソファ(緑フロア)",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "sofa",
     placement: "floor",
     views: {
@@ -340,6 +355,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "窓+カーテン",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["shared"],
     kind: "window",
     placement: "back-wall",
     // 窓は端寄せ厳禁(壁の天井/床境界に貼らないため上下 1 cell マージン)。
@@ -362,6 +378,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "学習デスク",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["student", "child", "teen"],
     kind: "desk",
     placement: "floor",
     views: {
@@ -398,6 +415,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "デスクチェア(ピンク)",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "chair",
     placement: "floor",
     views: {
@@ -425,6 +443,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ワードローブ",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "storage",
     placement: "floor",
     views: {
@@ -463,6 +482,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "本棚",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "storage",
     placement: "floor",
     views: {
@@ -502,6 +522,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ドレッサー+鏡+プフ",
     defaultView: "front-dimetric",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "vanity",
     placement: "floor",
     views: {
@@ -528,6 +549,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     id: "sakura-rug-floral",
     label: "ラグ(花柄)",
     defaultView: "front",
+    persona: ["teen", "female", "kawaii"],
     kind: "rug",
     placement: "ground",
     views: {
@@ -544,6 +566,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ラグ(雲)",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "rug",
     placement: "ground",
     views: {
@@ -562,6 +585,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "額絵(花柄)",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "wall-decor",
     placement: "back-wall",
     views: {
@@ -578,6 +602,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "壁掛け時計",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["shared"],
     kind: "wall-decor",
     placement: "back-wall",
     views: {
@@ -594,6 +619,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ドライフラワー束",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "wall-decor",
     placement: "back-wall",
     views: {
@@ -610,6 +636,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "ペナント(5旗)",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "wall-decor",
     placement: "ceiling",
     views: {
@@ -626,6 +653,7 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     label: "フェアリーライト",
     defaultView: "front",
     source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
     kind: "wall-decor",
     placement: "ceiling",
     views: {

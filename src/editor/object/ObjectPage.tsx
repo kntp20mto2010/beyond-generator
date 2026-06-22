@@ -81,6 +81,11 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
   const [selectedPlacements, setSelectedPlacements] = useState<Set<ObjectPlacement>>(new Set());
   const [selectedAngles, setSelectedAngles] = useState<Set<ObjectViewName>>(new Set());
   const [selectedSources, setSelectedSources] = useState<Set<"yes" | "no">>(new Set());
+  // 全 catalog エントリで使われてる persona タグを抽出 (フィルタ chip 用)
+  const personasUsed = Array.from(
+    new Set(OBJECT_CATALOG.flatMap((d) => d.persona ?? [])),
+  ).sort();
+  const [selectedPersonas, setSelectedPersonas] = useState<Set<string>>(new Set());
   // 透過状況: src -> { transparentPct, opaque }。/__object-alpha から取得。alphaVersion を上げると再取得。
   const [alphaMap, setAlphaMap] = useState<Record<string, { transparentPct: number; opaque: boolean }> | null>(null);
   const [alphaVersion, setAlphaVersion] = useState(0);
@@ -123,6 +128,12 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
     setSelectedSources((prev) => {
       const next = new Set(prev);
       next.has(s) ? next.delete(s) : next.add(s);
+      return next;
+    });
+  const togglePersona = (p: string) =>
+    setSelectedPersonas((prev) => {
+      const next = new Set(prev);
+      next.has(p) ? next.delete(p) : next.add(p);
       return next;
     });
   const toggleTrans = (t: "done" | "todo") =>
@@ -200,6 +211,11 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
     if (selectedPlacements.size > 0 && (!def.placement || !selectedPlacements.has(def.placement))) return false;
     if (selectedAngles.size > 0 && !selectedAngles.has(view)) return false;
     if (selectedSources.size > 0 && !selectedSources.has(def.source ? "yes" : "no")) return false;
+    if (selectedPersonas.size > 0) {
+      const tags = def.persona ?? [];
+      // shared は常にどのペルソナにも適合とみなす (選択 persona ∪ "shared" のどれかにヒット)
+      if (!tags.some((t) => selectedPersonas.has(t) || t === "shared")) return false;
+    }
     if (selectedTrans.size > 0 && alphaMap) {
       const st = transOf(variant.src);
       if (st === "unknown" || !selectedTrans.has(st)) return false;
@@ -275,6 +291,15 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
           selected={selectedSources as Set<string>}
           onToggle={(s) => toggleSource(s as "yes" | "no")}
           onClear={() => setSelectedSources(new Set())}
+        />
+      )}
+      {personasUsed.length > 0 && (
+        <FilterChipRow
+          label="ペルソナ"
+          items={personasUsed.map((p) => ({ key: p, label: p }))}
+          selected={selectedPersonas}
+          onToggle={(p) => togglePersona(p)}
+          onClear={() => setSelectedPersonas(new Set())}
         />
       )}
       <FilterChipRow
@@ -1009,6 +1034,23 @@ function ObjectTile({
               抽出元あり ⤴
             </button>
           )}
+          {(def.persona ?? []).map((p) => (
+            <span
+              key={p}
+              style={{
+                fontSize: "9.5px",
+                padding: "1px 5px",
+                borderRadius: 10,
+                background: p === "shared" ? "var(--accent, #3b82f6)" : "var(--bg-elev)",
+                color: p === "shared" ? "white" : "var(--text-dim)",
+                border: "1px solid var(--border)",
+                fontWeight: p === "shared" ? 600 : 400,
+              }}
+              title={`ペルソナ: ${p}`}
+            >
+              {p}
+            </span>
+          ))}
           </>
         )}
       </div>
