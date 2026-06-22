@@ -94,12 +94,19 @@ export function SourcePage({
 }) {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [masks, setMasks] = useState<MaskBbox[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     let live = true;
     fetch("/__moodboard-positions")
       .then((r) => r.json())
       .then((data: { masks?: MaskBbox[] }) => {
         if (live && data.masks) setMasks(data.masks);
+      })
+      .catch(() => {});
+    fetch("/__catalog-hidden")
+      .then((r) => r.json())
+      .then((data: { hidden?: string[] }) => {
+        if (live && data.hidden) setHiddenIds(new Set(data.hidden));
       })
       .catch(() => {});
     return () => { live = false; };
@@ -136,19 +143,19 @@ export function SourcePage({
         <span style={{ marginLeft: 6 }}>□ 未作成</span>= catalog 未登録。
       </div>
       {MOODBOARD_SOURCES.map((src) => (
-        <SourceCard key={src.id} src={src} highlight={highlightId === src.id} masks={masks} />
+        <SourceCard key={src.id} src={src} highlight={highlightId === src.id} masks={masks} hiddenIds={hiddenIds} />
       ))}
     </div>
   );
 }
 
-function SourceCard({ src, highlight, masks }: { src: MoodboardSource; highlight?: boolean; masks: MaskBbox[] }) {
+function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource; highlight?: boolean; masks: MaskBbox[]; hiddenIds: Set<string> }) {
   const paths = useMemo(() => src.imagePaths.map((im) => im.path), [src]);
   const counts = useMemo(() => {
     const c: Record<ItemStatus, number> = { extracted: 0, made: 0, todo: 0 };
-    for (const it of src.items) c[itemStatus(it, paths)] += 1;
+    for (const it of src.items) c[itemStatus(it, paths, hiddenIds)] += 1;
     return c;
-  }, [src, paths]);
+  }, [src, paths, hiddenIds]);
   const total = src.items.length;
 
   // group 見出しごとにまとめる(出現順を保持)
@@ -207,7 +214,7 @@ function SourceCard({ src, highlight, masks }: { src: MoodboardSource; highlight
               <div style={{ fontFamily: "monospace", fontSize: "9.5px", color: "var(--text-dim)", marginTop: "2px" }}>
                 {im.path}
               </div>
-              <QCLayout sourceImagePath={im.path} masks={masks} />
+              <QCLayout sourceImagePath={im.path} masks={masks} hiddenIds={hiddenIds} />
             </div>
           ))}
         </div>
@@ -230,7 +237,7 @@ function SourceCard({ src, highlight, masks }: { src: MoodboardSource; highlight
                 >
                   {group}
                 </div>
-                <FurnitureTable items={items} paths={paths} />
+                <FurnitureTable items={items} paths={paths} hiddenIds={hiddenIds} />
               </div>
             ))}
           </div>
@@ -238,7 +245,7 @@ function SourceCard({ src, highlight, masks }: { src: MoodboardSource; highlight
       </div>
 
       {/* QC ストリップ: この source 配下で抽出済の家具を全部サムネで並べてスタイル一貫性を目視判定 */}
-      <QCStrip paths={paths} />
+      <QCStrip paths={paths} hiddenIds={hiddenIds} />
     </div>
   );
 }
@@ -249,13 +256,15 @@ const EMPTY_BG = "/assets/backgrounds/sakura-room-empty.png";
 const MOODBOARD_W = 1920;
 const MOODBOARD_H = 1080;
 
-function QCLayout({ sourceImagePath, masks }: { sourceImagePath: string; masks: MaskBbox[] }) {
-  // この source 画像と一致する catalog variant + その bbox を集める
+function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: string; masks: MaskBbox[]; hiddenIds: Set<string> }) {
+  // この source 画像と一致する catalog variant + その bbox を集める (hidden は除外)
   const placements = useMemo(() => {
     const out: { defLabel: string; view: ObjectViewName; src: string; bbox: MaskBbox["bbox"] }[] = [];
     for (const def of OBJECT_CATALOG) {
+      if (hiddenIds.has(def.id)) continue;
       for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, ObjectVariant | undefined][]) {
         if (!variant) continue;
+        if (hiddenIds.has(`${def.id}|${view}`)) continue;
         const path = variant.source ?? def.source;
         if (path !== sourceImagePath) continue;
         const mask = findBboxForVariant(variant, MOODBOARD_W, MOODBOARD_H, masks);
@@ -264,7 +273,7 @@ function QCLayout({ sourceImagePath, masks }: { sourceImagePath: string; masks: 
       }
     }
     return out;
-  }, [sourceImagePath, masks]);
+  }, [sourceImagePath, masks, hiddenIds]);
 
   if (placements.length === 0) {
     return (
@@ -315,13 +324,15 @@ function QCLayout({ sourceImagePath, masks }: { sourceImagePath: string; masks: 
 
 // QC プレビュー Step1: この source の抽出済 variant を catalog からピックアップしてサムネ並べる。
 // moodboard 原画とスタイルが合ってるか目視で確認できる (配置自動化は Step2 で予定)。
-function QCStrip({ paths }: { paths: string[] }) {
+function QCStrip({ paths, hiddenIds }: { paths: string[]; hiddenIds: Set<string> }) {
   const pathSet = useMemo(() => new Set(paths), [paths]);
   const tiles = useMemo(() => {
     const out: { defId: string; defLabel: string; view: ObjectViewName; src: string; imageIdx: number }[] = [];
     for (const def of OBJECT_CATALOG) {
+      if (hiddenIds.has(def.id)) continue;
       for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, NonNullable<(typeof def.views)[ObjectViewName]>][]) {
         if (!variant) continue;
+        if (hiddenIds.has(`${def.id}|${view}`)) continue;
         const sourcePath = variant.source ?? def.source;
         if (!sourcePath || !pathSet.has(sourcePath)) continue;
         const imageIdx = paths.indexOf(sourcePath) + 1;
@@ -329,7 +340,7 @@ function QCStrip({ paths }: { paths: string[] }) {
       }
     }
     return out;
-  }, [paths, pathSet]);
+  }, [paths, pathSet, hiddenIds]);
 
   if (tiles.length === 0) return null;
   return (
@@ -461,7 +472,7 @@ function StatusBadge({ status }: { status: ItemStatus }) {
 }
 
 // 家具テーブル: 1 行 = 1 家具、列 = 正面 / 立体 / 壁付。セル値は何番目の画像から抽出したかの index (1-based)。
-function FurnitureTable({ items, paths }: { items: MoodboardItem[]; paths: string[] }) {
+function FurnitureTable({ items, paths, hiddenIds }: { items: MoodboardItem[]; paths: string[]; hiddenIds: Set<string> }) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
       <thead>
@@ -474,10 +485,10 @@ function FurnitureTable({ items, paths }: { items: MoodboardItem[]; paths: strin
       </thead>
       <tbody>
         {items.map((it) => {
-          const status = itemStatus(it, paths);
-          const front = viewExtractionCell(it, "front", paths);
-          const dimetric = viewExtractionCell(it, "front-dimetric", paths);
-          const side = viewExtractionCell(it, "side", paths);
+          const status = itemStatus(it, paths, hiddenIds);
+          const front = viewExtractionCell(it, "front", paths, hiddenIds);
+          const dimetric = viewExtractionCell(it, "front-dimetric", paths, hiddenIds);
+          const side = viewExtractionCell(it, "side", paths, hiddenIds);
           return (
             <tr key={it.labelJa} style={{ borderBottom: "1px solid var(--border)" }}>
               <td style={{ padding: "4px", verticalAlign: "top" }}>

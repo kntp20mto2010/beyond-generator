@@ -40,13 +40,24 @@ export interface MoodboardSource {
 // - todo      : 対応する catalog entry がまだ無い (= 未作成)
 export type ItemStatus = "extracted" | "made" | "todo";
 
-export function itemStatus(item: MoodboardItem, moodboardPaths: string[]): ItemStatus {
+// hidden 判定: catalog-hidden.json に id がある (家具ごと) または id|view がある (視点ごと)
+function isHidden(hiddenIds: Set<string>, defId: string, view?: string): boolean {
+  if (hiddenIds.has(defId)) return true;
+  if (view && hiddenIds.has(`${defId}|${view}`)) return true;
+  return false;
+}
+
+export function itemStatus(item: MoodboardItem, moodboardPaths: string[], hiddenIds: Set<string> = new Set()): ItemStatus {
   if (!item.catalogId) return "todo";
   const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
   if (!def) return "todo";
-  // どれかの variant の source がこの source group の画像に一致すれば抽出済
-  for (const v of Object.values(def.views)) {
-    if (v?.source && moodboardPaths.includes(v.source)) return "extracted";
+  // def 自体が hidden なら todo 扱い (= UI から消えてるので未作成と同じ意味)
+  if (isHidden(hiddenIds, def.id)) return "todo";
+  // 可視 variant の source がこの source group の画像に一致すれば抽出済
+  for (const [view, v] of Object.entries(def.views)) {
+    if (!v) continue;
+    if (isHidden(hiddenIds, def.id, view)) continue; // hidden variant は無視
+    if (v.source && moodboardPaths.includes(v.source)) return "extracted";
   }
   return def.source && moodboardPaths.includes(def.source) ? "extracted" : "made";
 }
@@ -61,10 +72,14 @@ export function viewExtractionCell(
   item: MoodboardItem,
   view: "front" | "front-dimetric" | "side",
   moodboardPaths: string[],
+  hiddenIds: Set<string> = new Set(),
 ): ViewExtractionCell {
   if (!item.catalogId) return "—";
   const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
   if (!def) return "—";
+  // hidden は「無いものとして扱う」(KEN 指示: hidden は議論に混ぜない)
+  if (isHidden(hiddenIds, def.id, view)) return "—";
+  if (isHidden(hiddenIds, def.id)) return "—";
   const v = def.views[view];
   if (!v) return "—";
   const path = v.source ?? def.source;
