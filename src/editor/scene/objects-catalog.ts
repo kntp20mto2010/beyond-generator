@@ -468,6 +468,17 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     kind: "chair",
     placement: "floor",
     views: {
+      // front: altlayout-r5 head-on 部屋 (4 家具集中版) から緑マスク pipeline で抽出。
+      //   緑マスク自体も view_image→edit 強制で生成 (r1 は room を描き直してチェアがベッド位置に
+      //   ズレ → r2 で room 保持・正位置に修正)。OCCLUDERS: bed behind chair だがチェア本体は完全可視。
+      //   edgepolish (view_image 強制) で輪郭整形、内部 RGB 保持。head-on 縦長なので footprint 1x2。
+      front: {
+        src: "assets/objects/sakura-desk-chair-pink-front.png",
+        nativeW: 128,
+        nativeH: 223,
+        cells: { w: 1, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R3,
+      },
       "front-dimetric": {
         src: "assets/objects/sakura-desk-chair-pink-dimetric.png",
         nativeW: 550,
