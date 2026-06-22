@@ -153,7 +153,7 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     group: "壁飾り",
     location: "中央右壁・時計の下",
     catalogId: null,
-    note: "2枚目の額。専用 entry が未作成 (frame-floral は左壁に割当済み)。",
+    note: "2枚目の額 (frame-floral は左壁に割当済み)。緑マスク抽出を試みたが、tiny target のため Codex の edit が 3 連続で部屋ごと再生成 (写実的な別部屋) → deferred。手動 crop or 専用 moodboard で後日。",
   },
   { labelJa: "壁掛け時計 (丸型)", group: "壁飾り", location: "中央上部・窓の右上", catalogId: "sakura-wall-clock" },
   { labelJa: "ドライフラワー (スワッグ)", group: "壁飾り", location: "左壁上部・ベッド頭上", catalogId: "sakura-wall-dried-bouquet" },
@@ -174,14 +174,14 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     group: "小物・植物",
     location: "学習机の上(左奥)",
     catalogId: null,
-    note: "机上の緑デスクランプ。単体 entry が未作成 (机抽出に内包する手もある)。",
+    note: "学習机の抽出画像 (sakura-study-desk-*) に天板小物として内包済み。単体で置く需要が出たら専用抽出するが、現状は机に含むため standalone entry は作らない。",
   },
   {
     labelJa: "鉢植え観葉植物 (窓辺・棚上など)",
     group: "小物・植物",
     location: "窓辺/ワードローブ上/本棚/テーブル上",
     catalogId: null,
-    note: "各所の小型鉢植えをまとめて1行。plant entry 群が未作成。",
+    note: "各所の小型鉢植え。多くは host 家具の抽出画像に内包済み (ウォールシェルフ=sakura-wall-shelf-plant に鉢植え2つ、本棚/ワードローブの上の小鉢も各家具に含む)。単体 plant entry は床置き大 (sakura-plant-floor-large) のみ作成。微小な棚上鉢植えの standalone は需要が出たら個別に。",
   },
 ];
 
