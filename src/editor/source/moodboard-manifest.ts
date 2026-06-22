@@ -7,7 +7,7 @@
 // ステータスは **manifest にハードコードしない**。catalogId と OBJECT_CATALOG.source から
 // 実行時に導出する (itemStatus)。これにより catalog に source を足したり新 entry を登録すると
 // チェックリストが自動で更新され、drift しない。
-import { OBJECT_CATALOG, SAKURA_ROOM_MOODBOARD, SAKURA_ROOM_ALTLAYOUT_R1 } from "../scene/objects-catalog.js";
+import { OBJECT_CATALOG, SAKURA_ROOM_MOODBOARD, SAKURA_ROOM_ALTLAYOUT_R1, SAKURA_ROOM_ALTLAYOUT_R3 } from "../scene/objects-catalog.js";
 
 // moodboard 上の1アイテム = チェックリスト1行。
 export interface MoodboardItem {
@@ -203,6 +203,11 @@ export const MOODBOARD_SOURCES: MoodboardSource[] = [
         path: SAKURA_ROOM_ALTLAYOUT_R1,
         labelJa: "別レイアウト r1 (足元 3/4 視点)",
         contributes: "正面寄り 3/4 (足元/前面向き) を補強。ベッド・学習デスク・ワードローブ・本棚 などの front を抽出可能",
+      },
+      {
+        path: SAKURA_ROOM_ALTLAYOUT_R3,
+        labelJa: "別レイアウト r3 (head-on 視点)",
+        contributes: "真正面 (head-on) を補強。ベッド・ソファ・ドレッサー・デスクチェア の front を抽出可能。OCCLUDERS: ベッド前=雲ラグ / ソファ前=なし / デスクチェア前=デスク天板 / ドレッサー前=なし",
       },
     ],
     items: SAKURA_ROOM_ITEMS,

@@ -189,6 +189,10 @@ export const SAKURA_ROOM_MOODBOARD =
 // 一部の variant (ベッド dimetric, 学習デスク front 等) はこちらから抽出した。
 export const SAKURA_ROOM_ALTLAYOUT_R1 =
   "assets/generated/sakura-room-altlayout-r1-20260621.png";
+// 3 枚目: ベッド・ソファ・ドレッサー・デスクチェア を真正面寄りに再配置した head-on レイアウト。
+// OCCLUDERS: ベッド前=雲ラグ / ソファ前=なし / デスクチェア前=デスク天板 / ドレッサー前=なし。
+export const SAKURA_ROOM_ALTLAYOUT_R3 =
+  "assets/generated/sakura-room-altlayout-r3-front-20260622.png";
 
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
