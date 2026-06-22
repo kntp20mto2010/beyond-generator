@@ -634,6 +634,26 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     },
   },
   {
+    id: "sakura-pouf-pink",
+    label: "プーフ(丸スツール・ピンク)",
+    defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
+    kind: "stool",
+    placement: "floor",
+    views: {
+      // front: r2 部屋から緑マスク (view_image→edit 強制) → apply-green-mask → strip。
+      //   OCCLUDERS: none・虫食いなしのクリーンな丸スツールだったため cleanup 不要。
+      front: {
+        src: "assets/objects/sakura-pouf-pink-front.png",
+        nativeW: 239,
+        nativeH: 154,
+        cells: { w: 1, h: 1 },
+        source: SAKURA_ROOM_MOODBOARD,
+      },
+    },
+  },
+  {
     id: "sakura-coffee-table",
     label: "コーヒーテーブル(円形ロー)",
     defaultView: "front",
