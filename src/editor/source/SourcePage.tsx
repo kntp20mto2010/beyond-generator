@@ -11,6 +11,7 @@ import {
   viewExtractionCell,
   type ViewExtractionCell,
 } from "./moodboard-manifest.js";
+import { OBJECT_CATALOG, VIEW_LABEL, type ObjectViewName } from "../scene/objects-catalog.js";
 
 const STATUS_COLOR: Record<ItemStatus, string> = {
   extracted: "var(--ok, #3a6)",
@@ -163,15 +164,117 @@ function SourceCard({ src, highlight }: { src: MoodboardSource; highlight?: bool
                   {group}
                 </div>
                 <FurnitureTable items={items} paths={paths} />
-                {/* 隠しデバッグ用: ChecklistRow を残しておきたければここに */}
-                {false &&
-                  items.map((it) => (
-                    <ChecklistRow key={it.labelJa} item={it} status={itemStatus(it, paths)} />
-                  ))}
               </div>
             ))}
           </div>
         </div>
+      </div>
+
+      {/* QC ストリップ: この source 配下で抽出済の家具を全部サムネで並べてスタイル一貫性を目視判定 */}
+      <QCStrip paths={paths} />
+    </div>
+  );
+}
+
+// QC プレビュー Step1: この source の抽出済 variant を catalog からピックアップしてサムネ並べる。
+// moodboard 原画とスタイルが合ってるか目視で確認できる (配置自動化は Step2 で予定)。
+function QCStrip({ paths }: { paths: string[] }) {
+  const pathSet = useMemo(() => new Set(paths), [paths]);
+  const tiles = useMemo(() => {
+    const out: { defId: string; defLabel: string; view: ObjectViewName; src: string; imageIdx: number }[] = [];
+    for (const def of OBJECT_CATALOG) {
+      for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, NonNullable<(typeof def.views)[ObjectViewName]>][]) {
+        if (!variant) continue;
+        const sourcePath = variant.source ?? def.source;
+        if (!sourcePath || !pathSet.has(sourcePath)) continue;
+        const imageIdx = paths.indexOf(sourcePath) + 1;
+        out.push({ defId: def.id, defLabel: def.label, view, src: variant.src, imageIdx });
+      }
+    }
+    return out;
+  }, [paths, pathSet]);
+
+  if (tiles.length === 0) return null;
+  return (
+    <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "4px" }}>
+        QC プレビュー
+        <span style={{ color: "var(--text-dim)", fontWeight: 400, fontSize: "10px", marginLeft: "6px" }}>
+          ({tiles.length} variants) — moodboard と画風・色トーン・スケールが揃っているか目視確認
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+          gap: "8px",
+        }}
+      >
+        {tiles.map((t) => (
+          <div
+            key={`${t.defId}|${t.view}`}
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: "4px",
+              background: "var(--bg-panel)",
+              padding: "6px",
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100px",
+                background: "var(--bg-app)",
+                borderRadius: "3px",
+                backgroundImage:
+                  "linear-gradient(45deg, var(--border) 25%, transparent 25%), linear-gradient(-45deg, var(--border) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--border) 75%), linear-gradient(-45deg, transparent 75%, var(--border) 75%)",
+                backgroundSize: "10px 10px",
+                backgroundPosition: "0 0, 0 5px, 5px -5px, -5px 0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                marginBottom: "4px",
+              }}
+            >
+              <img
+                src={`/${t.src}`}
+                alt={`${t.defLabel}/${t.view}`}
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+              />
+            </div>
+            <div style={{ fontSize: "10px", fontWeight: 600 }}>
+              {t.defLabel}
+              <span
+                style={{
+                  fontSize: "9px",
+                  marginLeft: "4px",
+                  padding: "0 4px",
+                  borderRadius: 6,
+                  background: "var(--accent, #3b82f6)",
+                  color: "white",
+                  fontWeight: 600,
+                }}
+              >
+                {VIEW_LABEL[t.view]}
+              </span>
+              <span
+                style={{
+                  fontSize: "9px",
+                  marginLeft: "3px",
+                  padding: "0 4px",
+                  borderRadius: 6,
+                  background: "var(--ok, #3a6)",
+                  color: "white",
+                  fontWeight: 600,
+                }}
+                title={paths[t.imageIdx - 1]?.split("/").pop()}
+              >
+                {t.imageIdx}
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
