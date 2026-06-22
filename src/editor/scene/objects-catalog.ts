@@ -430,16 +430,6 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     kind: "desk",
     placement: "floor",
     views: {
-      // front: altlayout-r1 部屋から緑マスク → apply-green-mask → prep-fillin-canvas →
-      //   Codex cleanup r2-ctx (緑マスクを 2nd 参照に追加した最初の成功版、aspect 1.009 vs input 1.019) →
-      //   strip-fake-transparency。
-      front: {
-        src: "assets/objects/sakura-study-desk-front.png",
-        nativeW: 454,
-        nativeH: 450,
-        cells: { w: 2, h: 2 },
-        source: SAKURA_ROOM_ALTLAYOUT_R1,
-      },
       "front-dimetric": {
         src: "assets/objects/sakura-study-desk-dimetric.png",
         nativeW: 1041,
@@ -448,13 +438,16 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         projection: "dimetric-2to1-sitting",
         promptFile: "sakura-study-desk-sitting-2to1-l1b-v1-20260619",
       },
+      // side (壁付): altlayout-r1 部屋から抽出した壁付寄り 3/4 view。元は front slot に
+      //   誤登録されていた (実際は壁に寄せた時の見え方 = 壁付) ため KEN 指示で side に移動。
+      //   旧 leftwall v10 side (sakura-study-desk-leftwall.png、急角度で潰れ気味) を置換、
+      //   旧ファイルは disk に残置。注: src ファイル名は -front だが view は side。
       side: {
-        src: "assets/objects/sakura-study-desk-leftwall.png",
-        nativeW: 570,
-        nativeH: 842,
-        cells: { w: 4, h: 3 },
-        projection: "wall-aligned-v10",
-        promptFile: "sakura-study-desk-leftwall-v10-l1b-20260619",
+        src: "assets/objects/sakura-study-desk-front.png",
+        nativeW: 454,
+        nativeH: 450,
+        cells: { w: 2, h: 2 },
+        source: SAKURA_ROOM_ALTLAYOUT_R1,
         wallOrigin: "left",
       },
     },
