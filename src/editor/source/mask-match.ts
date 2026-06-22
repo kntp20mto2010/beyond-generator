@@ -46,6 +46,14 @@ export function stemMatches(maskStem: string, candidate: string): boolean {
   return false;
 }
 
+// マスク stem が view 専用 (命名規約 <…>-front / -leftwall 等で終わる) か。
+// view 専用マスクは exact-first でしか当てない (緩いマッチからは除外する) ことで、
+// 例えば「sakura-bed-pink-single-front」(r5 front) がベッドの side/dimetric (別 source) に
+// prefix で誤マッチして別 view を別位置に飛ばすのを防ぐ。
+export function isViewSpecificMaskStem(stem: string): boolean {
+  return VIEW_SUFFIXES.some((suf) => stem.endsWith(`-${suf}`));
+}
+
 // variant に対応する mask bbox を返す。
 //
 // 【重要】matching は本来「家具名」だけで探すと source 盲目になる: 同じ家具を複数 moodboard から
@@ -68,9 +76,10 @@ export function findBboxForVariant(
   const fullStem = stemFromVariantSrc(variant.src);
   const exact = candidates.find((m) => m.stem === fullStem);
   if (exact) return exact;
-  // 2) フォールバック (旧マスク)。
+  // 2) フォールバック (旧マスク)。view 専用マスクは exact でしか当てない (別 view への誤マッチ防止)。
+  const loose = candidates.filter((m) => !isViewSpecificMaskStem(m.stem));
   for (const stem of stemCandidates(variant.src)) {
-    const hit = candidates.find((m) => stemMatches(m.stem, stem));
+    const hit = loose.find((m) => stemMatches(m.stem, stem));
     if (hit) return hit;
   }
   return null;

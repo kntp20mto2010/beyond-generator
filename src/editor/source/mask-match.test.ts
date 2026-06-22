@@ -64,6 +64,25 @@ describe("findBboxForVariant exact-first (命名規約 <variant-src-stem>-mask)"
     expect(findBboxForVariant(variant("sakura-desk-chair-pink-front"), W, H, masks)?.bbox.x).toBe(986);
   });
 
+  it("view 専用マスク (-front 等) は別 view の variant に誤マッチしない (exact のみ)", () => {
+    // r5 front マスクができたことで、ベッドの side/dimetric (別 source) が
+    // 緩い prefix マッチで front マスク (別位置) を拾ってしまう回帰を防ぐ。
+    const masks = [
+      mask("sakura-bed-pink-single-front", 1182, 471), // r5 front (view 専用)
+      mask("sakura-bed-altlayout", 571, 475), // r1 (stem 不一致)
+    ];
+    expect(findBboxForVariant(variant("sakura-bed-pink-single-leftwall"), W, H, masks)).toBeNull();
+    expect(findBboxForVariant(variant("sakura-bed-pink-single-dimetric"), W, H, masks)).toBeNull();
+    // front 自身は exact で当たる
+    expect(findBboxForVariant(variant("sakura-bed-pink-single-front"), W, H, masks)?.bbox.x).toBe(1182);
+  });
+
+  it("非 view マスク (sakura-sofa 等) はフォールバックで別 view にも当たる (旧挙動維持)", () => {
+    const masks = [mask("sakura-sofa", 1022, 608)];
+    // front-dimetric は exact 無し → 非 view の sakura-sofa にフォールバック
+    expect(findBboxForVariant(variant("sakura-sofa-green-floor-dimetric"), W, H, masks)?.bbox.x).toBe(1022);
+  });
+
   it("旧マスク (命名規約前) はフォールバックの緩いマッチで当たる", () => {
     const masks = [mask("sakura-wardrobe-front", 533, 185), mask("sakura-wardrobe", 1268, 121)];
     // front 完全一致
