@@ -87,6 +87,10 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
   const [selectedTrans, setSelectedTrans] = useState<Set<"done" | "todo">>(new Set());
   // 不足角度フィルタ (floor 家具で未生成の view を絞る)
   const [selectedMissing, setSelectedMissing] = useState<Set<ObjectViewName>>(new Set());
+  // hidden catalog ids (soft hide。catalog-hidden.json で永続)
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [hiddenVersion, setHiddenVersion] = useState(0);
+  const [showHidden, setShowHidden] = useState(false);
   const toggleKind = (k: ObjectKind) =>
     setSelectedKinds((prev) => {
       const next = new Set(prev);
@@ -127,6 +131,19 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
       next.has(t) ? next.delete(t) : next.add(t);
       return next;
     });
+
+  // hidden id リストをサーバから取得
+  useEffect(() => {
+    let live = true;
+    fetch(`/__catalog-hidden`)
+      .then((r) => r.json())
+      .then((data: { hidden?: string[] }) => {
+        if (!live) return;
+        setHiddenIds(new Set(data.hidden ?? []));
+      })
+      .catch(() => { if (live) setHiddenIds(new Set()); });
+    return () => { live = false; };
+  }, [hiddenVersion]);
 
   // 透過状況をサーバから取得 (alphaVersion で再取得)
   useEffect(() => {
@@ -176,6 +193,8 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
   }
 
   const tiles = allTiles.filter(({ def, view, variant }) => {
+    // hidden 判定: showHidden が false なら hidden id は除外
+    if (!showHidden && hiddenIds.has(def.id)) return false;
     if (selectedKinds.size > 0 && (!def.kind || !selectedKinds.has(def.kind))) return false;
     if (selectedPlacements.size > 0 && (!def.placement || !selectedPlacements.has(def.placement))) return false;
     if (selectedAngles.size > 0 && !selectedAngles.has(view)) return false;
@@ -193,10 +212,19 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "var(--bg-app)", color: "var(--text)" }}>
-      <div style={{ fontWeight: 700, marginBottom: "12px", fontSize: "14px" }}>
-        オブジェクト({OBJECT_CATALOG.length} 家具 / {allTiles.length} 視点バリアント
-        {tiles.length !== allTiles.length ? ` ・ 表示中 ${tiles.length}` : ""}
-        {opaqueCount > 0 ? <span style={{ color: "var(--err, #c44)" }}> ・ 要透過 {opaqueCount}</span> : ""})
+      <div style={{ fontWeight: 700, marginBottom: "8px", fontSize: "14px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span>
+          オブジェクト({OBJECT_CATALOG.length} 家具 / {allTiles.length} 視点バリアント
+          {tiles.length !== allTiles.length ? ` ・ 表示中 ${tiles.length}` : ""}
+          {opaqueCount > 0 ? <span style={{ color: "var(--err, #c44)" }}> ・ 要透過 {opaqueCount}</span> : ""}
+          {hiddenIds.size > 0 ? <span style={{ color: "var(--text-dim)" }}> ・ 非表示 {hiddenIds.size}</span> : ""})
+        </span>
+        {hiddenIds.size > 0 && (
+          <label style={{ fontSize: "11px", color: "var(--text-dim)", fontWeight: 400, display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+            <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} />
+            非表示も表示
+          </label>
+        )}
       </div>
       <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "12px" }}>
         カタログの全オブジェクト。各家具は front / side の 2 視点を持てる。
@@ -293,6 +321,8 @@ export function ObjectPage({ onJumpToSource }: { onJumpToSource: (sourcePath: st
             trans={transOf(variant.src)}
             onAfterTransparent={() => setAlphaVersion((v) => v + 1)}
             onJumpToSource={onJumpToSource}
+            isHidden={hiddenIds.has(def.id)}
+            onToggleHidden={() => setHiddenVersion((v) => v + 1)}
           />
         ))}
       </div>
@@ -728,6 +758,8 @@ function ObjectTile({
   trans,
   onAfterTransparent,
   onJumpToSource,
+  isHidden,
+  onToggleHidden,
 }: {
   def: ObjectDef;
   view: ObjectViewName;
@@ -735,6 +767,8 @@ function ObjectTile({
   trans: "done" | "todo" | "unknown";
   onAfterTransparent: () => void;
   onJumpToSource: (sourcePath: string) => void;
+  isHidden: boolean;
+  onToggleHidden: () => void;
 }) {
   const cells = variantCells(variant);
   const scale = containScale(variant.nativeW, variant.nativeH, cells);
@@ -743,6 +777,24 @@ function ObjectTile({
   const [flip, setFlip] = useState<FlipState>({ status: "idle" });
   const [transp, setTransp] = useState<FlipState>({ status: "idle" });
   const isDefault = def.defaultView === view;
+
+  const handleToggleHidden = async () => {
+    const action = isHidden ? "unhide" : "hide";
+    const verb = isHidden ? "復元" : "削除 (非表示化)";
+    if (!isHidden && !confirm(`${def.label} を ${verb} しますか？\n(ファイルは消えず、UI から非表示になるだけ。catalog-hidden.json で管理。復元は「非表示も表示」→「復元」ボタン or JSON 編集で可能)`)) return;
+    try {
+      const res = await fetch("/__catalog-hidden", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: def.id, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || `server ${res.status}`);
+      onToggleHidden();
+    } catch (e) {
+      alert(`${verb}失敗: ${String((e as Error)?.message ?? e)}`);
+    }
+  };
 
   const handleMakeTransparent = async () => {
     setTransp({ status: "running" });
@@ -815,6 +867,7 @@ function ObjectTile({
         display: "flex",
         flexDirection: "column",
         gap: "6px",
+        opacity: isHidden ? 0.4 : 1,
       }}
     >
       <div
@@ -1021,6 +1074,22 @@ function ObjectTile({
           {flip.message}
         </div>
       )}
+      <button
+        type="button"
+        onClick={handleToggleHidden}
+        title={isHidden ? "非表示を解除して再び一覧に表示する" : "オブジェクトタブから非表示にする (ファイルは消さず catalog-hidden.json に id を追加)"}
+        style={{
+          fontSize: "10px",
+          padding: "3px 6px",
+          background: "transparent",
+          color: isHidden ? "var(--ok, #3a6)" : "var(--text-dim)",
+          border: "1px dashed var(--border)",
+          borderRadius: 3,
+          cursor: "pointer",
+        }}
+      >
+        {isHidden ? "↩ 復元" : "✕ 削除 (非表示化)"}
+      </button>
     </div>
   );
 }

@@ -321,7 +321,47 @@ function objectMakeTransparentPlugin(): Plugin {
   };
 }
 
+// catalog の hidden ID リストを管理。GET /__catalog-hidden で読取、POST /__catalog-hidden で
+// id を追加・削除。実体は src/editor/scene/catalog-hidden.json。catalog source は触らない。
+// オブジェクトタブで「削除」ボタンを押すと id がここに加わり、UI から非表示になる (soft hide)。
+function catalogHiddenPlugin(): Plugin {
+  const HIDDEN_PATH = "src/editor/scene/catalog-hidden.json";
+  return {
+    name: "catalog-hidden",
+    configureServer(server) {
+      server.middlewares.use("/__catalog-hidden", async (req, res) => {
+        try {
+          if (req.method === "GET" || !req.method) {
+            const buf = await readFile(HIDDEN_PATH, "utf8").catch(() => '{"hidden":[]}');
+            res.setHeader("Content-Type", "application/json");
+            res.end(buf);
+            return;
+          }
+          if (req.method !== "POST") { res.statusCode = 405; res.end("GET or POST only"); return; }
+          let body = "";
+          for await (const chunk of req) body += chunk as string;
+          const { id, action } = JSON.parse(body) as { id?: string; action?: "hide" | "unhide" };
+          if (typeof id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+            res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: "bad id" })); return;
+          }
+          const op = action === "unhide" ? "unhide" : "hide";
+          const cur = JSON.parse(await readFile(HIDDEN_PATH, "utf8").catch(() => '{"hidden":[]}')) as { hidden: string[] };
+          const set = new Set(cur.hidden);
+          if (op === "hide") set.add(id); else set.delete(id);
+          const next = { hidden: Array.from(set).sort() };
+          await writeFile(HIDDEN_PATH, JSON.stringify(next, null, 2) + "\n", "utf8");
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ ok: true, hidden: next.hidden, op }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ ok: false, error: String((e as Error)?.message ?? e) }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin(), generatedListPlugin(), objectImportPlugin(), objectAlphaPlugin(), objectMakeTransparentPlugin()],
+  plugins: [react(), poseSnapshotPlugin(), rigSavePlugin(), objectFlipPlugin(), generatedListPlugin(), objectImportPlugin(), objectAlphaPlugin(), objectMakeTransparentPlugin(), catalogHiddenPlugin()],
   server: { port: 5273, strictPort: true },
 });
