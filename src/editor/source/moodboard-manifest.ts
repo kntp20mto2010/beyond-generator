@@ -161,8 +161,7 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     labelJa: "ウォールシェルフ (植物棚)",
     group: "壁飾り",
     location: "左壁・ベッド上方",
-    catalogId: null,
-    note: "鉢植え2つを載せた壁付け木製シェルフ。entry 未作成。",
+    catalogId: "sakura-wall-shelf-plant",
   },
 
   // ── 天井 ──

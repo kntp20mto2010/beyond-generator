@@ -715,6 +715,26 @@ export const OBJECT_CATALOG: ObjectDef[] = [
 
   // === 壁デコ(wall-mounted、視点は1つのみ) ===
   {
+    id: "sakura-wall-shelf-plant",
+    label: "ウォールシェルフ(植物棚)",
+    defaultView: "front",
+    source: SAKURA_ROOM_MOODBOARD,
+    persona: ["teen", "female", "kawaii"],
+    kind: "wall-decor",
+    placement: "back-wall",
+    views: {
+      // front: r2 左壁・ベッド上方の木製壁付け棚 + 鉢植え2つ。緑マスク (view_image→edit 強制、
+      //   本物の r2 編集を目視確認済) → apply → strip。OCCLUDERS: none・クリーンで cleanup 不要。
+      front: {
+        src: "assets/objects/sakura-wall-shelf-plant-front.png",
+        nativeW: 234,
+        nativeH: 185,
+        cells: { w: 1, h: 1 },
+        source: SAKURA_ROOM_MOODBOARD,
+      },
+    },
+  },
+  {
     id: "sakura-wall-frame-floral",
     label: "額絵(花柄)",
     defaultView: "front",
