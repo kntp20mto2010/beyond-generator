@@ -211,7 +211,14 @@ const MOODBOARD_H = 1080;
 function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: string; masks: MaskBbox[]; hiddenIds: Set<string> }) {
   // この source 画像と一致する catalog variant + その bbox を集める (hidden は除外)
   const placements = useMemo(() => {
-    const out: { defLabel: string; view: ObjectViewName; src: string; bbox: MaskBbox["bbox"]; flipX: boolean }[] = [];
+    const out: {
+      defLabel: string;
+      view: ObjectViewName;
+      src: string;
+      bbox: MaskBbox["bbox"];
+      flipX: boolean;
+      z: number;
+    }[] = [];
     for (const def of OBJECT_CATALOG) {
       if (hiddenIds.has(def.id)) continue;
       for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, ObjectVariant | undefined][]) {
@@ -229,9 +236,21 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
           const targetWall = centerX < MOODBOARD_W / 2 ? "left" : "right";
           flipX = resolveSideFlipX(variant, targetWall);
         }
-        out.push({ defLabel: def.label, view, src: variant.src, bbox: mask.bbox, flipX });
+        // 描画 z は scene-eval.ts の effectiveZ と同じレイヤ構造で計算:
+        //   壁/天井 (back-wall/side-wall/ceiling): -10000
+        //   床敷き (ground、ラグ等):              -5000
+        //   床置き (floor、家具):                  bbox 底辺 y (奥→手前)
+        // これでラグ < 床家具 になりソファ等がラグの上に重なる。
+        const placement = def.placement;
+        let z: number;
+        if (placement === "back-wall" || placement === "side-wall" || placement === "ceiling") z = -10000;
+        else if (placement === "ground") z = -5000;
+        else if (placement === "floor") z = mask.bbox.y + mask.bbox.h;
+        else z = 0;
+        out.push({ defLabel: def.label, view, src: variant.src, bbox: mask.bbox, flipX, z });
       }
     }
+    out.sort((a, b) => a.z - b.z);
     return out;
   }, [sourceImagePath, masks, hiddenIds]);
 
