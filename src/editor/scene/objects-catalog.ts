@@ -566,12 +566,13 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     placement: "floor",
     views: {
       // front: altlayout-r5 head-on 部屋 (4 家具集中版) から緑マスク pipeline で抽出。
-      //   ドレッサー本体 + 鏡 + プフ を一体として緑塗り、天板上の小物 (鉢植え・ボトル) も
-      //   一体保持。silhouette 完全可視 (OCCLUDERS: none) で input pixel ほぼそのまま完成。
+      //   OCCLUDERS: none のため cleanup ではなく edgepolish フロー (Codex template framing +
+      //   5 step + diff metric で輪郭外周のみ anti-alias、内部 RGB は bit-perfect 保持) を採用。
+      //   天板の鉢植えは Codex が「本体ではない」と判断して落とし、ドレッサー本体のみのクリーン版。
       front: {
         src: "assets/objects/sakura-vanity-dresser-with-pouf-front.png",
-        nativeW: 340,
-        nativeH: 366,
+        nativeW: 283,
+        nativeH: 321,
         cells: { w: 2, h: 2 },
         source: SAKURA_ROOM_ALTLAYOUT_R3,
       },
