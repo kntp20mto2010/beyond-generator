@@ -210,6 +210,28 @@ export function StageCanvas(props: Props) {
         return null;
       };
 
+      // 壁デコ (placement: "wall") は貼られた region に応じて view を切り替える:
+      //   奥壁 (B) → front (壁面正面、完全フラット)
+      //   左壁 (L) / 右壁 (R) → side (壁面に対して斜め視点 + wallOrigin で flipX)
+      // footprint の左上 cell の region で判定 (壁デコは1セル占有が前提なのでこれで十分)。
+      // side variant が無ければ front にフォールバック (左右壁配置だが見た目は完全フラット = 浮く)。
+      const pickViewForWallPosition = (
+        def: ObjectDef,
+        colLeft: number,
+        rowTop: number,
+        map: RoomRegionMap,
+      ): { view: ObjectViewName; flipX: boolean } | null => {
+        if (def.placement !== "wall") return null;
+        const region = map.regions[rowTop]?.[colLeft];
+        const has = (v: ObjectViewName) => def.views[v] !== undefined;
+        if ((region === "L" || region === "R") && has("side")) {
+          const targetWall = region === "L" ? "left" : "right";
+          return { view: "side", flipX: resolveSideFlipX(def.views.side!, targetWall) };
+        }
+        if (has("front")) return { view: "front", flipX: false };
+        return null;
+      };
+
       const currentScene = (): SceneDoc | undefined =>
         p().store.doc.scenes.find((s) => s.id === p().sceneId);
 
@@ -435,6 +457,24 @@ export function StageCanvas(props: Props) {
                 const colLeft = Math.round((snx - (cw * map.grid) / 2) / map.grid);
                 const rowTop = Math.round(sny / map.grid) - ch2;
                 const pick = pickViewForFloorPosition(def, colLeft, rowTop, cw, ch2, map);
+                if (pick) {
+                  const target = def.views[pick.view];
+                  if (target && target.src !== liveEl.src) {
+                    const newCells = variantCells(target);
+                    const newScale = containScale(target.nativeW, target.nativeH, newCells);
+                    setObjectView(p().store, scene.id, hitId, target.src, newCells, newScale);
+                  }
+                  if (liveEl.transform.flipX !== pick.flipX) {
+                    updateElementTransform(p().store, scene.id, hitId, { flipX: pick.flipX });
+                  }
+                }
+              }
+              // 壁デコは貼られた壁 region で view を自動切替 (奥壁→front / 左右壁→side+flipX)
+              if (def.placement === "wall") {
+                const ch2 = liveEl.cells?.h ?? 1;
+                const colLeft = Math.round((snx - (cw * map.grid) / 2) / map.grid);
+                const rowTop = Math.round(sny / map.grid) - ch2;
+                const pick = pickViewForWallPosition(def, colLeft, rowTop, map);
                 if (pick) {
                   const target = def.views[pick.view];
                   if (target && target.src !== liveEl.src) {

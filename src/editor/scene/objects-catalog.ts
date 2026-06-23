@@ -143,12 +143,13 @@ export const PLACEMENT_LABEL: Record<ObjectPlacement, string> = {
 
 // 配置ごとに使う角度 (view) の許可リスト。
 // - floor                       : 全 3 角度(AC 風配置で正面/斜め/壁付け全部使う)
-// - wall/back-wall/side-wall/ceiling: 正面のみ(壁/天井にぴったり貼る平面画)
+// - wall                        : 正面 (奥壁用、完全フラット) + 壁付 (左右壁用、壁面に対して斜め視点)
+// - back-wall/side-wall/ceiling: 正面のみ(壁/天井にぴったり貼る平面画。窓は奥壁固定、天井は横方向)
 // - ground                      : 正面のみ(ラグは正面 or 上面のみ、立体だと模様が歪む)
 // テストでカタログ整合性を保証する(grid-object.test.ts)。
 export const ALLOWED_ANGLES_BY_PLACEMENT: Record<ObjectPlacement, readonly ObjectViewName[]> = {
   floor: ["front", "front-dimetric", "side"],
-  wall: ["front"],
+  wall: ["front", "side"],
   "back-wall": ["front"],
   "side-wall": ["front"],
   ceiling: ["front"],
