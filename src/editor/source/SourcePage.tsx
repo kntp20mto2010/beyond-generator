@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   MOODBOARD_SOURCES,
   STATUS_LABEL,
+  countGaps,
   itemStatus,
   type ItemStatus,
   type MoodboardItem,
@@ -108,6 +109,7 @@ function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource
     for (const it of src.items) c[itemStatus(it, paths, hiddenIds)] += 1;
     return c;
   }, [src, paths, hiddenIds]);
+  const gaps = useMemo(() => countGaps(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
   const total = src.items.length;
 
   // group 見出しごとにまとめる(出現順を保持)
@@ -173,7 +175,7 @@ function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource
 
         {/* 右: サマリ + チェックリスト */}
         <div style={{ flex: "2 1 420px", minWidth: "320px" }}>
-          <ProgressSummary counts={counts} total={total} />
+          <ProgressSummary counts={counts} total={total} gaps={gaps} />
           <div style={{ marginTop: "10px" }}>
             {groups.map(({ group, items }) => (
               <div key={group} style={{ marginBottom: "10px" }}>
@@ -408,17 +410,35 @@ function QCStrip({ paths, hiddenIds }: { paths: string[]; hiddenIds: Set<string>
   );
 }
 
-function ProgressSummary({ counts, total }: { counts: Record<ItemStatus, number>; total: number }) {
+function ProgressSummary({ counts, total, gaps }: { counts: Record<ItemStatus, number>; total: number; gaps: number }) {
   const done = counts.extracted;
   return (
     <div>
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", marginBottom: "6px" }}>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", marginBottom: "6px", alignItems: "center" }}>
         {STATUS_ORDER.map((s) => (
           <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
             <StatusBadge status={s} />
             <span style={{ color: "var(--text-dim)" }}>{counts[s]}</span>
           </span>
         ))}
+        {gaps > 0 && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 10,
+              padding: "1px 6px",
+              borderRadius: 10,
+              border: "1px dashed var(--warn, #c98a2b)",
+              color: "var(--warn, #c98a2b)",
+              fontWeight: 600,
+            }}
+            title="この placement では使う角度だが variant 未作成 (= 取りこぼし)。catalog 登録済の家具のうち、足りない角度の総数。"
+          >
+            ○ 取りこぼし {gaps} 角度
+          </span>
+        )}
         <span style={{ color: "var(--text-dim)", marginLeft: "auto" }}>
           抽出 {done}/{total}
         </span>
@@ -499,10 +519,24 @@ function FurnitureTable({ items, paths, hiddenIds }: { items: MoodboardItem[]; p
 }
 
 function CellTd({ cell, paths }: { cell: ViewExtractionCell; paths: string[] }) {
-  if (cell === "—") {
+  if (cell === "na") {
+    // この placement では不要な view (窓/ラグ/壁デコの立体/壁付 など) または catalog 未登録 / hidden。
+    // 薄い「—」で「カウント対象外」を明示。
     return (
-      <td style={{ textAlign: "center", padding: "4px", color: "var(--text-dim)", verticalAlign: "top" }}>
+      <td style={{ textAlign: "center", padding: "4px", color: "var(--text-dim)", verticalAlign: "top", opacity: 0.35 }}>
         —
+      </td>
+    );
+  }
+  if (cell === "gap") {
+    // placement 的にあるべき view だが未作成 (取りこぼし = 残作業)。
+    // 点線枠 + 「○」で「ここ空けてる」を目立たせる。
+    return (
+      <td
+        style={{ textAlign: "center", padding: "4px", color: "var(--warn, #c98a2b)", verticalAlign: "top" }}
+        title="この placement では使う角度だが未作成 (取りこぼし)"
+      >
+        <span style={{ display: "inline-block", minWidth: 18, border: "1px dashed var(--warn, #c98a2b)", borderRadius: 3, padding: "0 4px" }}>○</span>
       </td>
     );
   }

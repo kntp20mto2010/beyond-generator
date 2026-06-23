@@ -7,7 +7,13 @@
 // ステータスは **manifest にハードコードしない**。catalogId と OBJECT_CATALOG.source から
 // 実行時に導出する (itemStatus)。これにより catalog に source を足したり新 entry を登録すると
 // チェックリストが自動で更新され、drift しない。
-import { OBJECT_CATALOG, SAKURA_ROOM_MOODBOARD, SAKURA_ROOM_ALTLAYOUT_R1, SAKURA_ROOM_ALTLAYOUT_R3 } from "../scene/objects-catalog.js";
+import {
+  OBJECT_CATALOG,
+  ALLOWED_ANGLES_BY_PLACEMENT,
+  SAKURA_ROOM_MOODBOARD,
+  SAKURA_ROOM_ALTLAYOUT_R1,
+  SAKURA_ROOM_ALTLAYOUT_R3,
+} from "../scene/objects-catalog.js";
 
 // moodboard 上の1アイテム = チェックリスト1行。
 export interface MoodboardItem {
@@ -66,11 +72,16 @@ export function itemStatus(item: MoodboardItem, moodboardPaths: string[], hidden
   return def.source && moodboardPaths.includes(def.source) ? "extracted" : "made";
 }
 
-// 各 view の variant がどの moodboard 画像 (sourcePaths 配列) から抽出されたかを 1-based index で返す。
-// "—" = その view の variant が catalog に存在しない (未生成)
-// number = sourcePaths[index-1] から抽出 (variant.source または def.source が一致)
-// "?" = variant 存在するが source 未設定または別 source 由来
-export type ViewExtractionCell = number | "—" | "?";
+// 各 view の variant がどの moodboard 画像 (sourcePaths 配列) から抽出されたかを返す。
+// number = sourcePaths[index-1] から抽出 (variant.source または def.source が一致、= 抽出済)
+// "?"    = variant 存在するが source 未設定または別 source 由来
+// "gap"  = variant 未作成だが、placement 的にあるべき view (取りこぼし = 残作業)
+// "na"   = この placement では使わない view (窓/ラグ/壁デコは front 専用、立体/壁付は不要) または
+//          catalog 未登録 / hidden (= 無いものとして扱う)
+//
+// 「gap」と「na」を分けることで「あと何角度作れば埋まるか」が数えられる
+// ("—" だと「不要」と「取りこぼし」が混ざって残作業が見えない)。
+export type ViewExtractionCell = number | "?" | "gap" | "na";
 
 export function viewExtractionCell(
   item: MoodboardItem,
@@ -78,18 +89,35 @@ export function viewExtractionCell(
   moodboardPaths: string[],
   hiddenIds: Set<string> = new Set(),
 ): ViewExtractionCell {
-  if (!item.catalogId) return "—";
+  if (!item.catalogId) return "na"; // catalog 未登録 → per-view は判定不能 (item 全体が「未作成」)
   const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
-  if (!def) return "—";
-  // hidden は「無いものとして扱う」(KEN 指示: hidden は議論に混ぜない)
-  if (isHidden(hiddenIds, def.id, view)) return "—";
-  if (isHidden(hiddenIds, def.id)) return "—";
+  if (!def) return "na";
+  // hidden は「無いものとして扱う」(KEN ルール)。取りこぼし扱いにもしない。
+  if (isHidden(hiddenIds, def.id, view)) return "na";
+  if (isHidden(hiddenIds, def.id)) return "na";
   const v = def.views[view];
-  if (!v) return "—";
+  if (!v) {
+    // variant が無い。placement 的にこの view が「あるべき」なら取りこぼし (gap)、不要なら na。
+    // floor → 3角度全部 / back-wall・side-wall・ceiling・ground → front のみ。
+    const applicable = def.placement ? ALLOWED_ANGLES_BY_PLACEMENT[def.placement].includes(view) : false;
+    return applicable ? "gap" : "na";
+  }
   const path = v.source ?? def.source;
   if (!path) return "?";
   const idx = moodboardPaths.indexOf(path);
   return idx >= 0 ? idx + 1 : "?";
+}
+
+// この source の moodboard 内で「取りこぼし」(placement 的にあるべきだが未作成の view) の総数。
+// 早見表のヘッダで「残作業 N 角度」を表示するために使う。hidden は対象外。
+export function countGaps(items: MoodboardItem[], moodboardPaths: string[], hiddenIds: Set<string> = new Set()): number {
+  let n = 0;
+  for (const item of items) {
+    for (const view of ["front", "front-dimetric", "side"] as const) {
+      if (viewExtractionCell(item, view, moodboardPaths, hiddenIds) === "gap") n++;
+    }
+  }
+  return n;
 }
 
 export const STATUS_LABEL: Record<ItemStatus, string> = {
