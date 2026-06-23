@@ -98,7 +98,7 @@ export function viewExtractionCell(
   const v = def.views[view];
   if (!v) {
     // variant が無い。placement 的にこの view が「あるべき」なら取りこぼし (gap)、不要なら na。
-    // floor → 3角度全部 / back-wall・side-wall・ceiling・ground → front のみ。
+    // floor → 3角度全部 / wall・back-wall・side-wall・ceiling・ground → front のみ。
     const applicable = def.placement ? ALLOWED_ANGLES_BY_PLACEMENT[def.placement].includes(view) : false;
     return applicable ? "gap" : "na";
   }

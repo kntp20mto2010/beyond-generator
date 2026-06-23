@@ -239,13 +239,13 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
           flipX = resolveSideFlipX(variant, targetWall);
         }
         // 描画 z は scene-eval.ts の effectiveZ と同じレイヤ構造で計算:
-        //   壁/天井 (back-wall/side-wall/ceiling): -10000
+        //   壁/天井 (wall/back-wall/side-wall/ceiling): -10000
         //   床敷き (ground、ラグ等):              -5000
         //   床置き (floor、家具):                  bbox 底辺 y (奥→手前)
         // これでラグ < 床家具 になりソファ等がラグの上に重なる。
         const placement = def.placement;
         let z: number;
-        if (placement === "back-wall" || placement === "side-wall" || placement === "ceiling") z = -10000;
+        if (placement === "wall" || placement === "back-wall" || placement === "side-wall" || placement === "ceiling") z = -10000;
         else if (placement === "ground") z = -5000;
         else if (placement === "floor") z = mask.bbox.y + mask.bbox.h;
         else z = 0;
