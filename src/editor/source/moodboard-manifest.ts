@@ -120,6 +120,29 @@ export function countGaps(items: MoodboardItem[], moodboardPaths: string[], hidd
   return n;
 }
 
+// 取りこぼしの内訳: アイテムごとに「足りない view のラベル」を集計。
+// chip の hover tooltip で「何が足りないか」を具体的に見せるために使う。
+const VIEW_LABEL_JA: Record<"front" | "front-dimetric" | "side", string> = {
+  front: "正面",
+  "front-dimetric": "立体",
+  side: "壁付",
+};
+export function gapsDetail(
+  items: MoodboardItem[],
+  moodboardPaths: string[],
+  hiddenIds: Set<string> = new Set(),
+): { label: string; missingViews: string[] }[] {
+  const out: { label: string; missingViews: string[] }[] = [];
+  for (const item of items) {
+    const missing: string[] = [];
+    for (const view of ["front", "front-dimetric", "side"] as const) {
+      if (viewExtractionCell(item, view, moodboardPaths, hiddenIds) === "gap") missing.push(VIEW_LABEL_JA[view]);
+    }
+    if (missing.length > 0) out.push({ label: item.labelJa, missingViews: missing });
+  }
+  return out;
+}
+
 export const STATUS_LABEL: Record<ItemStatus, string> = {
   extracted: "抽出済",
   made: "作成済(別生成)",

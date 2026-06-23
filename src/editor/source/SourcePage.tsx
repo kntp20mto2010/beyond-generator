@@ -5,6 +5,7 @@ import {
   MOODBOARD_SOURCES,
   STATUS_LABEL,
   countGaps,
+  gapsDetail,
   itemStatus,
   type ItemStatus,
   type MoodboardItem,
@@ -110,6 +111,7 @@ function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource
     return c;
   }, [src, paths, hiddenIds]);
   const gaps = useMemo(() => countGaps(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
+  const gapDetails = useMemo(() => gapsDetail(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
   const total = src.items.length;
 
   // group 見出しごとにまとめる(出現順を保持)
@@ -175,7 +177,7 @@ function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource
 
         {/* 右: サマリ + チェックリスト */}
         <div style={{ flex: "2 1 420px", minWidth: "320px" }}>
-          <ProgressSummary counts={counts} total={total} gaps={gaps} />
+          <ProgressSummary counts={counts} total={total} gaps={gaps} gapDetails={gapDetails} />
           <div style={{ marginTop: "10px" }}>
             {groups.map(({ group, items }) => (
               <div key={group} style={{ marginBottom: "10px" }}>
@@ -410,8 +412,24 @@ function QCStrip({ paths, hiddenIds }: { paths: string[]; hiddenIds: Set<string>
   );
 }
 
-function ProgressSummary({ counts, total, gaps }: { counts: Record<ItemStatus, number>; total: number; gaps: number }) {
+function ProgressSummary({
+  counts,
+  total,
+  gaps,
+  gapDetails,
+}: {
+  counts: Record<ItemStatus, number>;
+  total: number;
+  gaps: number;
+  gapDetails: { label: string; missingViews: string[] }[];
+}) {
   const done = counts.extracted;
+  // tooltip 用に「取りこぼし詳細」を整形。アイテムごとに 1 行で「label: 立体, 壁付」のように。
+  const gapsTooltip =
+    gaps === 0
+      ? ""
+      : `取りこぼし ${gaps} 角度 (placement 的にあるべきだが variant 未作成):\n` +
+        gapDetails.map((g) => `  ${g.label}: ${g.missingViews.join(", ")}`).join("\n");
   return (
     <div>
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", marginBottom: "6px", alignItems: "center" }}>
@@ -434,7 +452,7 @@ function ProgressSummary({ counts, total, gaps }: { counts: Record<ItemStatus, n
               color: "var(--warn, #c98a2b)",
               fontWeight: 600,
             }}
-            title="この placement では使う角度だが variant 未作成 (= 取りこぼし)。catalog 登録済の家具のうち、足りない角度の総数。"
+            title={gapsTooltip}
           >
             ○ 取りこぼし {gaps} 角度
           </span>
