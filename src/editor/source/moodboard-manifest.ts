@@ -1,6 +1,6 @@
 // 抽出元 (moodboard) ごとの「置かれている家具リスト」+ 抽出進捗チェックリストのデータ。
 //
-// 目的: 部屋全体の理想レイアウト moodboard (例 sakura-room-ideal-layout-ken-style-r2) に
+// 目的: 部屋全体の理想レイアウト moodboard (例 sakura-room-L1) に
 // 描かれた家具/装飾を列挙し、それぞれが OBJECT_CATALOG に「抽出済み / 別生成済み / 未作成」の
 // どれかを一目で追えるようにする。SourcePage がこれを描画する。
 //
@@ -10,9 +10,14 @@
 import {
   OBJECT_CATALOG,
   ALLOWED_ANGLES_BY_PLACEMENT,
-  SAKURA_ROOM_MOODBOARD,
-  SAKURA_ROOM_ALTLAYOUT_R1,
-  SAKURA_ROOM_ALTLAYOUT_R3,
+  SAKURA_ROOM_L1,
+  SAKURA_ROOM_L2,
+  SAKURA_ROOM_L3,
+  SAKURA_ROOM_L4,
+  NAVY_ROOM_L1,
+  NAVY_ROOM_L2,
+  NAVY_ROOM_L3,
+  NAVY_ROOM_L4,
 } from "../scene/objects-catalog.js";
 
 // moodboard 上の1アイテム = チェックリスト1行。
@@ -23,6 +28,9 @@ export interface MoodboardItem {
   // 対応する OBJECT_CATALOG の id。まだ単体オブジェクト化していなければ null。
   catalogId: string | null;
   note?: string;
+  // KEN が「単体オブジェクト化しない」と判断したもの (host 家具に内包 / 需要が出るまで保留)。
+  // 「未作成 (= これから作る backlog)」とは区別し、🖐️ で「意図的に作らない」を示す。
+  deferred?: boolean;
 }
 
 // 1 つの moodboard 画像 (部屋を別レイアウト/別角度で再生成したバリエーション)。
@@ -38,13 +46,17 @@ export interface MoodboardSource {
   labelJa: string;
   imagePaths: MoodboardImage[]; // 複数の room image を縦に並べる
   items: MoodboardItem[];
+  // この部屋の空室背景 (リポジトリ相対)。QC レイアウトで家具を重ねる下地に使う。
+  // 新部屋を追加するときは必ずその部屋の empty を指定する (未指定だと別部屋の背景で QC されてしまう)。
+  emptyBg: string;
 }
 
 // アイテムの抽出状態:
 // - extracted : catalog に entry があり、その source = この moodboard (= ここから抽出済み)
 // - made      : catalog に entry はあるが source 未設定/別 (= 別途ゼロ生成された版が存在)
-// - todo      : 対応する catalog entry がまだ無い (= 未作成)
-export type ItemStatus = "extracted" | "made" | "todo";
+// - deferred  : KEN が「単体化しない」と判断 (host 家具に内包 / 保留)。意図的に作らない 🖐️
+// - todo      : 対応する catalog entry がまだ無い (= これから作る backlog)
+export type ItemStatus = "extracted" | "made" | "deferred" | "todo";
 
 // hidden 判定: catalog-hidden.json に id がある (家具ごと) または id|view がある (視点ごと)
 function isHidden(hiddenIds: Set<string>, defId: string, view?: string): boolean {
@@ -54,6 +66,8 @@ function isHidden(hiddenIds: Set<string>, defId: string, view?: string): boolean
 }
 
 export function itemStatus(item: MoodboardItem, moodboardPaths: string[], hiddenIds: Set<string> = new Set()): ItemStatus {
+  // KEN が意図的に単体化しないと決めたものは「未作成 backlog」と区別する。
+  if (item.deferred) return "deferred";
   if (!item.catalogId) return "todo";
   const def = OBJECT_CATALOG.find((d) => d.id === item.catalogId);
   if (!def) return "todo";
@@ -73,15 +87,16 @@ export function itemStatus(item: MoodboardItem, moodboardPaths: string[], hidden
 }
 
 // 各 view の variant がどの moodboard 画像 (sourcePaths 配列) から抽出されたかを返す。
-// number = sourcePaths[index-1] から抽出 (variant.source または def.source が一致、= 抽出済)
-// "?"    = variant 存在するが source 未設定または別 source 由来
-// "gap"  = variant 未作成だが、placement 的にあるべき view (取りこぼし = 残作業)
-// "na"   = この placement では使わない view (窓/ラグ/壁デコは front 専用、立体/壁付は不要) または
-//          catalog 未登録 / hidden (= 無いものとして扱う)
+// number  = sourcePaths[index-1] から抽出 (variant.source または def.source が一致、= 抽出済)
+// "indiv" = 部屋 moodboard 抽出ではなく単体プロンプトでゼロ生成 (generatedStandalone) ⚠️
+// "?"     = variant 存在するが source 未設定または別 source 由来
+// "gap"   = variant 未作成だが、placement 的にあるべき view (取りこぼし = 残作業)
+// "na"    = この placement では使わない view (窓/ラグ/壁デコは front 専用、立体/壁付は不要) または
+//           catalog 未登録 / hidden (= 無いものとして扱う)
 //
 // 「gap」と「na」を分けることで「あと何角度作れば埋まるか」が数えられる
 // ("—" だと「不要」と「取りこぼし」が混ざって残作業が見えない)。
-export type ViewExtractionCell = number | "?" | "gap" | "na";
+export type ViewExtractionCell = number | "indiv" | "?" | "gap" | "na";
 
 export function viewExtractionCell(
   item: MoodboardItem,
@@ -102,6 +117,9 @@ export function viewExtractionCell(
     const applicable = def.placement ? ALLOWED_ANGLES_BY_PLACEMENT[def.placement].includes(view) : false;
     return applicable ? "gap" : "na";
   }
+  // 単体プロンプトでゼロ生成された view は moodboard 抽出ではない → ⚠️ で区別。
+  // (def.source へのフォールバックで誤って「抽出済」に化けるのを防ぐ)
+  if (v.generatedStandalone) return "indiv";
   const path = v.source ?? def.source;
   if (!path) return "?";
   const idx = moodboardPaths.indexOf(path);
@@ -115,6 +133,18 @@ export function countGaps(items: MoodboardItem[], moodboardPaths: string[], hidd
   for (const item of items) {
     for (const view of ["front", "front-dimetric", "side"] as const) {
       if (viewExtractionCell(item, view, moodboardPaths, hiddenIds) === "gap") n++;
+    }
+  }
+  return n;
+}
+
+// 「個別生成」(部屋 moodboard 抽出ではなく単体プロンプトでゼロ生成された) view の総数。
+// 早見表のヘッダで「⚠️ 個別生成 N 角度」を表示するために使う。hidden は対象外。
+export function countStandalone(items: MoodboardItem[], moodboardPaths: string[], hiddenIds: Set<string> = new Set()): number {
+  let n = 0;
+  for (const item of items) {
+    for (const view of ["front", "front-dimetric", "side"] as const) {
+      if (viewExtractionCell(item, view, moodboardPaths, hiddenIds) === "indiv") n++;
     }
   }
   return n;
@@ -146,6 +176,7 @@ export function gapsDetail(
 export const STATUS_LABEL: Record<ItemStatus, string> = {
   extracted: "抽出済",
   made: "作成済(別生成)",
+  deferred: "作らない(保留)",
   todo: "未作成",
 };
 
@@ -204,7 +235,8 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     group: "壁飾り",
     location: "中央右壁・時計の下",
     catalogId: null,
-    note: "2枚目の額 (frame-floral は左壁に割当済み)。緑マスク抽出を試みたが、tiny target のため Codex の edit が 3 連続で部屋ごと再生成 (写実的な別部屋) → deferred。手動 crop or 専用 moodboard で後日。",
+    deferred: true,
+    note: "2枚目の額 (frame-floral は左壁に割当済み)。r2 で額 2 枚の duplicate になり奥壁側は orphan。単体化せず放置と判断 (2026-06-23)。必要なら専用 moodboard で後日。",
   },
   { labelJa: "壁掛け時計 (丸型)", group: "壁飾り", location: "中央上部・窓の右上", catalogId: "sakura-wall-clock" },
   { labelJa: "ドライフラワー (スワッグ)", group: "壁飾り", location: "左壁上部・ベッド頭上", catalogId: "sakura-wall-dried-bouquet" },
@@ -225,6 +257,7 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     group: "小物・植物",
     location: "学習机の上(左奥)",
     catalogId: null,
+    deferred: true,
     note: "学習机の抽出画像 (sakura-study-desk-*) に天板小物として内包済み。単体で置く需要が出たら専用抽出するが、現状は机に含むため standalone entry は作らない。",
   },
   {
@@ -232,7 +265,38 @@ const SAKURA_ROOM_ITEMS: MoodboardItem[] = [
     group: "小物・植物",
     location: "窓辺/ワードローブ上/本棚/テーブル上",
     catalogId: null,
+    deferred: true,
     note: "各所の小型鉢植え。多くは host 家具の抽出画像に内包済み (ウォールシェルフ=sakura-wall-shelf-plant に鉢植え2つ、本棚/ワードローブの上の小鉢も各家具に含む)。単体 plant entry は床置き大 (sakura-plant-floor-large) のみ作成。微小な棚上鉢植えの standalone は需要が出たら個別に。",
+  },
+];
+
+// navy-room (20 代男性の部屋) の家具インベントリ。理想レイアウト r3 に描かれた家具を列挙。
+// catalogId は抽出して catalog (navy-*) に登録するごとに紐付ける。現状は全て未作成 (todo)。
+const NAVY_ROOM_ITEMS: MoodboardItem[] = [
+  // ── 床家具 ──
+  { labelJa: "ベッド (セミダブル・ネイビー)", group: "床家具", location: "左壁ぎわ", catalogId: "navy-bed" },
+  { labelJa: "作業デスク (PC モニター付き)", group: "床家具", location: "奥壁ぎわ中央", catalogId: "navy-desk" },
+  { labelJa: "オフィスチェア", group: "床家具", location: "デスク前(中央)", catalogId: "navy-office-chair" },
+  { labelJa: "本棚 (オープンシェルフ)", group: "床家具", location: "右壁ぎわ", catalogId: "navy-bookshelf" },
+  { labelJa: "ソファ (2人掛け・ネイビー)", group: "床家具", location: "中央前寄り・ラグ上", catalogId: "navy-sofa" },
+  { labelJa: "ローテーブル", group: "床家具", location: "ソファ前・ラグ上", catalogId: "navy-coffee-table" },
+  { labelJa: "ワードローブ (木)", group: "床家具", location: "左壁ぎわ・ベッド横", catalogId: "navy-wardrobe" },
+  { labelJa: "観葉植物 (床置き)", group: "床家具", location: "右壁ぎわ床・本棚脇", catalogId: "navy-plant-floor" },
+  { labelJa: "フロアランプ", group: "床家具", location: "部屋の角(右寄り)", catalogId: "navy-floor-lamp" },
+  // ── 床敷き ──
+  { labelJa: "ラグ", group: "床敷き", location: "部屋中央・床", catalogId: "navy-rug" },
+  // ── 壁飾り ──
+  { labelJa: "壁アート (抽象ポスター)", group: "壁飾り", location: "奥壁・デスク上", catalogId: "navy-wall-poster" },
+  { labelJa: "壁掛け時計", group: "壁飾り", location: "奥壁右上", catalogId: "navy-wall-clock" },
+  { labelJa: "ウォールシェルフ", group: "壁飾り", location: "右壁", catalogId: "navy-wall-shelf" },
+  // ── 小物・植物 ──
+  {
+    labelJa: "PC モニター",
+    group: "小物・植物",
+    location: "デスク上",
+    catalogId: null,
+    deferred: true,
+    note: "作業デスクの抽出画像に天板小物として内包する想定。単体需要が出たら個別抽出。",
   },
 ];
 
@@ -240,23 +304,57 @@ export const MOODBOARD_SOURCES: MoodboardSource[] = [
   {
     id: "sakura-room",
     labelJa: "サクラルーム",
+    emptyBg: "assets/backgrounds/sakura-room-empty.png",
     imagePaths: [
       {
-        path: SAKURA_ROOM_MOODBOARD,
-        labelJa: "理想レイアウト r2",
+        path: SAKURA_ROOM_L1,
+        labelJa: "L1 理想レイアウト",
         contributes: "立体 (側面寄り 3/4) 中心、窓+カーテン・ラグ・ソファ・ワードローブ・本棚 など多くの家具の最初の moodboard",
       },
       {
-        path: SAKURA_ROOM_ALTLAYOUT_R1,
-        labelJa: "別レイアウト r1 (足元 3/4 視点)",
+        path: SAKURA_ROOM_L2,
+        labelJa: "L2 足元 3/4 視点",
         contributes: "正面寄り 3/4 (足元/前面向き) を補強。ベッド・学習デスク・ワードローブ・本棚 などの front を抽出可能",
       },
       {
-        path: SAKURA_ROOM_ALTLAYOUT_R3,
-        labelJa: "別レイアウト r3 (head-on 視点・4 家具集中)",
+        path: SAKURA_ROOM_L3,
+        labelJa: "L3 head-on 視点 (4 家具集中)",
         contributes: "真正面 (head-on) を補強。ベッド・ソファ・ドレッサー+プフ・デスクチェア の front を抽出可能。ワードローブ/本棚/学習机は別 source で取得済のため画面から省略。OCCLUDERS: 全 4 家具とも none",
+      },
+      {
+        path: SAKURA_ROOM_L4,
+        labelJa: "L4 ソファ左壁 side + デスク正面",
+        contributes: "混成 view。学習机の真正面 front、ソファの左壁 wall-aligned side、左壁の壁飾り (スワッグ/シェルフ) の壁付 side を抽出。",
       },
     ],
     items: SAKURA_ROOM_ITEMS,
+  },
+  {
+    id: "navy-room",
+    labelJa: "ネイビールーム (20 代男性)",
+    emptyBg: "assets/backgrounds/navy-room-empty.png",
+    imagePaths: [
+      {
+        path: NAVY_ROOM_L1,
+        labelJa: "L1 理想レイアウト (立体 3/4)",
+        contributes: "立体 (3/4) の vision moodboard。本家 ken-style レシピ踏襲のフラット作風。ベッド/デスク/ソファ/本棚/ローテーブル/植物 等を壁との位置関係で side・front・dimetric として抽出する起点。",
+      },
+      {
+        path: NAVY_ROOM_L2,
+        labelJa: "L2 正面寄せ",
+        contributes: "取りこぼし均等配分 1/3。奥壁=ベッド/ワードローブ/本棚 の front、左壁=ソファ side、右壁=植物 side、中央=デスク/フロアランプ dimetric。",
+      },
+      {
+        path: NAVY_ROOM_L3,
+        labelJa: "L3 立体補強",
+        contributes: "取りこぼし均等配分 2/3。奥壁=オフィスチェア/ローテーブル/フロアランプ の front、左壁=ワードローブ side、右壁=デスク side、中央=ベッド/本棚 dimetric。",
+      },
+      {
+        path: NAVY_ROOM_L4,
+        labelJa: "L4 壁付+壁飾り",
+        contributes: "取りこぼし均等配分 3/3。奥壁=ソファ/植物 の front、左壁=ローテーブル+壁ポスター/時計/シェルフ の side、右壁=オフィスチェア side。",
+      },
+    ],
+    items: NAVY_ROOM_ITEMS,
   },
 ];

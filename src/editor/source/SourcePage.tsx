@@ -5,6 +5,7 @@ import {
   MOODBOARD_SOURCES,
   STATUS_LABEL,
   countGaps,
+  countStandalone,
   gapsDetail,
   itemStatus,
   type ItemStatus,
@@ -25,19 +26,22 @@ import { findBboxForVariant, type MaskBbox } from "./mask-match.js";
 const STATUS_COLOR: Record<ItemStatus, string> = {
   extracted: "var(--ok, #3a6)",
   made: "var(--warn, #c98a2b)",
+  deferred: "var(--bg-elev)",
   todo: "var(--bg-elev)",
 };
 const STATUS_TEXT_COLOR: Record<ItemStatus, string> = {
   extracted: "white",
   made: "white",
+  deferred: "var(--text-dim)",
   todo: "var(--text-dim)",
 };
 const STATUS_MARK: Record<ItemStatus, string> = {
   extracted: "✓",
   made: "◐",
+  deferred: "🖐️",
   todo: "□",
 };
-const STATUS_ORDER: ItemStatus[] = ["extracted", "made", "todo"];
+const STATUS_ORDER: ItemStatus[] = ["extracted", "made", "deferred", "todo"];
 
 export function SourcePage({
   jumpTarget,
@@ -94,7 +98,11 @@ export function SourcePage({
         部屋全体の理想レイアウト画から、どの家具を単体オブジェクト化したかを追う。
         <span style={{ color: "var(--ok, #3a6)", marginLeft: 8 }}>✓ 抽出済</span>= この moodboard を source に抽出済み /
         <span style={{ color: "var(--warn, #c98a2b)", marginLeft: 6 }}>◐ 作成済</span>= catalog にあるが別生成(source 未設定) /
-        <span style={{ marginLeft: 6 }}>□ 未作成</span>= catalog 未登録。
+        <span style={{ marginLeft: 6 }}>🖐️ 作らない</span>= 単体化しない判断(host 内包/保留) /
+        <span style={{ marginLeft: 6 }}>□ 未作成</span>= これから作る backlog。
+        <br />
+        セル: <span style={{ color: "var(--warn, #c98a2b)" }}>⚠️</span> = 個別生成(moodboard 抽出ではなく単体プロンプト) /
+        <span style={{ color: "var(--warn, #c98a2b)" }}>○</span> = 取りこぼし(作るべきだが未作成)。
       </div>
       {MOODBOARD_SOURCES.map((src) => (
         <SourceCard key={src.id} src={src} highlight={highlightId === src.id} masks={masks} hiddenIds={hiddenIds} />
@@ -106,12 +114,13 @@ export function SourcePage({
 function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource; highlight?: boolean; masks: MaskBbox[]; hiddenIds: Set<string> }) {
   const paths = useMemo(() => src.imagePaths.map((im) => im.path), [src]);
   const counts = useMemo(() => {
-    const c: Record<ItemStatus, number> = { extracted: 0, made: 0, todo: 0 };
+    const c: Record<ItemStatus, number> = { extracted: 0, made: 0, deferred: 0, todo: 0 };
     for (const it of src.items) c[itemStatus(it, paths, hiddenIds)] += 1;
     return c;
   }, [src, paths, hiddenIds]);
   const gaps = useMemo(() => countGaps(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
   const gapDetails = useMemo(() => gapsDetail(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
+  const standalone = useMemo(() => countStandalone(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
   const total = src.items.length;
 
   // group 見出しごとにまとめる(出現順を保持)
@@ -170,14 +179,14 @@ function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource
               <div style={{ fontFamily: "monospace", fontSize: "9.5px", color: "var(--text-dim)", marginTop: "2px" }}>
                 {im.path}
               </div>
-              <QCLayout sourceImagePath={im.path} masks={masks} hiddenIds={hiddenIds} />
+              <QCLayout sourceImagePath={im.path} emptyBg={src.emptyBg} masks={masks} hiddenIds={hiddenIds} />
             </div>
           ))}
         </div>
 
         {/* 右: サマリ + チェックリスト */}
         <div style={{ flex: "2 1 420px", minWidth: "320px" }}>
-          <ProgressSummary counts={counts} total={total} gaps={gaps} gapDetails={gapDetails} />
+          <ProgressSummary counts={counts} total={total} gaps={gaps} gapDetails={gapDetails} standalone={standalone} />
           <div style={{ marginTop: "10px" }}>
             {groups.map(({ group, items }) => (
               <div key={group} style={{ marginBottom: "10px" }}>
@@ -208,11 +217,11 @@ function SourceCard({ src, highlight, masks, hiddenIds }: { src: MoodboardSource
 
 // QC プレビュー Step2: 空背景 + 抽出済家具を moodboard 元配置で並べる。
 // 各 variant の bbox を mask スキャン結果から引いて、空背景の上に絶対座標で配置する。
-const EMPTY_BG = "/assets/backgrounds/sakura-room-empty.png";
+// 背景は部屋ごと (emptyBg) に渡す。sakura 固定にすると navy 部屋が sakura 背景で QC されてしまう。
 const MOODBOARD_W = 1920;
 const MOODBOARD_H = 1080;
 
-function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: string; masks: MaskBbox[]; hiddenIds: Set<string> }) {
+function QCLayout({ sourceImagePath, emptyBg, masks, hiddenIds }: { sourceImagePath: string; emptyBg: string; masks: MaskBbox[]; hiddenIds: Set<string> }) {
   // この source 画像と一致する catalog variant + その bbox を集める (hidden は除外)
   const placements = useMemo(() => {
     const out: {
@@ -228,6 +237,7 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
       for (const [view, variant] of Object.entries(def.views) as [ObjectViewName, ObjectVariant | undefined][]) {
         if (!variant) continue;
         if (hiddenIds.has(`${def.id}|${view}`)) continue;
+        // この variant がこの moodboard から抽出されたものか (variant.source、未設定なら def.source)。
         const path = variant.source ?? def.source;
         if (path !== sourceImagePath) continue;
         const mask = findBboxForVariant(variant, MOODBOARD_W, MOODBOARD_H, masks);
@@ -244,7 +254,6 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
         //   壁/天井 (wall/back-wall/side-wall/ceiling): -10000
         //   床敷き (ground、ラグ等):              -5000
         //   床置き (floor、家具):                  bbox 底辺 y (奥→手前)
-        // これでラグ < 床家具 になりソファ等がラグの上に重なる。
         const placement = def.placement;
         let z: number;
         if (placement === "wall" || placement === "back-wall" || placement === "side-wall" || placement === "ceiling") z = -10000;
@@ -279,7 +288,7 @@ function QCLayout({ sourceImagePath, masks, hiddenIds }: { sourceImagePath: stri
           borderRadius: "6px",
           border: "1px solid var(--border)",
           overflow: "hidden",
-          backgroundImage: `url(${EMPTY_BG})`,
+          backgroundImage: `url(/${emptyBg})`,
           backgroundSize: "100% 100%",
         }}
       >
@@ -417,11 +426,13 @@ function ProgressSummary({
   total,
   gaps,
   gapDetails,
+  standalone,
 }: {
   counts: Record<ItemStatus, number>;
   total: number;
   gaps: number;
   gapDetails: { label: string; missingViews: string[] }[];
+  standalone: number;
 }) {
   const done = counts.extracted;
   // tooltip 用に「取りこぼし詳細」を整形。アイテムごとに 1 行で「label: 立体, 壁付」のように。
@@ -455,6 +466,24 @@ function ProgressSummary({
             title={gapsTooltip}
           >
             ○ 取りこぼし {gaps} 角度
+          </span>
+        )}
+        {standalone > 0 && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 10,
+              padding: "1px 6px",
+              borderRadius: 10,
+              border: "1px solid var(--warn, #c98a2b)",
+              color: "var(--warn, #c98a2b)",
+              fontWeight: 600,
+            }}
+            title="個別生成 (部屋 moodboard 抽出ではなく単体プロンプトでゼロ生成した view)。dimetric 2:1 / v10 side など部屋 render が見せない投影。"
+          >
+            ⚠️ 個別生成 {standalone} 角度
           </span>
         )}
         <span style={{ color: "var(--text-dim)", marginLeft: "auto" }}>
@@ -555,6 +584,18 @@ function CellTd({ cell, paths }: { cell: ViewExtractionCell; paths: string[] }) 
         title="この placement では使う角度だが未作成 (取りこぼし)"
       >
         <span style={{ display: "inline-block", minWidth: 18, border: "1px dashed var(--warn, #c98a2b)", borderRadius: 3, padding: "0 4px" }}>○</span>
+      </td>
+    );
+  }
+  if (cell === "indiv") {
+    // 部屋 moodboard 抽出ではなく単体プロンプトでゼロ生成された view。
+    // moodboard を増やしても抽出で取れない投影 (dimetric 2:1 / v10 side) の印。
+    return (
+      <td
+        style={{ textAlign: "center", padding: "4px", verticalAlign: "top" }}
+        title="個別生成 (部屋 moodboard からの抽出ではなく単体プロンプトでゼロ生成)"
+      >
+        <span style={{ display: "inline-block", minWidth: 18, border: "1px solid var(--warn, #c98a2b)", borderRadius: 3, padding: "0 4px", color: "var(--warn, #c98a2b)" }}>⚠️</span>
       </td>
     );
   }

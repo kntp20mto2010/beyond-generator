@@ -175,11 +175,13 @@ export function StageCanvas(props: Props) {
       let camFrameValue: CameraState = { x: 960, y: 540, zoom: 1 };
 
       const p = () => pRef.current;
-      // scene.background から領域マップを引く。現状 sakura-room のみ対応。
+      // scene.background から領域マップを引く。
+      // navy-room は sakura-room を recolor しただけでジオメトリ同一のため region map を流用。
       // TODO: 部屋増設時に room-id レジストリ化
       const currentRoomMap = (scene: SceneDoc | undefined): RoomRegionMap | undefined => {
         const bg = scene?.background as { image?: string } | null | undefined;
-        if (bg?.image?.includes("sakura-room-empty")) return SAKURA_ROOM_REGIONS;
+        const img = bg?.image ?? "";
+        if (img.includes("sakura-room-empty") || img.includes("navy-room-empty")) return SAKURA_ROOM_REGIONS;
         return undefined;
       };
 

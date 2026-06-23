@@ -33,7 +33,9 @@ const BUILTIN_BGS = [
   "assets/generated/bg-school-001.png",
   "assets/backgrounds/bg-classroom-001.svg",
   "assets/backgrounds/sakura-room-empty.png",
-  "assets/generated/sakura-room-ideal-layout-ken-style-r2-20260620.png",
+  "assets/generated/sakura-room-L1-20260620.png",
+  "assets/backgrounds/navy-room-empty.png",
+  "assets/generated/navy-room-L1-20260623.png",
 ];
 
 const BG_SWATCHES = [

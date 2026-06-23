@@ -42,12 +42,14 @@ from PIL import Image
 def stem_of(filename: str) -> str:
     """sakura-bookshelf-front-mask-r1-20260621.png → sakura-bookshelf-front"""
     name = filename.removesuffix(".png")
-    # remove revision tags
-    name = re.sub(r"-r\d+[a-z]?$", "", name)
+    # remove revision tags (-r<n> retry) or board tags (-L<n> layout)。
+    # board tag -L<n> も剥がさないと side マスク stem が "navy-wall-poster-side-mask-L4" のまま残り、
+    # exact 一致できず loose で L1 front マスクに prefix 誤マッチして QC で別位置に飛ぶ (2026-06-24)。
+    name = re.sub(r"-(?:r|L)\d+[a-z]?$", "", name)
     # remove date suffix
     name = re.sub(r"-2026\d{4}$", "", name)
-    # remove mask suffix
-    name = re.sub(r"-mask(?:-tight)?(?:-only)?(?:-r\d+[a-z]?)?$", "", name)
+    # remove mask suffix (末尾に retry -r<n> / board -L<n> が付くことがある)
+    name = re.sub(r"-mask(?:-tight)?(?:-only)?(?:-(?:r|L)\d+[a-z]?)?$", "", name)
     name = re.sub(r"-green-mask(?:-tight)?$", "", name)
     # remove other common suffixes that came in via -tight / -only
     name = re.sub(r"-(tight|only|complete|hidden-aware|occlusion|abspath|green-blue|green)$", "", name)
@@ -63,8 +65,9 @@ def main() -> int:
     out: list[dict] = []
     seen_stems: dict[str, dict] = {}  # stem → entry; later mtime wins
 
-    pattern = re.compile(r"sakura-.*mask.*\.png$")
-    for png in sorted(args.dir.glob("sakura-*mask*.png")):
+    # 部屋ファミリーのプレフィックスを増やすときはここに足す (sakura / navy / ...)。
+    pattern = re.compile(r"^(?:sakura|navy)-.*mask.*\.png$")
+    for png in sorted(args.dir.glob("*mask*.png")):
         if not pattern.search(png.name):
             continue
         try:
