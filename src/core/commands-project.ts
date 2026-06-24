@@ -162,6 +162,19 @@ export function setSceneBackgroundImage(
 // カメラキー / シーントランジション
 // ---------------------------------------------------------------------------
 
+// 横スクロール: カメラ追従対象 (キャラ element id) を設定。null で追従解除。
+export function setCameraFollow(
+  store: DocStore<ProjectDoc>,
+  sceneId: string,
+  targetId: string | null,
+): void {
+  store.dispatch("カメラ追従", (d) => {
+    const scene = findScene(d, sceneId);
+    if (!scene) return;
+    scene.cameraFollowId = targetId;
+  });
+}
+
 export function addCameraKey(
   store: DocStore<ProjectDoc>,
   sceneId: string,

@@ -8,7 +8,7 @@ import {
   type SceneDoc,
 } from "../../core/schema/project.js";
 import {
-  evaluateCamera,
+  evaluateCameraFollowed,
   STAGE_H,
   STAGE_W,
   type CameraState,
@@ -852,23 +852,25 @@ export function StageCanvas(props: Props) {
       const drawGrid = () => {
         gridLayer.clear();
         // 領域オーバーレイ(床/奥壁/左壁/右壁の色分け)。最背面に重ねる。
-        // TODO: scene.background に応じて region map を選択(現状 sakura-room 固定)
+        // region map は scene.background から選択。map 無しの背景(野外 riverside 等)では非表示。
         if (p().showRegions) {
-          const map = SAKURA_ROOM_REGIONS;
-          const colorOf: Record<string, number> = {
-            F: 0x00d4d4, // floor   = cyan
-            B: 0xff00ff, // back    = magenta
-            L: 0xffeb00, // left    = yellow
-            R: 0x00cc00, // right   = lime
-          };
-          for (let r = 0; r < map.rows; r++) {
-            for (let c = 0; c < map.cols; c++) {
-              const code = map.regions[r]?.[c];
-              if (!code) continue;
-              gridLayer.rect(c * map.grid, r * map.grid, map.grid, map.grid);
-              gridLayer.fill({ color: colorOf[code], alpha: 0.18 });
-              gridLayer.rect(c * map.grid, r * map.grid, map.grid, map.grid);
-              gridLayer.stroke({ color: colorOf[code], width: 1, alpha: 0.45 });
+          const map = currentRoomMap(currentScene());
+          if (map) {
+            const colorOf: Record<string, number> = {
+              F: 0x00d4d4, // floor   = cyan
+              B: 0xff00ff, // back    = magenta
+              L: 0xffeb00, // left    = yellow
+              R: 0x00cc00, // right   = lime
+            };
+            for (let r = 0; r < map.rows; r++) {
+              for (let c = 0; c < map.cols; c++) {
+                const code = map.regions[r]?.[c];
+                if (!code) continue;
+                gridLayer.rect(c * map.grid, r * map.grid, map.grid, map.grid);
+                gridLayer.fill({ color: colorOf[code], alpha: 0.18 });
+                gridLayer.rect(c * map.grid, r * map.grid, map.grid, map.grid);
+                gridLayer.stroke({ color: colorOf[code], width: 1, alpha: 0.45 });
+              }
             }
           }
         }
@@ -911,8 +913,8 @@ export function StageCanvas(props: Props) {
       let transMeta: { type: "fade" | "wipe" | "slide"; dur: number } | null = null;
 
       const renderFrame = (scene: SceneDoc | undefined, t: number) => {
-        // カメラ評価。枠が示すカメラ = ドラッグ中ローカル値 ?? 評価値
-        const evalCam = scene ? evaluateCamera(scene.camera, t) : { x: 960, y: 540, zoom: 1 };
+        // カメラ評価 (追従+ワールドクランプ込み)。枠が示すカメラ = ドラッグ中ローカル値 ?? 評価値
+        const evalCam = evaluateCameraFollowed(scene, t, stack.worldWidth);
         camFrameValue = camLive ?? evalCam;
         // トランジション slide の押し込み量
         let slidePush = 0;

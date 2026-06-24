@@ -25,6 +25,7 @@ import {
   addTalk,
   removeAction,
   removeCameraKey,
+  setCameraFollow,
   removeExpressionKey,
   removeTalk,
   setBalloonProps,
@@ -1013,6 +1014,30 @@ function SceneSettings({ store, sceneId, scene, t, fs }: SceneSettingsProps) {
 
       {/* カメラ */}
       <Section title="カメラ" defaultOpen={true}>
+        {/* 横スクロール: 指定キャラをカメラが自動追従 (パノラマ背景で有効) */}
+        <div className="ui-row" style={{ marginBottom: "6px" }}>
+          <label>追従</label>
+          <select
+            className="ui-input"
+            style={{ fontSize: "11px", flex: 1 }}
+            value={scene.cameraFollowId ?? ""}
+            onChange={(e) => setCameraFollow(store, sceneId, e.target.value || null)}
+          >
+            <option value="">なし(固定/手動キー)</option>
+            {scene.elements
+              .filter((el) => el.kind === "character")
+              .map((el) => (
+                <option key={el.id} value={el.id}>
+                  {el.ref.replace(/^builtin:/, "")}
+                </option>
+              ))}
+          </select>
+        </div>
+        {scene.cameraFollowId && (
+          <div style={{ color: "var(--text-dim)", fontSize: "10px", marginBottom: "6px" }}>
+            追従中はカメラ X はキャラを追います(Y/ズームはキー/固定値)。
+          </div>
+        )}
         {cam.length === 0 && (
           <div style={{ color: "var(--text-dim)", fontSize: "11px" }}>キーなし(固定)</div>
         )}

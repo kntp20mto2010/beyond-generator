@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
+import { computeBgFit } from "./bg-fit.js";
 import { drawBalloon } from "./balloon.js";
 import { CharacterView } from "./character-pixi.js";
 import { SpriteCharacterView } from "./sprite-character-view.js";
@@ -6,7 +7,7 @@ import type { CharConfig } from "../editor/newchar/character-configs.js";
 import type { AssetResolver } from "../io/asset-resolver.js";
 import { PAPER_COLOR, type ProjectDoc, type SceneDoc } from "../core/schema/project.js";
 import {
-  evaluateCamera,
+  evaluateCameraFollowed,
   evaluateScene,
   STAGE_H,
   STAGE_W,
@@ -69,6 +70,9 @@ export class SceneRenderStack {
   // 表示中の背景画像キー = "パス|URL"。パスと URL 有無の両方で再評価
   #bgImgKey: string | null = null;
   #disposed = false;
+  // 背景がパノラマ (16:9 より横長) のとき、その実描画幅 = 横スクロールのワールド幅。
+  // 通常背景 (16:9 以内) では STAGE_W。カメラ x はこの範囲を左右にパンできる。
+  #worldWidth = STAGE_W;
 
   // 最後に評価/描画したフレーム(ヒットテスト等に呼び出し側が使う)
   lastFrame: SceneFrameItem[] = [];
@@ -106,6 +110,10 @@ export class SceneRenderStack {
   get viewH(): number {
     return this.#viewH;
   }
+  // 現在の背景に基づく横スクロールのワールド幅 (パノラマ背景なら画面より広い)
+  get worldWidth(): number {
+    return this.#worldWidth;
+  }
 
   // root(world)へカメラ変換を適用。slidePush は新シーン押し込み量(px)
   applyCamera(cam: CameraState, slidePush = 0): void {
@@ -136,16 +144,20 @@ export class SceneRenderStack {
     if (key === this.#bgImgKey) return;
     this.#bgImgKey = key;
     for (const c of this.#bgImageLayer.removeChildren()) c.destroy();
-    if (!path || !url) return;
+    if (!path || !url) {
+      this.#worldWidth = STAGE_W;
+      return;
+    }
     const want = key;
     const imgEl = new Image();
     imgEl.onload = () => {
       if (this.#disposed || this.#bgImgKey !== want) return;
       const tex = Texture.from(imgEl);
-      const s = Math.max(STAGE_W / tex.width, STAGE_H / tex.height);
       const sp = new Sprite(tex);
-      sp.scale.set(s);
-      sp.position.set((STAGE_W - tex.width * s) / 2, (STAGE_H - tex.height * s) / 2);
+      const fit = computeBgFit(tex.width, tex.height, STAGE_W, STAGE_H);
+      sp.scale.set(fit.scale);
+      sp.position.set(fit.x, fit.y);
+      this.#worldWidth = fit.worldWidth;
       this.#bgImageLayer.addChild(sp);
     };
     imgEl.src = url;
@@ -160,14 +172,14 @@ export class SceneRenderStack {
     pool: ScenePhysicsPool,
     opts?: RenderFrameOpts,
   ): CameraState {
+    this.#updateBgImage(scene);
     this.#bg.clear();
     const color = scene?.background?.color ?? PAPER_COLOR;
-    this.#bg.rect(0, 0, STAGE_W, STAGE_H).fill({ color });
-    this.#updateBgImage(scene);
+    // 背景色はワールド幅ぶん敷く (パノラマ背景でパンしても右側に余白が出ない)
+    this.#bg.rect(0, 0, Math.max(STAGE_W, this.#worldWidth), STAGE_H).fill({ color });
 
-    const cam =
-      opts?.cameraOverride ??
-      (scene ? evaluateCamera(scene.camera, t) : { x: STAGE_W / 2, y: STAGE_H / 2, zoom: 1 });
+    // 実効カメラ = 追従+クランプ込み (override 指定時はそれを尊重: editor が算出済み)
+    const cam = opts?.cameraOverride ?? evaluateCameraFollowed(scene, t, this.#worldWidth);
     this.applyCamera(cam, opts?.slidePush ?? 0);
 
     if (!scene) {

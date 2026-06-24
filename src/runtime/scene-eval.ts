@@ -28,6 +28,7 @@ import type { Mat2D } from "./mat2d.js";
 import { computeBoneWorld } from "./pose.js";
 import { buildRenderList, type RenderItem } from "./pose.js";
 import { mulberry32 } from "./rand.js";
+import { clampCameraX } from "./camera-clamp.js";
 import { getObjectDef } from "../editor/scene/objects-catalog.js";
 
 const CROSSFADE = 0.22;
@@ -653,6 +654,33 @@ export function evaluateCamera(keys: readonly CameraKey[], t: number): CameraSta
     }
   }
   return { x: last.x, y: last.y, zoom: last.zoom };
+}
+
+// カメラキー評価に「横スクロールの追従・ワールド境界クランプ」を重ねた実効カメラ。
+// editor 表示・書き出し・再生で共通に使う (どこでも同じカメラになるように一本化)。
+// - scene.cameraFollowId が指すキャラが居れば、カメラ x をそのキャラの現在位置に追従。
+// - パノラマ背景 (worldWidth>STAGE_W) または追従中は、x を [halfView, worldWidth-halfView] にクランプ。
+export function evaluateCameraFollowed(
+  scene: SceneDoc | undefined,
+  t: number,
+  worldWidth = STAGE_W,
+): CameraState {
+  if (!scene) return { ...CAMERA_DEFAULT };
+  const base = evaluateCamera(scene.camera, t);
+  let x = base.x;
+  let followed = false;
+  const followId = scene.cameraFollowId;
+  if (followId) {
+    const target = scene.elements.find((e) => e.id === followId);
+    if (target && target.kind === "character") {
+      x = evaluateCharMotion(target, t).pos[0];
+      followed = true;
+    }
+  }
+  if (worldWidth > STAGE_W || followed) {
+    x = clampCameraX(x, base.zoom, worldWidth, STAGE_W);
+  }
+  return { ...base, x };
 }
 
 export { STAGE_W, STAGE_H };

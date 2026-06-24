@@ -217,6 +217,9 @@ export const SceneDocSchema = z
       .nullable()
       .default(null), // null = 紙色 #f4f1ec
     camera: z.array(CameraKeySchema).default([]),
+    // 横スクロール: 指定キャラ element id を追ってカメラ x を自動追従。未設定/null=固定/手動カメラキー
+    // (.optional で未設定時はキー自体を持たない → 既存シーンの round-trip を壊さない)
+    cameraFollowId: z.string().nullable().optional(),
     // 前シーンからこのシーンへの切替効果。scenes[0] は無視(常にcut)
     transition: TransitionSchema.default({}),
     elements: z.array(SceneElementSchema).default([]),

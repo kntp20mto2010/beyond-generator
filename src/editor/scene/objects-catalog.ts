@@ -110,7 +110,9 @@ export function resolveSideFlipX(variant: ObjectVariant, targetWall: "left" | "r
 export type ObjectKind =
   | "sofa" | "chair" | "desk" | "bed"
   | "storage" | "vanity" | "table" | "stool" | "plant"
-  | "window" | "rug" | "wall-decor" | "lamp";
+  | "window" | "rug" | "wall-decor" | "lamp"
+  // 野外 (河川敷) プロップ
+  | "tree" | "bench" | "stairs";
 
 export const KIND_LABEL: Record<ObjectKind, string> = {
   sofa: "ソファ",
@@ -126,6 +128,9 @@ export const KIND_LABEL: Record<ObjectKind, string> = {
   rug: "ラグ",
   "wall-decor": "壁飾り",
   lamp: "照明",
+  tree: "木",
+  bench: "ベンチ",
+  stairs: "階段",
 };
 
 // 配置方法。Scene 上の Z 並びやスナップ規則を将来分けるためにも使う。
@@ -233,6 +238,12 @@ export const NAVY_ROOM_L3 =
   "assets/generated/navy-room-L3-20260623.png";
 export const NAVY_ROOM_L4 =
   "assets/generated/navy-room-L4-20260623.png";
+
+// === riverside (河川敷 野外シーン) ===
+// 横スクロール野外シーン用の配置プロップを 1 枚に分離配置したマゼンタ背景のデザインシート。
+// 各プロップを scripts/extract-prop-sheet.py でマゼンタ chroma-key 切り抜き → 個別 catalog 登録。
+export const RIVERSIDE_PROPS_SHEET =
+  "assets/generated/riverside-props-sheet-20260624.png";
 
 // 家具カタログのエントリ。少なくとも一つの view を持つ。
 export interface ObjectDef {
@@ -1446,6 +1457,95 @@ export const OBJECT_CATALOG: ObjectDef[] = [
         wallOrigin: "right",
         // 輪郭の navy 縁被り(37%)を Codex 輪郭クリーン+マゼンタキーで除去 → 11%。
         promptFile: "navy-plant-floor-rightwall-edgeclean-20260624",
+      },
+    },
+  },
+  // === riverside (河川敷) 野外プロップ ===
+  // 横スクロール野外シーン用。riverside 背景は region map を持たない (undefined) ため
+  // view 自動切替・壁吸着は発火せず、各プロップは front 1 view で固定描画・自由配置になる。
+  // プロップシート (RIVERSIDE_PROPS_SHEET) をマゼンタ chroma-key 切り抜きして生成。
+  {
+    id: "riverside-tree",
+    label: "木 (広葉樹)",
+    defaultView: "front",
+    persona: ["shared", "outdoor"],
+    kind: "tree",
+    placement: "floor",
+    source: RIVERSIDE_PROPS_SHEET,
+    views: {
+      front: {
+        src: "assets/objects/riverside-tree-front.png",
+        nativeW: 420,
+        nativeH: 580,
+        cells: { w: 5, h: 6 },
+      },
+    },
+  },
+  {
+    id: "riverside-bush",
+    label: "茂み (植え込み)",
+    defaultView: "front",
+    persona: ["shared", "outdoor"],
+    kind: "plant",
+    placement: "floor",
+    source: RIVERSIDE_PROPS_SHEET,
+    views: {
+      front: {
+        src: "assets/objects/riverside-bush-front.png",
+        nativeW: 370,
+        nativeH: 173,
+        cells: { w: 3, h: 2 },
+      },
+    },
+  },
+  {
+    id: "riverside-bench",
+    label: "ベンチ (公園)",
+    defaultView: "front",
+    persona: ["shared", "outdoor"],
+    kind: "bench",
+    placement: "floor",
+    source: RIVERSIDE_PROPS_SHEET,
+    views: {
+      front: {
+        src: "assets/objects/riverside-bench-front.png",
+        nativeW: 210,
+        nativeH: 247,
+        cells: { w: 2, h: 2 },
+      },
+    },
+  },
+  {
+    id: "riverside-stairs",
+    label: "階段 (水際)",
+    defaultView: "front",
+    persona: ["shared", "outdoor"],
+    kind: "stairs",
+    placement: "floor",
+    source: RIVERSIDE_PROPS_SHEET,
+    views: {
+      front: {
+        src: "assets/objects/riverside-stairs-front.png",
+        nativeW: 330,
+        nativeH: 215,
+        cells: { w: 3, h: 2 },
+      },
+    },
+  },
+  {
+    id: "riverside-lamp",
+    label: "街灯",
+    defaultView: "front",
+    persona: ["shared", "outdoor"],
+    kind: "lamp",
+    placement: "floor",
+    source: RIVERSIDE_PROPS_SHEET,
+    views: {
+      front: {
+        src: "assets/objects/riverside-lamp-front.png",
+        nativeW: 93,
+        nativeH: 590,
+        cells: { w: 1, h: 5 },
       },
     },
   },

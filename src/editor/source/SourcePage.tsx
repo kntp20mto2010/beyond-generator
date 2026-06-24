@@ -43,6 +43,9 @@ const STATUS_MARK: Record<ItemStatus, string> = {
 };
 const STATUS_ORDER: ItemStatus[] = ["extracted", "made", "deferred", "todo"];
 
+// 開いている部屋の詳細をリロードしても閉じないよう localStorage に保持するキー。
+const SELECTED_ROOM_KEY = "byond-source-selected-room";
+
 export function SourcePage({
   jumpTarget,
   onJumpHandled,
@@ -53,6 +56,24 @@ export function SourcePage({
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [masks, setMasks] = useState<MaskBbox[]>([]);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  // 開いている部屋の詳細 (null = ルーム一覧)。リロード後も詳細を維持するため localStorage から復元。
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(() => {
+    try {
+      const v = localStorage.getItem(SELECTED_ROOM_KEY);
+      return v && MOODBOARD_SOURCES.some((s) => s.id === v) ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const selectRoom = (id: string | null) => {
+    setSelectedRoomId(id);
+    try {
+      if (id) localStorage.setItem(SELECTED_ROOM_KEY, id);
+      else localStorage.removeItem(SELECTED_ROOM_KEY);
+    } catch {
+      /* localStorage 不可でも動作は継続 */
+    }
+  };
   useEffect(() => {
     let live = true;
     fetch("/__moodboard-positions")
@@ -78,8 +99,12 @@ export function SourcePage({
     const target = MOODBOARD_SOURCES.find((s) => s.imagePaths.some((im) => im.path === jumpTarget));
     onJumpHandled?.();
     if (!target) return;
+    selectRoom(target.id); // カード一覧でなく該当部屋の詳細を開く
     setHighlightId(target.id);
-    document.getElementById(`source-card-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // 詳細が描画されてからスクロール
+    requestAnimationFrame(() =>
+      document.getElementById(`source-card-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
     // onJumpHandled は安定参照前提で依存に含めない(含めると App 再描画毎に再実行)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpTarget]);
@@ -91,23 +116,104 @@ export function SourcePage({
     return () => clearTimeout(t);
   }, [highlightId]);
 
+  const selected = selectedRoomId ? MOODBOARD_SOURCES.find((s) => s.id === selectedRoomId) ?? null : null;
+
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "var(--bg-app)", color: "var(--text)" }}>
-      <div style={{ fontWeight: 700, marginBottom: "4px", fontSize: "14px" }}>抽出元 moodboard と家具チェックリスト</div>
-      <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "16px" }}>
-        部屋全体の理想レイアウト画から、どの家具を単体オブジェクト化したかを追う。
-        <span style={{ color: "var(--ok, #3a6)", marginLeft: 8 }}>✓ 抽出済</span>= この moodboard を source に抽出済み /
-        <span style={{ color: "var(--warn, #c98a2b)", marginLeft: 6 }}>◐ 作成済</span>= catalog にあるが別生成(source 未設定) /
-        <span style={{ marginLeft: 6 }}>🖐️ 作らない</span>= 単体化しない判断(host 内包/保留) /
-        <span style={{ marginLeft: 6 }}>□ 未作成</span>= これから作る backlog。
-        <br />
-        セル: <span style={{ color: "var(--warn, #c98a2b)" }}>⚠️</span> = 個別生成(moodboard 抽出ではなく単体プロンプト) /
-        <span style={{ color: "var(--warn, #c98a2b)" }}>○</span> = 取りこぼし(作るべきだが未作成)。
-      </div>
-      {MOODBOARD_SOURCES.map((src) => (
-        <SourceCard key={src.id} src={src} highlight={highlightId === src.id} masks={masks} hiddenIds={hiddenIds} />
-      ))}
+      {selected ? (
+        <>
+          <button
+            onClick={() => selectRoom(null)}
+            style={{
+              fontSize: "12px",
+              padding: "5px 12px",
+              borderRadius: "6px",
+              border: "1px solid var(--border)",
+              background: "var(--bg-panel)",
+              color: "var(--text)",
+              cursor: "pointer",
+              marginBottom: "12px",
+            }}
+          >
+            ← ルーム一覧へ
+          </button>
+          <SourceCard src={selected} highlight={highlightId === selected.id} masks={masks} hiddenIds={hiddenIds} />
+        </>
+      ) : (
+        <>
+          <div style={{ fontWeight: 700, marginBottom: "4px", fontSize: "14px" }}>抽出元 — ルーム一覧</div>
+          <div style={{ color: "var(--text-dim)", fontSize: "11px", marginBottom: "16px" }}>
+            部屋のカードをクリックすると moodboard・QC・家具チェックリストの詳細が開く。カード下部は各部屋の進捗。
+            <span style={{ color: "var(--ok, #3a6)", marginLeft: 8 }}>✓ 抽出済</span> /
+            <span style={{ color: "var(--warn, #c98a2b)", marginLeft: 6 }}>◐ 作成済</span> /
+            <span style={{ marginLeft: 6 }}>🖐️ 作らない</span> /
+            <span style={{ marginLeft: 6 }}>□ 未作成</span> /
+            <span style={{ color: "var(--warn, #c98a2b)", marginLeft: 6 }}>○ 取りこぼし</span>。
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+            {MOODBOARD_SOURCES.map((src) => (
+              <RoomCard key={src.id} src={src} hiddenIds={hiddenIds} onOpen={() => selectRoom(src.id)} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+// ルーム一覧カード: 部屋の L1 (imagePaths[0]) をサムネにし、下部に進捗サマリを出す。クリックで詳細へ。
+function RoomCard({ src, hiddenIds, onOpen }: { src: MoodboardSource; hiddenIds: Set<string>; onOpen: () => void }) {
+  const paths = useMemo(() => src.imagePaths.map((im) => im.path), [src]);
+  const counts = useMemo(() => {
+    const c: Record<ItemStatus, number> = { extracted: 0, made: 0, deferred: 0, todo: 0 };
+    for (const it of src.items) c[itemStatus(it, paths, hiddenIds)] += 1;
+    return c;
+  }, [src, paths, hiddenIds]);
+  const gaps = useMemo(() => countGaps(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
+  const gapDetails = useMemo(() => gapsDetail(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
+  const standalone = useMemo(() => countStandalone(src.items, paths, hiddenIds), [src, paths, hiddenIds]);
+  const total = src.items.length;
+  const thumb = src.imagePaths[0]?.path; // L1
+
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        textAlign: "left",
+        padding: 0,
+        border: "1px solid var(--border)",
+        borderRadius: "10px",
+        background: "var(--bg-panel)",
+        color: "var(--text)",
+        cursor: "pointer",
+        overflow: "hidden",
+      }}
+    >
+      {thumb && (
+        <img
+          src={`/${thumb}`}
+          alt={src.labelJa}
+          style={{
+            width: "100%",
+            aspectRatio: `${MOODBOARD_W} / ${MOODBOARD_H}`,
+            objectFit: "cover",
+            display: "block",
+            borderBottom: "1px solid var(--border)",
+          }}
+        />
+      )}
+      <div style={{ padding: "10px 12px" }}>
+        <div style={{ fontWeight: 700, fontSize: "13px", marginBottom: "6px" }}>
+          {src.labelJa}
+          <span style={{ fontSize: "11px", color: "var(--text-dim)", fontWeight: 400, marginLeft: 6 }}>
+            ({src.imagePaths.length} 画像)
+          </span>
+        </div>
+        <ProgressSummary counts={counts} total={total} gaps={gaps} gapDetails={gapDetails} standalone={standalone} />
+      </div>
+    </button>
   );
 }
 
