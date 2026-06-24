@@ -1157,12 +1157,14 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     placement: "floor",
     views: {
       // front: L3 奥壁ぎわ・真正面。OCCLUDERS none。
+      //   輪郭の navy 縁被り(64%)を Codex 輪郭クリーン+マゼンタキーで除去 → 0%。
       front: {
         src: "assets/objects/navy-coffee-table-front.png",
-        nativeW: 294,
+        nativeW: 293,
         nativeH: 108,
         cells: { w: 1, h: 1 },
         source: NAVY_ROOM_L3,
+        promptFile: "navy-coffee-table-front-edgeclean-v2-20260624",
       },
       "front-dimetric": {
         src: "assets/objects/navy-coffee-table-dimetric.png",
@@ -1344,20 +1346,23 @@ export const OBJECT_CATALOG: ObjectDef[] = [
       // front: r3 右壁。緑マスク r1 で 3D 別部屋 hallucination → r2 反例強化で成功。
       front: {
         src: "assets/objects/navy-wall-shelf.png",
-        nativeW: 229,
-        nativeH: 149,
+        nativeW: 206,
+        nativeH: 128,
         cells: { w: 1, h: 1 },
         source: NAVY_ROOM_L1,
-        promptFile: "navy-wall-shelf-mask-r2-20260623",
+        // 輪郭の navy 縁被り(49%)を Codex 輪郭クリーン+マゼンタキーで除去 → 6%。
+        promptFile: "navy-wall-shelf-front-edgeclean-20260624",
       },
       // side: L4 左壁 (中身=小植物/小物 内包)。wallOrigin "left"。
+      //   輪郭の navy 縁被り(39%)を Codex 輪郭クリーン+マゼンタキーで除去 → 9%。
       side: {
         src: "assets/objects/navy-wall-shelf-side.png",
-        nativeW: 199,
-        nativeH: 140,
+        nativeW: 192,
+        nativeH: 136,
         cells: { w: 1, h: 1 },
         source: NAVY_ROOM_L4,
         wallOrigin: "left",
+        promptFile: "navy-wall-shelf-side-edgeclean-20260624",
       },
     },
   },
@@ -1411,31 +1416,36 @@ export const OBJECT_CATALOG: ObjectDef[] = [
     placement: "floor",
     views: {
       // front: L4 中央 free-standing。OCCLUDERS none。
+      //   輪郭の navy 縁被り(壁色の焼込み 59%)を Codex 輪郭クリーン+マゼンタ背景キーで除去 → 4%。
       front: {
         src: "assets/objects/navy-plant-floor-front.png",
-        nativeW: 209,
-        nativeH: 460,
+        nativeW: 211,
+        nativeH: 463,
         cells: { w: 1, h: 2 },
         source: NAVY_ROOM_L4,
+        promptFile: "navy-plant-floor-front-edgeclean-v2-20260624",
       },
       // front-dimetric: r3 右・床。緑マスク r1 で 3D 別部屋 hallucination → r2 で反例強化し成功。
       "front-dimetric": {
         src: "assets/objects/navy-plant-floor-dimetric.png",
-        nativeW: 189,
-        nativeH: 232,
+        nativeW: 169,
+        nativeH: 212,
         cells: { w: 1, h: 1 },
         source: NAVY_ROOM_L1,
-        promptFile: "navy-plant-floor-dimetric-mask-r2-20260623",
+        // 輪郭の navy 縁被り(51%)を Codex 輪郭クリーン+マゼンタキーで除去。
+        promptFile: "navy-plant-floor-dimetric-edgeclean-20260624",
       },
       // side: r4 右壁ぎわ wall-aligned。OCCLUDERS none。wallOrigin "right"。
       side: {
         src: "assets/objects/navy-plant-floor-rightwall.png",
-        nativeW: 237,
-        nativeH: 438,
+        nativeW: 238,
+        nativeH: 439,
         cells: { w: 1, h: 2 },
         source: NAVY_ROOM_L2,
         projection: "wall-aligned-v10",
         wallOrigin: "right",
+        // 輪郭の navy 縁被り(37%)を Codex 輪郭クリーン+マゼンタキーで除去 → 11%。
+        promptFile: "navy-plant-floor-rightwall-edgeclean-20260624",
       },
     },
   },
